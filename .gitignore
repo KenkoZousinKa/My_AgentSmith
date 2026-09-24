@@ -1,0 +1,40 @@
+# Project specific (Mandatory rule)
+
+# -----------
+#     C     |
+# -----------
+a.out
+*.o
+
+# ----------
+#  Python  |
+# ----------
+*.py[cod]
+*$py.class
+
+# ------------------------
+#  Virtual Environments  |
+# -----------------------
+.venv/
+venv/
+
+# ------------------------
+# Environment variables  |
+# ------------------------
+.env
+env/
+
+# ---------------
+# python cache  |
+# ---------------
+__pycache__
+*/__pycache__/
+*_cache
+.mypy_cache/
+.ruff_cache/
+
+# --------------------
+#  Personal Settings |
+# --------------------
+# .claude
+# CLAUDE.md
