@@ -1,0 +1,64 @@
+[project]
+name = ""
+version = "0.1.0"
+description = ""
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [{"name" = "nsato", "email" = "nsato@student.42tokyo.jp"}]
+
+# これがないとプログラム実行時にエラー。
+dependencies = [
+	"fire>=0.7.1",
+    "pydantic>=2.12.5",
+]
+# 実行ロジックに違いはないが、開発、テスト、静的解析に必要。
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "flake8-bugbear>=25.11.29",
+    "flake8-pyproject",
+	"flake8-docstrings",
+    "mypy>=1.19.1",
+    "pep8-naming>=0.15.1",
+	"ruff",
+	"ty",
+	"pytest",
+]
+
+[tool.mypy]
+exclude = [
+    "^\\.venv/",
+	"^data/"
+]
+
+# .関数はAnyで返せなくなる
+warn_return_any = true
+
+# .type: ignoreを警告する
+warn_unused_ignores = true
+
+# .外部ライブラリは検証外にする
+ignore_missing_imports = true
+
+# .型ヒントのない関数を警告する
+disallow_untyped_defs = true
+
+# .型ヒントのない関数の中身を検証する
+check_untyped_defs = true
+
+# strict = true
+
+[tool.flake8]
+docstring-convention = "google"
+exclude = [
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+    "__init__.py",
+	"data",
+	"test",
+	"dist",
+	"build",
+]
+max-line-length = 130
