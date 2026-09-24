@@ -1,5 +1,5 @@
 [project]
-name = ""
+name = "AgentSmith"
 version = "0.1.0"
 description = ""
 readme = "README.md"
@@ -17,13 +17,13 @@ dev = [
     "flake8>=7.3.0",
     "flake8-bugbear>=25.11.29",
     "flake8-pyproject",
-	"flake8-docstrings",
     "mypy>=1.19.1",
     "pep8-naming>=0.15.1",
 	"ruff",
 	"ty",
 	"pytest",
 ]
+# "flake8-docstrings",
 
 [tool.mypy]
 exclude = [
