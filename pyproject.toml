@@ -1,10 +1,14 @@
 [project]
 name = "AgentSmith"
 version = "0.1.0"
-description = ""
+description = "An autonomous AI agent capable of reasoning, generating, executing, and iterating on code to solve programming challenges in a secure, sandboxed environment. "
 readme = "README.md"
-requires-python = ">=3.14"
-authors = [{"name" = "nsato", "email" = "nsato@student.42tokyo.jp"}]
+requires-python = ">=3.10"
+authors = [
+	{"name" = "ayhirose", "email" = "ayhirose@student.42tokyo.jp"},
+	{"name" = "nsato", "email" = "nsato@student.42tokyo.jp"},
+	{"name" = "joseo", "email" = "joseo@student.42tokyo.jp"}
+]
 
 # これがないとプログラム実行時にエラー。
 dependencies = [
