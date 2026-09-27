@@ -1,6 +1,8 @@
 import sys
 import json
 
+from src.models.jsonrpc import jsonrpc_message_adapter
+
 
 def run_tests(code: str, test_list: list[str]) -> dict[str, bool | str]:
     """実際のツール処理（ここではダミー）"""
@@ -14,9 +16,13 @@ def main() -> None:
             break  # 親が死んだら終了
 
         try:
-            request = json.loads(line)
+            request = jsonrpc_message_adapter.validate_json(line)
+            sys.stdout.write(request.model_dump_json())
+            sys.stdout.flush()
+            sys.exit(1)
 
-            # tools/list リクエストが来た場合
+
+            # tools/list
             if request.get("method") == "tools/list":
                 response = {
                     "jsonrpc": "2.0",
@@ -39,6 +45,10 @@ def main() -> None:
                     }
                 }
 
+            # クライアントへ返信
+            sys.stdout.write(json.dumps(response) + "\n")
+            sys.stdout.flush()
+
             # # tool呼び出し
             # if request.get("method") == "call_tool":
             #     tool_name = request.get("tool")
@@ -54,10 +64,6 @@ def main() -> None:
 
             #         # 【超重要】バッファをフラッシュして確実に届ける
             #         sys.stdout.flush()
-
-                # クライアントへ返信
-                sys.stdout.write(json.dumps(response) + "\n")
-                sys.stdout.flush()
 
         except Exception as e:
             error_res = {"jsonrpc": "2.0", "error": {"message": str(e)}}
