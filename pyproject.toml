@@ -3,7 +3,7 @@ name = "AgentSmith"
 version = "0.1.0"
 description = "An autonomous AI agent capable of reasoning, generating, executing, and iterating on code to solve programming challenges in a secure, sandboxed environment. "
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.11"
 authors = [
 	{"name" = "ayhirose", "email" = "ayhirose@student.42tokyo.jp"},
 	{"name" = "nsato", "email" = "nsato@student.42tokyo.jp"},
@@ -14,6 +14,7 @@ authors = [
 dependencies = [
 	"fire>=0.7.1",
     "pydantic>=2.12.5",
+    "requests",
 ]
 # 実行ロジックに違いはないが、開発、テスト、静的解析に必要。
 [dependency-groups]
