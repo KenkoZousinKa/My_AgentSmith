@@ -7,7 +7,9 @@ NAME		:= Project_Name
 UV			:= uv
 PYTHON		:= python3
 SRC_DIR		:= src
-TEST_DIR	:= tests
+MBPP_FILE	:= agent_mbpp
+SWE_FILE	:= agent_swebench
+TEST_DIR	:= test
 
 # 追加変数(あれば)
 
@@ -30,13 +32,13 @@ install: ## 仮想環境を作成し、依存関係をインストールする
 #  Execution  |
 # -------------
 run: ## メインプログラムを実行
-	@echo "Running $(NAME)..."
+	@echo "Running $(MBPP_FILE)..."
 	@$(UV) run python3 -m $(SRC_DIR)
 
 debug:
 debug: ## pdbデバッガを使って実行
-	@echo "Debugging $(NAME)..."
-	@$(UV) run $(PYTHON) pdb -m $(SRC_DIR)
+	@echo "Debugging $(MBPP_FILE)..."
+	@$(UV) run $(PYTHON) -m pdb $(SRC_DIR)
 
 # -----------
 #  Cleanup  |
