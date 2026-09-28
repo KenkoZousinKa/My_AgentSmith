@@ -57,3 +57,7 @@ class InitializeResult(MCPModel):
     capabilities: dict[str, Any]
     """サーバーが提供する機能（tools / resources / prompts など）。"""
     server_info: Implementation
+
+
+class EmptyResult(MCPModel):
+    """中身のない成功応答(ping)"""
