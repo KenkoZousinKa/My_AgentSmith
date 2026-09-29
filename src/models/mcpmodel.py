@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 from typing import Any, Final, Literal
-
 from pydantic import (
     BaseModel,
     ConfigDict
 )
 from pydantic.alias_generators import to_camel
+from enum import StrEnum
 
-
-METHOD_INITIALIZE: Final = "initialize"
-METHOD_INITIALIZED: Final = "notifications/initialized"
 
 MCP_VERSION: Final[Literal["2025-06-18"]] = "2025-06-18"
 
-METHODS = [
-    METHOD_INITIALIZE,
-    METHOD_INITIALIZED
-]
+
+class Method(StrEnum):
+    INITIALIZE = "initialize"
+    INITIALIZED = "notifications/initialized"
+    PING = "ping"
+    TOOLS_LIST = "tools/list"
+    TOOLS_CALL = "tools/call"
 
 
 class MCPModel(BaseModel):
@@ -59,5 +59,54 @@ class InitializeResult(MCPModel):
     server_info: Implementation
 
 
+class Tool(MCPModel):
+    """ツール一つ分のモデル定義"""
+    name: str
+    description: str | None = None
+    input_schema: dict[str, Any]
+
+
+class ListToolsResult(MCPModel):
+    """tools/list リクエストへの応答の中身"""
+    tools: list[Tool]
+
+
 class EmptyResult(MCPModel):
     """中身のない成功応答(ping)"""
+
+
+# ===== Error Class =====
+
+
+class MCPClientError(Exception):
+    """MCP クライアントで起きたエラーの基底クラス.
+
+    サンドボックス以上のプロセスに対してクライアントで起きたエラーを伝えるもの.
+    """
+
+
+class MCPConnectionError(MCPClientError):
+    """サーバーが起動しない、途中で落ちた(readlineが空だった)、など接続の問題."""
+
+
+class MCPProtocolError(MCPClientError):
+    """サーバーが MCP / JSON-RPC の形式に合わないメッセージを送ってきた.
+
+    サーバーが起因するエラー。It's MangoMan's fault.
+    """
+
+
+class MCPError(MCPClientError):
+    """サーバーが JSON-RPC のエラー応答を返した.
+
+    このエラーはサーバーサイドが起因ではないケースで使う。(LLMが構文を間違えているなど)
+    ネストされたエラーオブジェクトも含めてLLMに渡すことを推奨。
+    """
+    def __init__(self, code: int, message: str, data: Any) -> None:
+        super().__init__(code, message, data)
+        self.code = code
+        self.message = message
+        self.data = data
+
+    def __str__(self) -> str:
+        return f"[{self.code}] {self.message}"

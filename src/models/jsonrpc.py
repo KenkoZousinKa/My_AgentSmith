@@ -3,31 +3,23 @@
 from __future__ import annotations
 
 from typing import Annotated, Any, Final, Literal
-
 from pydantic import BaseModel, Field, TypeAdapter
-
-__all__ = [
-    "INTERNAL_ERROR",
-    "INVALID_PARAMS",
-    "INVALID_REQUEST",
-    "JSONRPC_VERSION",
-    "METHOD_NOT_FOUND",
-    "PARSE_ERROR",
-    "ErrorData",
-    "JSONRPCError",
-    "JSONRPCMessage",
-    "JSONRPCNotification",
-    "JSONRPCRequest",
-    "JSONRPCResponse",
-    "RequestId",
-    "jsonrpc_message_adapter",
-]
+from enum import IntEnum
 
 RequestId = Annotated[int, Field(strict=True)] | str
 """JSON-RPC リクエストの ID."""
 
 JSONRPC_VERSION: Final[Literal["2.0"]] = "2.0"
 """すべての MCP メッセージに入る JSON-RPC のバージョン文字列."""
+
+
+class ErrorCode(IntEnum):
+    """JSON-RPC 標準のエラーコード."""
+    PARSE_ERROR = -32700        # JSON-RPC 標準: 不正な JSON を受信した。
+    INVALID_REQUEST = -32600    # JSON-RPC 標準: 送られてきたものが正しいリクエストオブジェクトではない。
+    METHOD_NOT_FOUND = -32601   # JSON-RPC 標準: 要求されたメソッドが存在しない、または利用できない。
+    INVALID_PARAMS = -32602     # JSON-RPC 標準: メソッドのパラメータが不正。
+    INTERNAL_ERROR = -32603     # JSON-RPC 標準: 受信側の内部でエラーが発生した。
 
 
 class JSONRPCRequest(BaseModel):
@@ -53,23 +45,6 @@ class JSONRPCResponse(BaseModel):
     jsonrpc: Literal["2.0"]
     id: RequestId
     result: dict[str, Any]
-
-
-# JSON-RPC 標準のエラーコード
-PARSE_ERROR = -32700
-"""JSON-RPC 標準: 不正な JSON を受信した。"""
-
-INVALID_REQUEST = -32600
-"""JSON-RPC 標準: 送られてきたものが正しいリクエストオブジェクトではない。"""
-
-METHOD_NOT_FOUND = -32601
-"""JSON-RPC 標準: 要求されたメソッドが存在しない、または利用できない。"""
-
-INVALID_PARAMS = -32602
-"""JSON-RPC 標準: メソッドのパラメータが不正。"""
-
-INTERNAL_ERROR = -32603
-"""JSON-RPC 標準: 受信側の内部でエラーが発生した。"""
 
 
 class ErrorData(BaseModel):
