@@ -18,4 +18,4 @@ labels: []
 <!-- 何ができたら完了か。検証方法も -->
 
 ## 依存・関連契約
-<!-- blocked-by: #  / 触る契約: execute()・StepMetrics 等 -->
+<!-- blocked-by: #  / 触る契約: run()・StepMetrics 等 -->
