@@ -1,4 +1,10 @@
-"""MBPP用のエントリーポイントモジュール."""
+"""MBPP用のエントリーポイントモジュール.
+
+`uv run python3 -m agent_mbpp
+--task-file ../cache/mbpp_task.json 
+--output ../cache/mbpp_solution.json
+--mode-name "model/name" --provider-url "http://provider.api/v1"`
+"""
 import fire
 
 
