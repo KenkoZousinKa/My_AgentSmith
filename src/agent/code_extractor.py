@@ -1,9 +1,10 @@
 """コード抽出機能を提供するモジュール.
 
-Pythonコード
-XML形式
-JSON / Hermes形式
-React形式
+- [ ] CodeExtracterをベースに、形式別にサブクラスを作成する。
+    - Pythonコード
+    - XML形式
+    - JSON / Hermes形式
+    - React形式
 """
 
 

@@ -1,1 +1,4 @@
-"""Thought -> Code -> Observationのループを制御するOrchestratorモジュール."""
+"""Thought -> Code -> Observationのループを制御するOrchestratorモジュール.
+
+中核
+"""

@@ -7,6 +7,8 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 具体的なプロバイダは、この抽象クラスを継承して実装する。
 プロバイダURL / モデル名 / キー郡などはJSONか.envで設定し、コードの変更なしでモデルを差し替えて
 ベンチマークを実行できるようにする。
+
+- [ ] 抽象クラスはmodels/以下に移動、各プロバイダのサブクラスは別途provider/以下に配置。
 """
 
 from abc import ABC, abstractmethod
