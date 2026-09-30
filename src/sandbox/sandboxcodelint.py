@@ -87,7 +87,7 @@ def _allowed(name: str, authorized: frozenset[str]) -> bool:
     )
 
 
-def _trunacate(text: str, limit: int) -> str:
+def _truncate(text: str, limit: int) -> str:
     """Cap text, stating what was dropped.
 
     The marker matters: without it the LLM treats a cut-off result as
@@ -103,7 +103,7 @@ def _trunacate(text: str, limit: int) -> str:
 
 
 class _Checker(ast.NodeVisitor):
-    """Static pass: cheap rejection before anything happens if anything is not allowed."""
+    """Static pass: cheap rejection before anything happens."""
     def __init__(
         self,
         authorized: frozenset[str],
@@ -126,7 +126,7 @@ class _Checker(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        """Visit from-imports and reject relative ones"""
+        """Visit from-imports and reject relative ones."""
         if node.level:
             self.errors.append("relative imports are not allowed")
         elif node.module:
@@ -134,7 +134,7 @@ class _Checker(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        """Blocks dunder access, which reaches globals and subclasses"""
+        """Blocks dunder access, which reaches globals and subclasses."""
         if node.attr.startswith("__") and node.attr.endswith("__"):
             self.errors.append(f"access to dunder attribute {node.attr!r}")
         self.generic_visit(node)
@@ -161,10 +161,10 @@ def check_code(
         return f"SyntaxError: {exc.msg} (line {exc.lineno})"
     checker = _Checker(frozenset(config.authorized_imports), tool_names)
     checker.visit(tree)
-    return ": ".join(checker.errors) or None
+    return "; ".join(checker.errors) or None
 
 
-# send to child
+# send to child/parent
 def _send(fd: int, message: dict[str, Any]) -> None:
     """Write one length-prefixed JSON message."""
     payload = json.dumps(message).encode("utf-8")
@@ -173,7 +173,7 @@ def _send(fd: int, message: dict[str, Any]) -> None:
         data = data[os.write(fd, data):]
 
 
-# recieve from child
+# receieve from child/parent
 def _recv(fd: int) -> dict[str, Any]:
     """Read one length-prefixed JSON message."""
     def read_exactly(size: int) -> bytes:
@@ -208,7 +208,7 @@ def _guarded_open(config: SandboxConfig) -> Callable[..., Any]:
     return guard
 
 
-def _safe_bultins(config: SandboxConfig) -> dict[str, Any]:
+def _safe_builtins(config: SandboxConfig) -> dict[str, Any]:
     """Bultins minus the dangerous ones, plus guarded __import__.
 
     This must be set explicitly: exec() given a globals dict with no
@@ -265,7 +265,6 @@ def _apply_limits(config: SandboxConfig) -> None:
     allocation raise MemoryError instead of swapping the machine.
     """
     max_bytes = config.max_memory_mb * 1024 * 1024
-    # limits the use of cpu time so that it cant overuse.
     resource.setrlimit(resource.RLIMIT_AS, (max_bytes, max_bytes))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
@@ -325,15 +324,15 @@ def _execute(
     except KeyboardInterrupt:
         result = {"kind": "interrupt"}
     except SystemExit as exc:
-        result = {"kind": "exit", "code": exc.code or 0}
+        result = {"kind": "exit", "code": str(exc.code or 0)}
     except BaseException:
         result = {"kind": "error", "error": traceback.format_exc(limit=5)}
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0.0)
 
     limit = config.max_output_chars
-    result["stdout"] = _trunacate(out.getvalue(), limit)
-    result["stderr"] = _trunacate(err.getvalue(), limit)
+    result["stdout"] = _truncate(out.getvalue(), limit)
+    result["stderr"] = _truncate(err.getvalue(), limit)
     return result
 
 
@@ -354,7 +353,7 @@ def _child_main(
 
     namespace: dict[str, Any] = {
         "__name__": "__sandbox__",
-        "__builtins__": _safe_bultins(config),
+        "__builtins__": _safe_builtins(config),
         "final_answer": final_answer,
     }
     for name in tool_names:
@@ -369,9 +368,7 @@ def _child_main(
             os._exit(0)
         if message.get("kind") != "run":
             os._exit(0)
-        outcome = _execute(
-            message["code"], namespace, config.max_execution_time_seconds
-        )
+        outcome = _execute(message["code"], namespace, config)
         try:
             _send(res_fd, outcome)
         except OSError:
@@ -421,9 +418,17 @@ class Sandbox:
         if self._pid is None:
             return
         try:
-            os.killpg(self._pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+            os.close(self._cmd_w)
+        except OSError:
             pass
+        for kill in (
+            lambda: os.killpg(self._pid, signal.SIGKILL),  # type: ignore[arg-type]
+            lambda: os.kill(self._pid, signal.SIGKILL),  # type: ignore[arg-type]
+        ):
+            try:
+                kill()
+            except (ProcessLookupError, PermissionError):
+                continue
         try:
             os.waitpid(self._pid, 0)
         except ChildProcessError:
@@ -435,7 +440,7 @@ class Sandbox:
                 pass
         self._pid = None
 
-    def __enter__(self) -> "SandBox":
+    def __enter__(self) -> "Sandbox":
         """Enter a context manager."""
         return self
 
@@ -481,12 +486,12 @@ class Sandbox:
         handler = self.tools.get(name)
         reply: dict[str, Any] = {"result": None, "error": None}
         if handler is None:
-            reply["error"] = f"unkown tool {name!r}"
+            reply["error"] = f"unknown tool {name!r}"
         else:
             try:
                 raw = handler(**(message.get("arguments") or {}))
                 reply["result"] = (
-                    _trunacate(raw, self.config.max_output_chars)
+                    _truncate(raw, self.config.max_output_chars)
                     if isinstance(raw, str) else raw
                 )
             except Exception as exc:
@@ -504,18 +509,20 @@ class Sandbox:
         if kind == "final_answer":
             return ExecuteResult(final_answer=message.get("value"), **base)
         if kind == "error":
-            return ExecuteResult(error=message.get("error", **base))
+            return ExecuteResult(error=message.get("error"), **base)
         if kind == "interrupt":
             raise KeyboardInterrupt
         if kind == "exit":
             raise SystemExit(message.get("code", 0))
-        return ExecuteResult(value=message.get("value", **base))
+        return ExecuteResult(value=message.get("value"), **base)
 
 
 def _show(result: ExecuteResult) -> None:
     """Shows the result of the executed code."""
     if result.stdout:
         print(result.stdout, end="")
+    if result.stderr:
+        print(result.stderr, end="")
     if result.error:
         print(result.error)
     elif result.final_answer is not None:
@@ -568,18 +575,18 @@ def main() -> int:
     parser.add_argument("-f", "--file", help="run a file and exit")
     args = parser.parse_args()
 
-    config =(
+    config = (
         SandboxConfig.model_validate_json(
             Path(args.config).read_text(encoding="utf-8")
         )
         if args.config else SandboxConfig()
     )
-    sandbox = SandboxConfig(config)
+    sandbox = Sandbox(config)
     try:
         if args.command is not None:
             _show(sandbox.run(args.command))
         elif args.file is not None:
-            _show(sandbox.rin(Path(args.file).read_text(encoding="utf-8")))
+            _show(sandbox.run(Path(args.file).read_text(encoding="utf-8")))
         else:
             return _repl(sandbox)
     finally:
