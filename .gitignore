@@ -39,3 +39,4 @@ __pycache__
 # --------------------
 # .claude
 # CLAUDE.md
+*.pdf
