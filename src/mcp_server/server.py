@@ -32,12 +32,16 @@ if __name__ == "__main__":
 
 import sys
 import json
+import inspect
 from collections.abc import Callable
-from typing import Any
-from pydantic import ValidationError
+from typing import Any, TypeVar
+from pydantic import ValidationError, create_model, BaseModel
 
 from src.models import jsonrpc as rpc
 from src.models import mcpmodel as mcp
+from src.mcp_server.tool_model import RegisteredTool
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class MCPServer:
@@ -46,6 +50,7 @@ class MCPServer:
             mcp.Method.INITIALIZE: self._handle_initialize,
             mcp.Method.PING: self._handle_ping
         }
+        self.tools: dict[str, RegisteredTool]
 
     def run(self) -> None:
         """サーバーの受付を担当する."""
@@ -138,6 +143,31 @@ class MCPServer:
         sys.stdout.write(msg.model_dump_json(by_alias=True, exclude_unset=True) + "\n")
         sys.stdout.flush()
 
+    def tool(self, description: str | None = None) -> callable[[F], F]:
+        def register(func: F) -> F:
+            name = func.__name__                                                    # 1. 名前 = 関数名
+            doc = description or inspect.getdoc(func)                               # 2. 説明 = 引数で渡された説明、無ければ docstring
+
+            arguments_model = self._build_argumets_model(func)                      # 3. 引数から検証用モデルを作る
+
+            self.tools[name] = RegisteredTool(name, doc, func, arguments_model)     # 4. 登録簿に載せる
+            return func                                                             # 5. 関数はそのまま返す
+        return register
+
+    def _build_argumets_model(self, func: Callable[..., Any]) -> type[BaseModel]:
+        """関数の引数（型と初期値）をまとめたモデルを作る."""
+        fields = {}
+        name = func.__name__
+        for param_name, param in inspect.signature(func).parameters.items():    # 引数名 -> 引数の情報 -> 引数名とオブジェクト情報
+            if param.annotation is inspect.Parameter.empty:
+                raise TypeError(f"{name} の引数 {param_name} に型ヒントがありません")
+            default = ... if param.default is inspect.Parameter.empty else param.default
+            fields[param_name] = (param.annotation, default)
+        return create_model(f"{name}Arguments", **fields)
+    # 3で型ヒントが無い引数を見つけたら、その場で TypeError にしています。
+    # 型ヒントが無いと、スキーマを作れないからです。
+    # サーバーの起動時（ファイルの読み込み時）に、すぐエラーで止まるので、「ツールを呼んで初めて問題に気づく」ことを防げます。
+    # 間違いは、できるだけ早い段階で止めるのが定石です。
 
 def main() -> None:
     MCPServer().run()
@@ -145,8 +175,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-# def run_tests(code: str, test_list: list[str]) -> dict[str, bool | str]:
-#     """実際のツール処理（ここではダミー）"""
-#     return {"success": True, "output": "テスト成功しました"}

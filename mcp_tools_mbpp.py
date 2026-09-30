@@ -1,36 +1,18 @@
-from typing import Callable, Any
-from pydantic import BaseModel
-from dataclasses import dataclass
+"""
+引数は code と test_list の2つだけにします。 引数を増やすと、LLM が使い方に迷う原因になります。
+返り値は、辞書ではなく JSON 文字列です。 json.dumps({"success": ..., "output": ...}) で作ります。
+実行時間の上限は、引数にせず、関数の中の定数として持ちます。 Moulinette の採点も、30秒の上限で実行していました。
+LLM に渡す必要のない設定なので、関数の中に閉じ込めておけば十分です。
+"""
 
-from src.models import jsonrpc as rpc
-from src.models import mcpmodel as mcp
+import json
+from src.mcp_server.server import MCPServer
 
 
-@dataclass
-class RegisteredTool:
-    """サーバーに登録されたツール1つ分の情報（サーバー内部用）."""
-    name: str
-    description: str | None
-    func: Callable[..., Any]            # 実行する関数
-    arguments_model: type[BaseModel]    # 引数の検証と inputSchema の生成に使うモデル
+@MCPServer.tool()
+def run_tests(code: str, test_list: list[str]) -> str:
+    """候補の解答コードを、与えられた assert 文のテストで実行する.
 
-    def to_tool(self) -> mcp.Tool:
-        """クライアントに送る形（mcp.Tool）に変換する."""
-        return mcp.Tool(name=self.name,
-                        description=self.description,
-                        input_schema=self.arguments_model.model_json_schema())
-
-# def register(func: F) -> F:
-#     name = func.__name__                                        # 1. 名前 = 関数名
-#     doc = description or inspect.getdoc(func)                   # 2. 説明 = 引数で渡された説明、無ければ docstring
-
-#     fields = {}                                                 # 3. 引数から検証用モデルを作る
-#     for param_name, param in inspect.signature(func).parameters.items():
-#         if param.annotation is inspect.Parameter.empty:
-#             raise TypeError(f"{name} の引数 {param_name} に型ヒントがありません")
-#         default = ... if param.default is inspect.Parameter.empty else param.default
-#         fields[param_name] = (param.annotation, default)
-#     arguments_model = create_model(f"{name}Arguments", **fields)
-
-#     self.tools[name] = RegisteredTool(name, doc, func, arguments_model)   # 4. 登録簿に載せる
-#     return func                                                           # 5. 関数はそのまま返す
+    すべてのテストが通ったかを表す success と、実行時の出力 output を含む JSON 文字列を返す.
+    """
+    return json.dumps({"success": True, "output": "dummy"})
