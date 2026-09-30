@@ -94,10 +94,23 @@ class StdioMCPClient:
             self.close()
             raise
 
-    def list_tools(self) -> None:  # must result
-        pass
+    def list_tools(self) -> list[mcp.Tool]:
+        """サーバーにツールリストを依頼し、結果を受け取る"""
+        if "tools" not in self.server_capabilities:
+            return []
+
+        result = self._request(mcp.Method.TOOLS_LIST)
+
+        try:
+            t_list = mcp.ListToolsResult.model_validate(result)
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"tools/listの応答が不正です: {result}") from e
+
+        return t_list.tools
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> None:  # Resultする必要あり
+        """サーバーにツール実行を依頼し、結果を受け取る"""
+        # if self.server_capabilities.get('tools/list')
         pass
 
     def ping(self) -> None:

@@ -45,12 +45,14 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 
 class MCPServer:
-    def __init__(self) -> None:
+    def __init__(self, name: str, version: str) -> None:
         self.handlers: dict[str, Callable[[dict[str, Any] | None], mcp.MCPModel]] = {  # methodと関数を辞書型で定義
             mcp.Method.INITIALIZE: self._handle_initialize,
-            mcp.Method.PING: self._handle_ping
+            mcp.Method.PING: self._handle_ping,
+            mcp.Method.TOOLS_LIST: self._handle_tools_list
         }
-        self.tools: dict[str, RegisteredTool]
+        self.tools: dict[str, RegisteredTool] = {}
+        self.server_info = mcp.Implementation(name=name, version=version)
 
     def run(self) -> None:
         """サーバーの受付を担当する."""
@@ -118,15 +120,24 @@ class MCPServer:
         # versionが異なる場合も接続を切るかどうかはクライアント側が判断するのでエラーは吐かない
         return mcp.InitializeResult(protocol_version=mcp.MCP_VERSION,
                                     capabilities=self._capabilities(),  # tools/listなどを追加したあとはここに情報を乗せる必要がある、動的取得を設計予定
-                                    server_info=mcp.Implementation(name="agent-smith-mbpp", version="0.1.0"))
+                                    server_info=self.server_info)
 
     def _handle_ping(self, params: dict[str, Any] | None) -> mcp.EmptyResult:
         """成功応答として空のリザルトを返す."""
         return mcp.EmptyResult()
 
+    def _handle_tools_list(self, params: dict[str, Any] | None) -> mcp.ListToolsResult:
+        """サーバーが提供する関数ツールのリストを返す."""
+        return mcp.ListToolsResult(tools=[tool.to_tool() for tool in self.tools.values()])
+
     def _capabilities(self) -> dict[str, Any]:
         """サーバーの提供する機能を動的に取得して返す."""
-        return {}  # いずれ追加
+        registries = {
+            "tools": self.tools,
+            # "resources": self.resources,
+            # "prompts": self.prompts,
+        }
+        return {name: {} for name, registry in registries.items() if registry}
 
     def _error(self, id: rpc.RequestId | None, code: int, message: str, data: Any | None = None) -> rpc.JSONRPCError:
         """エラーオブジェクトを作成して返す."""
@@ -143,20 +154,20 @@ class MCPServer:
         sys.stdout.write(msg.model_dump_json(by_alias=True, exclude_unset=True) + "\n")
         sys.stdout.flush()
 
-    def tool(self, description: str | None = None) -> callable[[F], F]:
+    def tool(self, description: str | None = None) -> Callable[[F], F]:
         def register(func: F) -> F:
             name = func.__name__                                                    # 1. 名前 = 関数名
             doc = description or inspect.getdoc(func)                               # 2. 説明 = 引数で渡された説明、無ければ docstring
 
-            arguments_model = self._build_argumets_model(func)                      # 3. 引数から検証用モデルを作る
+            arguments_model = self._build_argumetns_model(func)                      # 3. 引数から検証用モデルを作る
 
             self.tools[name] = RegisteredTool(name, doc, func, arguments_model)     # 4. 登録簿に載せる
             return func                                                             # 5. 関数はそのまま返す
         return register
 
-    def _build_argumets_model(self, func: Callable[..., Any]) -> type[BaseModel]:
+    def _build_argumetns_model(self, func: Callable[..., Any]) -> type[BaseModel]:
         """関数の引数（型と初期値）をまとめたモデルを作る."""
-        fields = {}
+        fields: dict[str, Any] = {}
         name = func.__name__
         for param_name, param in inspect.signature(func).parameters.items():    # 引数名 -> 引数の情報 -> 引数名とオブジェクト情報
             if param.annotation is inspect.Parameter.empty:
@@ -169,9 +180,6 @@ class MCPServer:
     # サーバーの起動時（ファイルの読み込み時）に、すぐエラーで止まるので、「ツールを呼んで初めて問題に気づく」ことを防げます。
     # 間違いは、できるだけ早い段階で止めるのが定石です。
 
-def main() -> None:
-    MCPServer().run()
-
 
 if __name__ == "__main__":
-    main()
+    pass

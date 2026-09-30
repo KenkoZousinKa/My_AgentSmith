@@ -8,11 +8,21 @@ LLM に渡す必要のない設定なので、関数の中に閉じ込めてお�
 import json
 from src.mcp_server.server import MCPServer
 
+server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
 
-@MCPServer.tool()
+
+@server.tool()
 def run_tests(code: str, test_list: list[str]) -> str:
     """候補の解答コードを、与えられた assert 文のテストで実行する.
 
     すべてのテストが通ったかを表す success と、実行時の出力 output を含む JSON 文字列を返す.
     """
     return json.dumps({"success": True, "output": "dummy"})
+
+
+def main() -> None:
+    server.run()
+
+
+if __name__ == "__main__":
+    main()
