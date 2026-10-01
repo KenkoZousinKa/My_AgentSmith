@@ -119,13 +119,15 @@ class _Checker(ast.NodeVisitor):
         if not _allowed(name, self.authorized):
             self.errors.append(f"import of {name!r} is not allowed")
 
-    def visit_Import(self, node: ast.Import) -> None:
+    #  Visit methods so need the capital letter to match the AST node names.
+    #  Or else the generic_visit() will not call them.
+    def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
         """Visit all nodes."""
         for alias in node.names:
             self._check_module(alias.name)
         self.generic_visit(node)
 
-    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
         """Visit from-imports and reject relative ones."""
         if node.level:
             self.errors.append("relative imports are not allowed")
@@ -133,13 +135,13 @@ class _Checker(ast.NodeVisitor):
             self._check_module(node.module)
         self.generic_visit(node)
 
-    def visit_Attribute(self, node: ast.Attribute) -> None:
+    def visit_Attribute(self, node: ast.Attribute) -> None:  # noqa: N802
         """Blocks dunder access, which reaches globals and subclasses."""
         if node.attr.startswith("__") and node.attr.endswith("__"):
             self.errors.append(f"access to dunder attribute {node.attr!r}")
         self.generic_visit(node)
 
-    def visit_Name(self, node: ast.Name) -> None:
+    def visit_Name(self, node: ast.Name) -> None:  # noqa: N802
         """Check names, letting injectted tools shadow blocked bultins.
 
         An unknown MCP server may expose a tools that aren't allowed.
@@ -166,7 +168,10 @@ def check_code(
 
 # send to child/parent
 def _send(fd: int, message: dict[str, Any]) -> None:
-    """Write one length-prefixed JSON message."""
+    """Write one length-prefixed JSON message.
+
+    fd is the legnth of the message.
+    """
     payload = json.dumps(message).encode("utf-8")
     data = memoryview(struct.pack("!I", len(payload)) + payload)
     while data:
@@ -325,7 +330,9 @@ def _execute(
         result = {"kind": "interrupt"}
     except SystemExit as exc:
         result = {"kind": "exit", "code": str(exc.code or 0)}
-    except BaseException:
+    except BaseException:  # noqa: B036 - KeyboardInterrupt/SystemExit
+        # are caught above; this is needed to catch LLM code that can
+        # raise any exception.
         result = {"kind": "error", "error": traceback.format_exc(limit=5)}
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0.0)
@@ -480,6 +487,70 @@ class Sandbox:
                 continue
             return self._to_result(message)
 
+    def _tool_doc(self, name: str, tool: Any) -> str:
+        """Render one tool as a Python-looking signature plus its docs."""
+        input_schema: dict[str, Any] = getattr(tool, "input_schema", None) or {}
+        props: dict[str, Any] = input_schema.get("properties") or {}
+        required = set(input_schema.get("required") or [])
+        types = {"string": "str", "integer": "int", "number": "float",
+                 "boolean": "bool", "array": "list", "object": "dict"}
+
+        params = []
+        for arg, spec in props.items():
+            hint = types.get(spec.get("type", ""), "Any")
+            params.append(f"{arg}: {hint}" if arg in required
+                          else f"{arg}: {hint} = ...")
+
+        out = [f"{name}({', '.join(params)})"]
+        description = getattr(tool, "description", "") or ""
+        if description:
+            out.append(f"   {description.strip()}")
+        for arg, spec in props.items():
+            if spec.get("description"):
+                out.append(f"   - {arg}: {spec['description']}")
+        return "\n".join(out)
+
+    def manual(self) -> str:
+        """Render the sandbox manual for the LLM's first prompt.
+
+        Made from connected server.
+        """
+        lines = [
+            "# Sandbox",
+            "",
+            "Your code runs in a restricted Python namespace.",
+            "State persists between steps: names you define stay defined.",
+            "",
+            "## Rules",
+            f"- Imports allowed: "
+            f"{', '.join(sorted(self.config.authorized_imports))}",
+            f"- File access limited to: "
+            f"{', '.join(sorted(self.config.allowed_directories))}",
+            "- No network access.",
+            f"- Execution time limit: {self.config.max_execution_time_seconds}s "
+            f"(tool calls are not counted against this limit).",
+            f"- Memory limit: {self.config.max_memory_mb}MB.",
+            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)) + ", ",
+            "- Dunder attribute access (__class__, __globals__) is blocked.",
+            "",
+            "## final_answer",
+            ""
+            "final_answer(value) ends the task. It is always available and",
+            "is not an MCP tool. Call it once you have a verified answer.",
+            "",
+            "## Tools",
+            "",
+            "Call these as normal Python functions, keywords arguments only.",
+            "",
+        ]
+        if not self.tools:
+            lines.append("No MCP server connected.")
+            return "\n".join(lines)
+        for name in sorted(self.tools):
+            lines.append(self._tool_doc(name, self.tools[name]))
+            lines.append("")
+        return "\n".join(lines)
+
     def _dispatch(self, message: dict[str, Any]) -> None:
         """Run one tool in the parent and send the reply back."""
         name = str(message.get("name", ""))
@@ -582,6 +653,8 @@ def main() -> int:
         if args.config else SandboxConfig()
     )
     sandbox = Sandbox(config)
+    # sandbox.tools = client.python_functions()
+    # sandbox.reset()
     try:
         if args.command is not None:
             _show(sandbox.run(args.command))
