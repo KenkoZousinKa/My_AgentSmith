@@ -1,22 +1,18 @@
-"""xmlコード抽出機能を提供するモジュール.
-
-
-"""
+"""xmlコード抽出機能を提供するモジュール."""
 from src.agent.extractor.code_extractor import CodeExtractor
 
 
 class XMLCodeExtractor(CodeExtractor):
     """XMLコードを抽出するクラス."""
 
-    @staticmethod
-    def extract_code_from_text(llm_output: str) -> str:
-        """LLMの出力テキストからPythonコードを抽出する.
+    def extract(self, llm_output: str) -> str | None:
+        """LLMの出力テキストからXMLコードを抽出する.
 
         Args:
             llm_output (str): LLMの出力テキスト
 
         Returns:
-            str: 抽出されたPythonコード
+            str: 抽出されたXMLコード
         """
-        # Pythonコードの抽出ロジックを実装する
-        return llm_output  # 実際には抽出したPythonコードを返す
+        # XMLコードの抽出ロジックを実装する
+        return llm_output  # 実際には抽出したXMLコードを返す

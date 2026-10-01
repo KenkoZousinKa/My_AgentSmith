@@ -1,12 +1,11 @@
-"""reactコード抽出機能を提供するモジュール.
-"""
+"""reactコード抽出機能を提供するモジュール."""
 from src.agent.extractor.code_extractor import CodeExtractor
 
 
 class ReactCodeExtractor(CodeExtractor):
     """Reactコードを抽出するクラス."""
 
-    def extract_code_from_text(self, llm_output: str) -> str:
+    def extract(self, llm_output: str) -> str | None:
         """LLMの出力テキストからReactコードを抽出する.
 
         Args:
