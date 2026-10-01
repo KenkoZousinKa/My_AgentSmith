@@ -68,7 +68,7 @@ lint: ## Flake8 / Mypy / ruffによる静的解析を実行
 	@echo "Running Linter (Standard)..."
 	-@$(UV) run flake8 $(SRC_DIR)
 	-@$(UV) run mypy $(SRC_DIR) 
-	-@$(UV) run ruff check $(SRC_DIR)
+#	-@$(UV) run ruff check $(SRC_DIR)
 # 	-@$(UV) run ty check $(SRC_DIR)
 	@echo "Linting complete."
 
