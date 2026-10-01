@@ -1,5 +1,7 @@
 # Project specific (Mandatory rule)
 cache/
+# 評価用出力ツリー、実行時生成
+evaluations/
 
 # -----------
 #     C     |

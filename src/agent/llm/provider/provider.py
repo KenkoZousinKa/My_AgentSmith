@@ -10,10 +10,8 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 
 - [ ] 抽象クラスはmodels/以下に移動、各プロバイダのサブクラスは別途provider/以下に配置。
 """
-
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
-from typing import Any, Protocol
 
 
 class ProviderConfig(BaseModel):

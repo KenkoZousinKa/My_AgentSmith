@@ -6,13 +6,14 @@
     - JSON / Hermes形式
     - React形式
 """
+from abc import ABC, abstractmethod
 
 
-class CodeExtractor:
+class CodeExtractor(ABC):
     """LLMの出力からコードを抽出するクラス."""
 
-    @staticmethod
-    def extract_code_from_text(llm_output: str) -> str:
+    @abstractmethod
+    def extract_code_from_text(self, llm_output: str) -> str:
         """LLMの出力テキストからコードを抽出する.
 
         P0: Pythonコード
