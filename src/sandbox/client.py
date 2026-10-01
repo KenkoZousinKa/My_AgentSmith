@@ -186,8 +186,12 @@ class StdioMCPClient:
 
 if __name__ == "__main__":
     print("[Client] MCPクライアントを起動します...")
-    with StdioMCPClient("python mcp_tools_mbpp.py") as c:
-        pass
+    try:
+        with StdioMCPClient("python mcp_tools_mbpp.py") as c:
+            c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
+            pass
+    except Exception as e:
+        print(e)
 
     # def call_tool(self, tool_name: str, args: dict[str, str]) -> dict[str, str]:
     #     """サーバーにツール実行を依頼し、結果を受け取る"""

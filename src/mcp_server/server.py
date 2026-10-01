@@ -1,33 +1,4 @@
-"""
-class MCPServer:
-    def __init__(self) -> None:
-        self.handlers = {                               # 対応表
-            METHOD_INITIALIZE: self.handle_initialize,
-            "ping": self.handle_ping,
-        }
-
-    def run(self) -> None:                              # 受付係
-        for line in sys.stdin:                          #   EOF で自然にループが終わる
-            ...                                         #   ② 封筒に変換 → 種類で分岐
-                                                        #      → self._dispatch(msg)
-                                                        #      → 壊れていれば self._error(None, ...)
-
-    def _dispatch(self, msg) -> None: ...               # 振り分け係（上のコード）
-                                                        #   → self.handlers[...](params)
-                                                        #   → self._write(...) / self._error(...)
-
-    def handle_initialize(self, params) -> InitializeResult: ...   # 担当課
-    def handle_ping(self, params) -> EmptyResult: ...              # 担当課
-
-    def _error(self, id, code, message) -> None: ...   # エラー応答を組み立てて → self._write
-    def _write(self, message) -> None: ...                   # 発送係
-
-
-if __name__ == "__main__":
-    MCPServer().run()
-
-
-"""
+"""mbpp server.py"""
 
 
 import sys

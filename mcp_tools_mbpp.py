@@ -1,29 +1,40 @@
-"""
-引数は code と test_list の2つだけにします。 引数を増やすと、LLM が使い方に迷う原因になります。
-返り値は、辞書ではなく JSON 文字列です。 json.dumps({"success": ..., "output": ...}) で作ります。
-実行時間の上限は、引数にせず、関数の中の定数として持ちます。 Moulinette の採点も、30秒の上限で実行していました。
-LLM に渡す必要のない設定なので、関数の中に閉じ込めておけば十分です。
-"""
+"""mcp_tools_mbpp.py"""
 
+import sys
 import json
+import subprocess
+import tempfile
 from src.mcp_server.server import MCPServer
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
+TIMEOUT = 30
 
 
 @server.tool()
 def run_tests(code: str, test_list: list[str]) -> str:
-    """候補の解答コードを、与えられた assert 文のテストで実行する.
+    """Run candidate solution code against a list of assert statements.
 
-    すべてのテストが通ったかを表す success と、実行時の出力 output を含む JSON 文字列を返す.
+    Returns a JSON string with "success" (True if all tests passed),
+    "message" and "output" (stdout and stderr of the run).
     """
-    return json.dumps({"success": True, "output": "dummy"})
+    # 1. 実行するスクリプトを用意
+    script = f"{code}\n" + '\n'.join(test_list)
 
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # 2. 自動で削除されるtemp_dir内で実行
+            result = subprocess.run([sys.executable, '-I', '-c', script], cwd=temp_dir, env={},
+                                    capture_output=True, text=True, timeout=TIMEOUT, check=True)
+    except subprocess.TimeoutExpired:
+        return json.dumps({"success": False, "message": "Timeout",
+                           "output": f"Execution did not finish within {TIMEOUT} seconds."})
+    except subprocess.CalledProcessError as e:
+        return json.dumps({"success": False, "message": "Tests failed", "output": e.stdout + e.stderr})
+    except Exception as e:
+        return json.dumps({"success": False, "message": type(e).__name__, "output": str(e)})
 
-# @server.tool()
-# def divide(a: int, b: int) -> str:
-#     """a を b で割る(debug)."""
-#     return str(a / b)
+    # 3. json形式のstrにして返す。
+    return json.dumps({"success": True, "message": "passed", "output": result.stdout + result.stderr})
 
 
 def main() -> None:
