@@ -1,25 +1,4 @@
-"""stdioMCPClient:
-    # --- 生成と後片付け ---
-    def __init__(self, command: str) -> None: ...
-    def __enter__(self) -> "StdioMCPClient": ...
-    def __exit__(self, *exc: object) -> None: ...
-    def __del__(self) -> None: ...
-
-    # --- 公開 API（使う順） ---
-    def connect(self) -> None: ...
-    def list_tools(self) -> list[Tool]: ...
-    def call_tool(self, name: str, arguments: dict[str, Any]) -> CallToolResult: ...
-    def close(self) -> None: ...
-
-    # --- 上の層：意味（リクエスト / 通知） ---
-    def _request(self, ...) -> ...: ...
-    def _notify(self, ...) -> None: ...
-
-    # --- 下の層：運搬（送信 / 受信） ---
-    def _send(self, message) -> None: ...
-    def _receive(self) -> JSONRPCMessage: ...
-
-"""
+"""stdioMCPClient:"""
 
 
 import subprocess
@@ -107,10 +86,17 @@ class StdioMCPClient:
 
         return t_list.tools
 
-    def call_tool(self, name: str, arguments: dict[str, Any]) -> None:  # Resultする必要あり
+    def call_tool(self, name: str, arguments: dict[str, Any]) -> mcp.CallToolResult:
         """サーバーにツール実行を依頼し、結果を受け取る"""
-        # if self.server_capabilities.get('tools/list')
-        pass
+        params = mcp.CallToolRequestParams(name=name, arguments=arguments)
+        result = self._request(mcp.Method.TOOLS_CALL, params)
+
+        try:
+            result_model = mcp.CallToolResult.model_validate(result)
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"tools/callの応答が不正です: {result}") from e
+
+        return result_model
 
     def ping(self) -> None:
         """サーバーが応答するか確かめる。応答が無ければ例外."""

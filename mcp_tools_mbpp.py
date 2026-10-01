@@ -20,10 +20,10 @@ def run_tests(code: str, test_list: list[str]) -> str:
     return json.dumps({"success": True, "output": "dummy"})
 
 
-@server.tool()
-def divide(a: int, b: int) -> str:
-    """a を b で割る（確認用）."""
-    return str(a / b)
+# @server.tool()
+# def divide(a: int, b: int) -> str:
+#     """a を b で割る(debug)."""
+#     return str(a / b)
 
 
 def main() -> None:
