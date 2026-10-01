@@ -39,7 +39,8 @@ class MBPPProfile(TaskProfile):
             },
             {
                 "input": "Write a function to check if a number is prime.",
-                "output": "def is_prime(n):\n    if n <= 1:\n        return False\n    for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True"
+                "output": "def is_prime(n):\n    if n <= 1:\n        return False\n    "
+                "for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True"
             }
         ]
 

@@ -12,7 +12,7 @@ class ExecutionResult(BaseModel):
     final_value: str | None  # 呼ばれた場合の引数（MBPP=コード, SWE=patch）
 
 
-class Sandbox_Base(Protocol):
+class SandboxBase(Protocol):
     def run(self, code: str) -> ExecutionResult:
         """Check then execute. Never raises for errors inside the snippet."""
         ...

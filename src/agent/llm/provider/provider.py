@@ -12,6 +12,7 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 """
 from abc import ABC, abstractmethod
 from pydantic import BaseModel
+from typing import Any
 
 
 class ProviderConfig(BaseModel):
@@ -43,6 +44,7 @@ class LLMResponse(BaseModel):
 class LLMProvider(ABC):
     """LLMプロバイダの抽象クラス。"""
 
+    @abstractmethod
     def generate(self, messages: str, model_name: str, stop_sequences: str, max_tokens: int) -> LLMResponse:
         """LLMにリクエストを送信し、レスポンスを返す.
 
