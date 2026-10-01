@@ -50,7 +50,7 @@ class InitializeRequestParams(MCPModel):
 
 
 class InitializeResult(MCPModel):
-    """`initialize` リクエストへの応答の中身（サーバー → クライアント）。"""
+    """`initialize` リクエストへの応答のresult（サーバー → クライアント）。"""
 
     protocol_version: str
     """サーバーが使うと決めた MCP バージョン。クライアントが対応していなければ、クライアント側が切断する（MUST）。"""
@@ -67,8 +67,31 @@ class Tool(MCPModel):
 
 
 class ListToolsResult(MCPModel):
-    """tools/list リクエストへの応答の中身"""
+    """tools/list リクエストへの応答のresult"""
     tools: list[Tool]
+
+
+class CallToolRequestParams(MCPModel):
+    """tools/call リクエストのパラメータ(クライアント -> サーバー)"""
+    name: str
+    arguments: dict[str, Any] | None = None
+
+
+class TextContent(MCPModel):
+    """CallToolResultの中で使われる 関数のテキスト結果."""
+    type: Literal["text"] = "text"
+    text: str
+
+
+class CallToolResult(MCPModel):
+    """tools/call リクエストへの応答のresult"""
+    content: list[TextContent]
+    is_error: bool = False
+
+    @property
+    def text(self) -> str:
+        """content の中のテキストを、1つの文字列につなげて返す."""
+        return "\n".join(c.text for c in self.content)
 
 
 class EmptyResult(MCPModel):

@@ -49,7 +49,8 @@ class MCPServer:
         self.handlers: dict[str, Callable[[dict[str, Any] | None], mcp.MCPModel]] = {  # methodと関数を辞書型で定義
             mcp.Method.INITIALIZE: self._handle_initialize,
             mcp.Method.PING: self._handle_ping,
-            mcp.Method.TOOLS_LIST: self._handle_tools_list
+            mcp.Method.TOOLS_LIST: self._handle_tools_list,
+            mcp.Method.TOOLS_CALL: self._handle_call_tool
         }
         self.tools: dict[str, RegisteredTool] = {}
         self.server_info = mcp.Implementation(name=name, version=version)
@@ -130,6 +131,32 @@ class MCPServer:
         """サーバーが提供する関数ツールのリストを返す."""
         return mcp.ListToolsResult(tools=[tool.to_tool() for tool in self.tools.values()])
 
+    def _handle_call_tool(self, params: dict[str, Any] | None) -> mcp.CallToolResult:
+        """サーバーが提供する関数ツールのリストを返す."""
+        p = mcp.CallToolRequestParams.model_validate(params)
+        # 1. tool検索
+        tool = self.tools.get(p.name)
+        if tool is None:  # toolが見つからなかった
+            raise mcp.MCPError(rpc.ErrorCode.INVALID_PARAMS,
+                               f"Unknown tools: {p.name} (available: {', '.join(list(self.tools.keys()))})", None)
+
+        # 2. 引数検証  argumentsはOptionalのため
+        try:
+            args = tool.arguments_model.model_validate(p.arguments or {})
+        except ValidationError as e:
+            detail = "; ".join(f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors())
+            raise mcp.MCPError(rpc.ErrorCode.INVALID_PARAMS,
+                               f"Invalid arguments for tool {p.name}: {detail}", None) from e
+
+        # 3. modelを辞書にして渡す
+        try:
+            value = tool.func(**args.model_dump())
+        except Exception as e:
+            return mcp.CallToolResult(content=[mcp.TextContent(text=f"{type(e).__name__}: {e}")], is_error=True)
+
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)  # 日本語をそのまま出力する
+        return mcp.CallToolResult(content=[mcp.TextContent(text=text)])
+
     def _capabilities(self) -> dict[str, Any]:
         """サーバーの提供する機能を動的に取得して返す."""
         registries = {
@@ -166,7 +193,7 @@ class MCPServer:
         return register
 
     def _build_argumetns_model(self, func: Callable[..., Any]) -> type[BaseModel]:
-        """関数の引数（型と初期値）をまとめたモデルを作る."""
+        """渡された関数の引数（型と初期値）をまとめたモデルを動的に作る."""
         fields: dict[str, Any] = {}
         name = func.__name__
         for param_name, param in inspect.signature(func).parameters.items():    # 引数名 -> 引数の情報 -> 引数名とオブジェクト情報
@@ -175,10 +202,6 @@ class MCPServer:
             default = ... if param.default is inspect.Parameter.empty else param.default
             fields[param_name] = (param.annotation, default)
         return create_model(f"{name}Arguments", **fields)
-    # 3で型ヒントが無い引数を見つけたら、その場で TypeError にしています。
-    # 型ヒントが無いと、スキーマを作れないからです。
-    # サーバーの起動時（ファイルの読み込み時）に、すぐエラーで止まるので、「ツールを呼んで初めて問題に気づく」ことを防げます。
-    # 間違いは、できるだけ早い段階で止めるのが定石です。
 
 
 if __name__ == "__main__":

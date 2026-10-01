@@ -1,5 +1,4 @@
-"""
-class StdioMCPClient:
+"""stdioMCPClient:
     # --- 生成と後片付け ---
     def __init__(self, command: str) -> None: ...
     def __enter__(self) -> "StdioMCPClient": ...
@@ -201,7 +200,7 @@ class StdioMCPClient:
 
 if __name__ == "__main__":
     print("[Client] MCPクライアントを起動します...")
-    with StdioMCPClient("python src/mcp_server/server.py") as c:
+    with StdioMCPClient("python mcp_tools_mbpp.py") as c:
         pass
 
     # def call_tool(self, tool_name: str, args: dict[str, str]) -> dict[str, str]:
