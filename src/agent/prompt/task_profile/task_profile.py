@@ -24,7 +24,6 @@ class TaskProfile(ABC):
         Returns:
             str: タスクの指示
         """
-        pass
 
     @abstractmethod
     def final_answer_specification(self) -> str:
@@ -33,7 +32,6 @@ class TaskProfile(ABC):
         Returns:
             str: 最終的な回答の仕様
         """
-        pass
 
     @abstractmethod
     def few_shot_examples(self) -> list:
@@ -42,7 +40,6 @@ class TaskProfile(ABC):
         Returns:
             list: Few-shotの例
         """
-        pass
 
     @abstractmethod
     def manual(self, sandbox: SandboxBase) -> str:
@@ -54,4 +51,3 @@ class TaskProfile(ABC):
         Returns:
             str: LLM向けツールマニュアル
         """
-        pass

@@ -1,7 +1,6 @@
 """SWEBenchのタスクプロファイルを定義するモジュール."""
-from src.agent.prompt.task_profile.task_profile import TaskProfile
-
 from src.models.sandbox_base import SandboxBase
+from src.agent.prompt.task_profile.task_profile import TaskProfile
 
 
 class SWEBenchProfile(TaskProfile):

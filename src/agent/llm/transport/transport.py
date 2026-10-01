@@ -20,4 +20,3 @@ class HttpTransport(ABC):
         Returns:
             tuple[int, str]: レスポンスのステータスコードとボディ
         """
-        pass
