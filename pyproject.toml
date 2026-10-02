@@ -19,9 +19,9 @@ dev = [
     "flake8-pyproject",
     "mypy>=1.19.1",
     "pep8-naming>=0.15.1",
-	"ruff",
-	"ty",
-	"pytest",
+    "ruff",
+    "ty",
+    "pytest",
 ]
 # "flake8-docstrings",
 
