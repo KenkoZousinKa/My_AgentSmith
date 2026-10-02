@@ -261,6 +261,7 @@ def _tool_proxy(name: str, out_fd: int, in_fd: int) -> Callable[..., Any]:
             if remaining > 0:
                 signal.setitimer(signal.ITIMER_REAL, remaining)
         if reply.get("error") is not None:
+            print(reply)
             raise RuntimeError(f"tool {name!r} failed: {reply['error']}")
         return reply.get("result")
     proxy.__name__ = name
@@ -400,7 +401,22 @@ class Sandbox:
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
+        # self._spawn()
+
+    def __enter__(self) -> "Sandbox":
+        """Enter a context manager."""
+
+        self.client = StdioMCPClient("python mcp_tools_mbpp.py")
+        self.client.connect()
+        self.tools = {t.name: MCPToolFunction(self.client, t) for t in self.client.list_tools()}
         self._spawn()
+
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        """Leave a context manager, killing the worker."""
+        self.close()
+        self.client.close()
 
     def _spawn(self) -> None:
         """Fork a worker and keep the parent endsd of both pipes."""
@@ -451,14 +467,6 @@ class Sandbox:
             except OSError:
                 pass
         self._pid = None
-
-    def __enter__(self) -> "Sandbox":
-        """Enter a context manager."""
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        """Leave a context manager, killing the worker."""
-        self.close()
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
@@ -658,21 +666,15 @@ def main() -> int:
         if args.config else SandboxConfig()
     )
 
-    with StdioMCPClient("python mcp_tools_mbpp.py") as client:
-        sandbox = Sandbox(config=config,
-                          tools={t.name: MCPToolFunction(client, t) for t in client.list_tools()})
-        # print(sandbox.tools['run_tests']())
+    with Sandbox(config=config) as sandbox:
         print(sandbox.manual())
-
-    try:
+        print(sandbox.client.list_tools())
         if args.command is not None:
             _show(sandbox.run(args.command))
         elif args.file is not None:
             _show(sandbox.run(Path(args.file).read_text(encoding="utf-8")))
         else:
             return _repl(sandbox)
-    finally:
-        sandbox.close()
     return 0
 
 
