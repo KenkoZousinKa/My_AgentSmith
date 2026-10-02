@@ -32,6 +32,9 @@ class MCPModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
+# ===== initialize/ Class =====
+
+
 class Implementation(MCPModel):
     """MCP 実装の名前とバージョン（`clientInfo` / `serverInfo` の中身）。"""
 
@@ -57,6 +60,9 @@ class InitializeResult(MCPModel):
     capabilities: dict[str, Any]
     """サーバーが提供する機能（tools / resources / prompts など）。"""
     server_info: Implementation
+
+
+# ===== tools/ Class =====
 
 
 class Tool(MCPModel):

@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any, Callable
 from pydantic import BaseModel, Field
 
+from src.models import jsonrpc as rpc
+from src.models import mcpmodel as mcp
+from src.sandbox.client import StdioMCPClient
+from src.sandbox.mcp_tool_function import MCPToolFunction
+
 
 class SandboxConfig(BaseModel):
     """Sandbox configuration for student solutions.
@@ -391,7 +396,7 @@ class Sandbox:
     ) -> None:
         """Init the Sandbox and fork its worker."""
         self.config = config or SandboxConfig()
-        self.tools = tools or {}
+        self.tools: dict[str, Callable[..., Any]] = tools or {}
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
@@ -652,9 +657,13 @@ def main() -> int:
         )
         if args.config else SandboxConfig()
     )
-    sandbox = Sandbox(config)
-    # sandbox.tools = client.python_functions()
-    # sandbox.reset()
+
+    with StdioMCPClient("python mcp_tools_mbpp.py") as client:
+        sandbox = Sandbox(config=config,
+                          tools={t.name: MCPToolFunction(client, t) for t in client.list_tools()})
+        # print(sandbox.tools['run_tests']())
+        print(sandbox.manual())
+
     try:
         if args.command is not None:
             _show(sandbox.run(args.command))

@@ -1,0 +1,21 @@
+from typing import Any
+
+from src.models import mcpmodel as mcp
+from src.sandbox.client import StdioMCPClient
+
+
+class MCPToolFunction:
+    """MCP のツール1つを、サンドボックスから普通の関数として呼べるようにする."""
+
+    def __init__(self, client: StdioMCPClient, tool: mcp.Tool) -> None:
+        self.client = client
+        self.name = tool.name
+        self.description = tool.description          # ← _tool_doc が読む
+        self.input_schema = tool.input_schema        # ← _tool_doc が読む
+
+    def __call__(self, **arguments: Any) -> str:     # ← _dispatch が呼ぶ
+        result = self.client.call_tool(self.name, arguments)
+        text = "\n".join(c.text for c in result.content)
+        if result.is_error:
+            raise RuntimeError(text)                 # ツールの失敗は例外にして、_dispatch に伝える
+        return text
