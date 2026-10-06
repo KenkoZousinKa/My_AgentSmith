@@ -29,7 +29,6 @@ class CodeExtractor(ABC):
         P1: XML形式, JSON / Hermes形式, React形式
         非Pythonコードは、コードブロックの中に含まれる場合があるため、
         正規表現やパターンマッチングを使用して抽出する。
-        コードが見つからない / 不正だが解釈した場合は明示的にフィードバックを返す。
 
         Args:
             llm_output (str): LLMが生成した出力テキスト全体。
