@@ -1,5 +1,8 @@
 """TaskProfileのベースクラスを定義するモジュール.
 
+タスク種別ごとのプロンプト差分の注入口。
+共通テンプレートに差し込む、タスク種別で変わる要素を抽象メソッドとして持つ。
+新しいタスク種別を足すときは、このクラスを継承したプロファイルを1つ実装する。
 - [x] models/以下に移動可能性あり。
 - [ ] MBPPProfile, SWEBenchProfileが継承、他にタスクを増やしたい時用。
 - [ ] few-shotを1例、各プロファイルごとに定義する。
@@ -12,14 +15,17 @@ from src.models.sandbox_base import SandboxBase
 
 
 class TaskProfile(ABC):
-    """タスクのプロファイルを定義するクラス."""
+    """タスク種別ごとのプロンプト差分を提供する抽象基底クラス.
+
+    具象クラスが下記4メソッドを実装する。
+    """
 
     @abstractmethod
-    def task_instructions(self, task_name: str) -> str:
-        """タスクの指示を取得する.
+    def task_instructions(self) -> str:
+        """このタスクの進め方を返す.
 
-        Args:
-            task_name (str): タスク名(mbpp / swebench)
+        具体的な問題分は、orchestratorがuserメッセージとして別途与えるため含めない。
+        MBPP -> 「関数を書き、printでテストを出力し、final_answer(関数のソース)で提出」。
 
         Returns:
             str: タスクの指示
@@ -27,23 +33,29 @@ class TaskProfile(ABC):
 
     @abstractmethod
     def final_answer_specification(self) -> str:
-        """最終的な回答の仕様を取得する.
+        """final_answer()に何を渡すべきか、最終的な回答の仕方を返す.
 
         Returns:
             str: 最終的な回答の仕様
         """
 
     @abstractmethod
-    def few_shot_examples(self) -> list:
-        """Few-shotの例を取得する.
+    def few_shot_example(self) -> str:
+        """出力形式を教えるためのFew-shotの例を返す.
+
+        Thought -> Code -> Observation -> final_answer
+        実タスクとは無関係な例。形式を示すためだけの固定のテキスト。
 
         Returns:
-            list: Few-shotの例
+            str: Few-shotの例
         """
 
     @abstractmethod
     def manual(self, sandbox: SandboxBase) -> str:
-        """接続中MCPサーバーのツールスキーマから動的生成した、LLM向けツールマニュアルを取得する.
+        """接続中MCPサーバーのツールスキーマから動的生成した、LLM向けツールマニュアルを返す.
+
+        このタスクで使えるツール / 環境の説明を返す。
+        ツールはハードコードせずに、sandbox.manual()から動的に取得する。
 
         Args:
             sandbox (SandboxBase): サンドボックスのインスタンス
