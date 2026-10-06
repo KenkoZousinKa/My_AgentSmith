@@ -2,31 +2,32 @@
 from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.models.sandbox_base import SandboxBase
 
+_SWEBENCH_FEW_SHOT_EXAMPLE = '''Thought: First I'll inspect the failing file to understand the bug.
+```python
+print(read_file("calc/ops.py"))
+```
+<end_code>
+Observation:
+[OK] Executed successfully.
+--- stdout ---
+def divide(a, b):
+    return a * b
+Thought: divide uses '*' instead of '/'. I'll submit a patch that fixes it.
+```python
+final_answer("""--- a/calc/ops.py
++++ b/calc/ops.py
+@@ -1,2 +1,2 @@
+ def divide(a, b):
+-    return a * b
++    return a / b
+""")
+```
+<end_code>'''
+
 
 class SWEBenchProfile(TaskProfile):
     """SWEBench(gitリポジトリのバグ修正)用のTaskProfileを定義するクラス."""
     name = "swebench"
-    _SWEBENCH_FEW_SHOT_EXAMPLE = '''Thought: First I'll inspect the failing file to understand the bug.
-    ```python
-    print(read_file("calc/ops.py"))
-    ```
-    <end_code>
-    Observation:
-    [OK] Executed successfully.
-    --- stdout ---
-    def divide(a, b):
-        return a * b
-    Thought: divide uses '*' instead of '/'. I'll submit a patch that fixes it.
-    ```python
-    final_answer("""--- a/calc/ops.py
-    +++ b/calc/ops.py
-    @@ -1,2 +1,2 @@
-     def divide(a, b):
-    -    return a * b
-    +    return a / b
-    """)
-    ```
-    <end_code>'''
 
     def task_instructions(self) -> str:
         """SWEタスクの進め方を返す.
@@ -61,7 +62,7 @@ class SWEBenchProfile(TaskProfile):
         Returns:
             str: Few-shotの例
         """
-        return self._SWEBENCH_FEW_SHOT_EXAMPLE
+        return _SWEBENCH_FEW_SHOT_EXAMPLE
 
     def manual(self, sandbox: SandboxBase) -> str:
         """接続中MCPサーバーのツールスキーマから動的生成した、LLM向けツールマニュアルを返す.

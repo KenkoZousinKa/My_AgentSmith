@@ -2,28 +2,29 @@
 from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.models.sandbox_base import SandboxBase
 
+_MBPP_FEW_SHOT_EXAMPLE = """Thought: I'll write the function, then quickly check it with print.
+```python
+def add(a, b):
+    return a + b
+
+print(add(2, 3))
+```
+<end_code>
+Observation:
+[OK] Executed successfully.
+--- stdout ---
+5
+Thought: The output is correct, so I'll submit the function source.
+```python
+final_answer("def add(a, b):\\n    return a + b")
+```
+<end_code>
+"""
+
 
 class MBPPProfile(TaskProfile):
     """MBPP(単一の関数の実装課題)用のTaskProfileを定義するクラス."""
     name = "mbpp"
-    _MBPP_FEW_SHOT_EXAMPLE = """Thought: I'll write the function, then quickly check it with print.
-    ```python
-    def add(a, b):
-        return a + b
-
-    print(add(2, 3))
-    ```
-    <end_code>
-    Observation:
-    [OK] Executed successfully.
-    --- stdout ---
-    5
-    Thought: The output is correct, so I'll submit the function source.
-    ```python
-    final_answer("def add(a, b):\\n    return a + b")
-    ```
-    <end_code>
-    """
 
     def task_instructions(self) -> str:
         """MBPPタスクの進め方を返す.
@@ -58,7 +59,7 @@ class MBPPProfile(TaskProfile):
         Returns:
             str: Few-shotの例
         """
-        return self._MBPP_FEW_SHOT_EXAMPLE
+        return _MBPP_FEW_SHOT_EXAMPLE
 
     def manual(self, sandbox: SandboxBase) -> str:
         """接続中MCPサーバーのツールスキーマから動的生成した、LLM向けツールマニュアルを返す.
