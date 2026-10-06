@@ -72,6 +72,22 @@ def _on_alarm(*_args: Any) -> None:
     raise _Timeout()
 
 
+def _truncate(text: str, limit: int) -> tuple[str, bool]:
+    """Cap text, stating what was dropped.
+
+    The marker matters: without it the LLM treats a cut-off result as
+    complete and reasons from a false premise.
+    """
+    if len(text) <= limit:
+        return text
+    dropped = len(text) - limit
+    marked = (
+        f"{text[:limit]}\n[output truncated: {dropped} of {len(text)} "
+        f"characters omitted; narrow your request to see the rest]"
+    )
+    return marked, True
+
+
 # send to child/parent
 def _send(fd: int, message: dict[str, Any]) -> None:
     """Write one length-prefixed JSON message.

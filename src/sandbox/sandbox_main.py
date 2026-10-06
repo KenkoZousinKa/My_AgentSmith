@@ -3,8 +3,7 @@
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
 from src.sandbox.code_lint import check_code, _BLOCKED
-from src.sandbox.sandbox_result import _truncate
-from src.sandbox.sandbox_helper import _send, _recv
+from src.sandbox.sandbox_helper import _send, _recv, _truncate
 from src.sandbox.sandbox_child import _child_main
 from src.sandbox.sandboxcodelint import ExecuteResult
 from src.sandbox.mcp_tool_function import MCPToolFunction
@@ -32,6 +31,7 @@ class Sandbox:
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
+        self._tool_truncated = False
         # self._spawn()
 
     def __enter__(self) -> "Sandbox":
@@ -104,6 +104,7 @@ class Sandbox:
         if rejection:
             return ExecuteResult(error=rejection)
 
+        self._tool_truncated = False
         try:
             _send(self._cmd_w, {"kind": "run", "code": code})
         except OSError:
@@ -204,24 +205,32 @@ class Sandbox:
         else:
             try:
                 raw = handler(**(message.get("arguments") or {}))
-                reply["result"] = (
-                    _truncate(raw, self.config.max_output_chars)
-                    if isinstance(raw, str) else raw
-                )
+                if isinstance(raw, str):
+                    raw, was_cut = _truncate(
+                        raw, self.config.max_output_chars
+                    )
+                    self._tool_truncated = self._tool_truncated or was_cut
+                reply["result"] = raw
             except Exception as exc:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
         _send(self._cmd_w, reply)
 
     @staticmethod
-    def _to_result(message: dict[str, Any]) -> ExecuteResult:
+    def _to_result(self, message: dict[str, Any]) -> ExecuteResult:
         """Turn a terminal worker message into an ExecuteResult."""
         base = {
             "stdout": message.get("stdout", ""),
-            "stderr": message.get("stderr", "")
+            "stderr": message.get("stderr", ""),
+            "timeout": bool(message.get("timeout", False)),
+            "truncated": bool(message.get("truncated", False) or self._tool_truncated),
         }
         kind = message.get("kind")
         if kind == "final_answer":
-            return ExecuteResult(final_answer=message.get("value"), **base)
+            return ExecuteResult(
+                final_answer=message.get("value"),
+                final_answer_bool=True,  # This is for cases where final answer is ""
+                **base
+            )
         if kind == "error":
             return ExecuteResult(error=message.get("error"), **base)
         if kind == "interrupt":

@@ -33,7 +33,7 @@ def _execute(
     body = compile(tree, "<sandbox>", "exec")
 
     out, err = io.StringIO(), io.StringIO()
-    result: dict[str, Any] = {"kind": "ok", "value": None}
+    result: dict[str, Any] = {"kind": "ok", "value": None, "timeout": False}
     signal.setitimer(signal.ITIMER_REAL, float(timeout))
     try:
         with redirect_stdout(out), redirect_stderr(err):
@@ -48,7 +48,7 @@ def _execute(
     except FinalAnswer as answer:
         result = {"kind": "final_answer", "value": str(answer.value)}
     except _Timeout:
-        result = {"kind": "error", "error": (
+        result = {"kind": "error", "timeout": True, "error": (
             f"timeout after {timeout}s; any output above is partial"
         )}
     except MemoryError:
@@ -65,8 +65,11 @@ def _execute(
         signal.setitimer(signal.ITIMER_REAL, 0.0)
 
     limit = config.max_output_chars
-    result["stdout"] = _truncate(out.getvalue(), limit)
-    result["stderr"] = _truncate(err.getvalue(), limit)
+    out_text, out_cut = _truncate(out.getvalue(), limit)
+    err_text, err_cut = _truncate(err.getvalue(), limit)
+    result["stdout"] = out_text
+    result["stderr"] = err_text
+    result["truncated"] = out_cut or err_cut
     return result
 
 
