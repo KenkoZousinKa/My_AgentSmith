@@ -3,7 +3,7 @@
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
 from src.sandbox.code_lint import _safe_builtins
-from src.sandbox.sandbox_result import FinalAnswer, _truncate
+from src.sandbox.sandbox_result import FinalAnswer
 from src.sandbox.sandbox_helper import (
     _apply_limits,
     _disable_network,
@@ -11,6 +11,7 @@ from src.sandbox.sandbox_helper import (
     _recv,
     _send,
     _on_alarm,
+    _truncate,
     _Timeout
 )
 from typing import Any

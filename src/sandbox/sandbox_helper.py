@@ -79,7 +79,7 @@ def _truncate(text: str, limit: int) -> tuple[str, bool]:
     complete and reasons from a false premise.
     """
     if len(text) <= limit:
-        return text
+        return text, False
     dropped = len(text) - limit
     marked = (
         f"{text[:limit]}\n[output truncated: {dropped} of {len(text)} "

@@ -5,9 +5,9 @@ from src.models.sandbox_config import SandboxConfig
 from src.sandbox.code_lint import check_code, _BLOCKED
 from src.sandbox.sandbox_helper import _send, _recv, _truncate
 from src.sandbox.sandbox_child import _child_main
-from src.sandbox.sandboxcodelint import ExecuteResult
+from src.models.output import ExecuteResult
 from src.sandbox.mcp_tool_function import MCPToolFunction
-from src.sandbox.mcp_client import StdioMCPClient
+from src.sandbox.client import StdioMCPClient
 from typing import Any, Callable
 from pathlib import Path
 import os
@@ -215,7 +215,6 @@ class Sandbox:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
         _send(self._cmd_w, reply)
 
-    @staticmethod
     def _to_result(self, message: dict[str, Any]) -> ExecuteResult:
         """Turn a terminal worker message into an ExecuteResult."""
         base = {
