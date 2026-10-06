@@ -11,7 +11,9 @@ from src.agent.extractor.code_extractor import CodeExtractor
 # \r?\n コードブロックあとの改行を許可
 # (.*?) コード本体。re.DOTALLで改行を含む任意の文字列を許可
 # \r?\n? コードブロックの終わりの直前に改行を許可
-_PYTHON_CODE_BLOCK_PATTERN = re.compile(r"```python[ \t]*\r?\n(.*?)\r?\n?", re.DOTALL)
+_PYTHON_CODE_BLOCK_PATTERN = re.compile(
+    r"^[ \t]*```[ \t]*(?:python|py)[ \t]*\r?\n(.*?)\r?\n[ \t]*```[ \t]*$", re.DOTALL | re.MULTILINE | re.IGNORECASE
+)
 
 
 class PythonCodeExtractor(CodeExtractor):
@@ -35,5 +37,5 @@ class PythonCodeExtractor(CodeExtractor):
         if not code_blocks:
             return None
 
-        # 最後のコードブロックを返す
-        return str(code_blocks[-1])
+        # 末尾の改行を削除し最後のコードブロックを返す
+        return str(code_blocks[-1].rstrip())
