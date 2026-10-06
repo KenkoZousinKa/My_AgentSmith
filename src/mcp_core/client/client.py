@@ -3,22 +3,21 @@
 
 import subprocess
 import uuid
-import time
-import shlex
 from typing import Any
 from pydantic import ValidationError
 
-from src.models import jsonrpc as rpc
-from src.models import mcpmodel as mcp
+from src.mcp_core.models import jsonrpc as rpc
+from src.mcp_core.models import mcpmodel as mcp
+from src.mcp_core.models.transport_model import ClientTransport
 
 
-class StdioMCPClient:
-    def __init__(self, command: str):
-        self.command = command
+class MCPClient:
+    def __init__(self, transport: ClientTransport):
+        self.transport = transport
         self.server_info: mcp.Implementation
         self.server_capabilities: dict[str, Any]
 
-    def __enter__(self) -> "StdioMCPClient":
+    def __enter__(self) -> "MCPClient":
         self.connect()
         return self
 
@@ -33,19 +32,7 @@ class StdioMCPClient:
         """MCPサーバーとの接続を確立する."""
 
         try:
-            # サーバープロセスを起動し、入出力をパイプで繋ぐ
-            # text=True により、バイト列ではなく文字列として扱える
-            # 例: command = ["python", "mcp_tools_mbpp.py"]
-            self.process = subprocess.Popen(
-                args=shlex.split(self.command),
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                text=True       # 送信時に文字列が壊れないように
-            )
-            # 起動直後の即死チェック
-            time.sleep(0.1)
-            if self.process.poll() is not None:
-                raise mcp.MCPConnectionError(f"サーバーの起動に失敗しました。コマンド: {self.command}")
+
 
             # requestを送る
             params = mcp.InitializeRequestParams(protocol_version=mcp.MCP_VERSION,

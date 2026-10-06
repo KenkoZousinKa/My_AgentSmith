@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel
 from dataclasses import dataclass
 
-from src.models import mcpmodel as mcp
+from src.mcp_core.models import mcpmodel as mcp
 
 
 @dataclass  # __init__を自動作成してくれる。データを入れておくだけのクラス

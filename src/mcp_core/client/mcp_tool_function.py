@@ -1,7 +1,7 @@
 from typing import Any
 
-from src.models import mcpmodel as mcp
-from src.sandbox.client import StdioMCPClient
+from src.mcp_core.models import mcpmodel as mcp
+from src.mcp_core.client.client import StdioMCPClient
 
 
 class MCPToolFunction:

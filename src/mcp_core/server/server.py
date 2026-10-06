@@ -8,9 +8,9 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 from pydantic import ValidationError, create_model, BaseModel
 
-from src.models import jsonrpc as rpc
-from src.models import mcpmodel as mcp
-from src.mcp_server.tool_model import RegisteredTool
+from src.mcp_core.models import jsonrpc as rpc
+from src.mcp_core.models import mcpmodel as mcp
+from src.mcp_core.server.tool_model import RegisteredTool
 
 F = TypeVar("F", bound=Callable[..., Any])
 

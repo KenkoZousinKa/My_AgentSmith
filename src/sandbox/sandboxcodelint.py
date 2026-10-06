@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any, Callable
 from pydantic import BaseModel, Field
 
-from src.models import jsonrpc as rpc
-from src.models import mcpmodel as mcp
-from src.sandbox.client import StdioMCPClient
-from src.sandbox.mcp_tool_function import MCPToolFunction
+from src.mcp_core.models import jsonrpc as rpc
+from src.mcp_core.models import mcpmodel as mcp
+from src.mcp_core.client.client import StdioMCPClient
+from src.mcp_core.client.mcp_tool_function import MCPToolFunction
 
 
 class SandboxConfig(BaseModel):

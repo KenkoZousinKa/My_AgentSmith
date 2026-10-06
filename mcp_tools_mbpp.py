@@ -4,7 +4,7 @@ import sys
 import json
 import subprocess
 import tempfile
-from src.mcp_server.server import MCPServer
+from src.mcp_core.server.server import MCPServer
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
 TIMEOUT = 30
