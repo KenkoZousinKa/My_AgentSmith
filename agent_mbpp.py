@@ -3,13 +3,18 @@
 `uv run python3 -m agent_mbpp
 --task-file ../cache/mbpp_task.json
 --output ../cache/mbpp_solution.json
---mode-name "model/name" --provider-url "http://provider.api/v1"`
+--model-name "model/name" --provider-url "http://provider.api/v1"`
 """
 import fire
 
 
 def agent_mbpp(
-        task_file: str, output: str, model_name: str, provider_url: str, **extra_args) -> None:
+    task_file: str,
+    output: str,
+    model_name: str,
+    provider_url: str,
+    **extra_args: object
+) -> None:
     """MBPP用のエントリーポイント関数."""
     if extra_args:
         print(f"Extra arguments: {extra_args}")
