@@ -34,7 +34,8 @@ class MBPPProfile(TaskProfile):
         return (
             "This is an MBPP task: inplement a single Python function theat satisfies the "
             "behavior described in the next user message. Write the function, test it by "
-            "calling it inside print(...), and iterate until it is correct. Then submit the function's source code with final_answer."
+            "calling it inside print(...), and iterate until it is correct."
+            "Then submit the function's source code with final_answer."
         )
 
     def final_answer_specification(self) -> str:
