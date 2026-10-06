@@ -2,18 +2,19 @@ from pydantic import BaseModel
 from typing import Protocol
 
 
-class ExecutionResult(BaseModel):
+class ExecuteResult(BaseModel):
     stdout: str
     stderr: str
-    exception: str | None  # 実行中に送出された例外の文字列（無ければ None）
-    timed_out: bool  # サンドボックスのtimeoutで打ち切られたか
+    error: str | None  # 実行中に送出された例外の文字列（無ければ None）
+    value: str | None  # 出力結果
+    timeout: bool  # サンドボックスのtimeoutで打ち切られたか
     truncated: bool  # 出力がサイズ制限で切り詰められたか
-    final_answer_called: bool  # final_answer() が呼ばれたか
-    final_value: str | None  # 呼ばれた場合の引数（MBPP=コード, SWE=patch）
+    final_answer_bool: bool  # final_answer() が呼ばれたか
+    final_answer: str | None  # 呼ばれた場合の引数（MBPP=コード, SWE=patch）
 
 
 class SandboxBase(Protocol):
-    def run(self, code: str) -> ExecutionResult:
+    def run(self, code: str) -> ExecuteResult:
         """Check then execute. Never raises for errors inside the snippet."""
         ...
 
