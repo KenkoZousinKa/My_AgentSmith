@@ -1,7 +1,6 @@
 """mbpp server.py"""
 
 
-import sys
 import json
 import inspect
 from collections.abc import Callable
@@ -11,6 +10,8 @@ from pydantic import ValidationError, create_model, BaseModel
 from src.mcp_core.models import jsonrpc as rpc
 from src.mcp_core.models import mcpmodel as mcp
 from src.mcp_core.server.tool_model import RegisteredTool
+from src.mcp_core.models.server_transport import ServerTransport
+from src.mcp_core.server.transport import StdioServerTransport
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -26,16 +27,11 @@ class MCPServer:
         self.tools: dict[str, RegisteredTool] = {}
         self.server_info = mcp.Implementation(name=name, version=version)
 
-    def run(self) -> None:
+    def run(self, transport: ServerTransport | None = None) -> None:
         """サーバーの受付を担当する."""
-        # 1.stdinを受け取る
-        for line in sys.stdin:  # EOFでループが終わる clientが異常終了した場合は子プロセスにEOFが届く
-            if not line.strip():  # '\n'などのから文字を読み飛ばす
-                continue
-            # 2. クライアントへの返答を生成
-            response = self.process_message(line)
-            if response is not None:
-                self._write(response)
+        if transport is None:
+            transport = StdioServerTransport()
+        transport.serve(self.process_message)
 
     def process_message(self, line: str) -> rpc.JSONRPCResponse | rpc.JSONRPCError | None:
         """受け取ったデータを解析して、クライアントに返すべき応答を返す."""
@@ -146,14 +142,10 @@ class MCPServer:
                                 id=id,
                                 error=error)
 
-    def _write(self, msg: rpc.JSONRPCResponse | rpc.JSONRPCError) -> None:
-        """渡されたレスポンスオブジェクトをstrにして標準出力へ書き込む."""
-        # exclude_unsetはコードで指定しなかった値、exclude_noneは値がNoneのものを消してjson文字列にする。
-        sys.stdout.write(msg.model_dump_json(by_alias=True, exclude_unset=True) + "\n")
-        sys.stdout.flush()
-
     def tool(self, description: str | None = None) -> Callable[[F], F]:
+        """ツールを動的にリスト化するためのデコレータ."""
         def register(func: F) -> F:
+            """MCPサーバーが提供するツールを動的にリスト化する."""
             name = func.__name__                                                    # 1. 名前 = 関数名
             doc = description or inspect.getdoc(func)                               # 2. 説明 = 引数で渡された説明、無ければ docstring
 

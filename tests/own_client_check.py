@@ -1,9 +1,10 @@
 """自作クライアントから、公式 SDK（FastMCP）のサーバーを呼ぶ確認用スクリプト."""
 
 from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.client.client import StdioMCPClient
+from src.mcp_core.client.client import MCPClient
+from src.mcp_core.client.transport import StdioClientTransport
 
-with StdioMCPClient("python tests/sdk_fastmcp_server.py") as client:
+with MCPClient(StdioClientTransport("python tests/sdk_fastmcp_server.py")) as client:
     print("server_info :", client.server_info)
     print("capabilities:", client.server_capabilities)
 

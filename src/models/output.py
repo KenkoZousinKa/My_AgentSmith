@@ -1,6 +1,23 @@
+"""Models for the output of the agent and sandbox."""
+
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional
+
+
+class ExecuteResult(BaseModel):
+    """Outcome of one step.
+
+    Its either pass error or standard code compile.
+    """
+    stdout: str = ""
+    stderr: str = ""
+    value: str | None = None
+    error: str | None = None
+    timeout: bool = False
+    truncated: bool = False
+    final_answer_bool: bool = False
+    final_answer: str | None = None
 
 
 class StepMetrics(BaseModel):

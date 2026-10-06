@@ -4,7 +4,10 @@ import sys
 import json
 import subprocess
 import tempfile
+import argparse
+
 from src.mcp_core.server.server import MCPServer
+# from src.mcp_core.server.transport import HttpServerTransport
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
 TIMEOUT = 30
@@ -38,7 +41,17 @@ def run_tests(code: str, test_list: list[str]) -> str:
 
 
 def main() -> None:
-    server.run()
+    parser = argparse.ArgumentParser(description="MBPP MCP Server")
+    parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    args = parser.parse_args()
+
+    if args.transport == "http":
+        # server.run(HttpServerTransport(host=args.host, port=args.port))
+        pass
+    else:
+        server.run()
 
 
 if __name__ == "__main__":

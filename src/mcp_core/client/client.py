@@ -1,14 +1,13 @@
-"""stdioMCPClient:"""
+"""MCPClient:"""
 
 
-import subprocess
 import uuid
 from typing import Any
 from pydantic import ValidationError
 
 from src.mcp_core.models import jsonrpc as rpc
 from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.models.transport_model import ClientTransport
+from src.mcp_core.models.client_transport import ClientTransport
 
 
 class MCPClient:
@@ -32,7 +31,8 @@ class MCPClient:
         """MCPサーバーとの接続を確立する."""
 
         try:
-
+            # transportクラスでサーバーの立ち上げと接続
+            self.transport.open()
 
             # requestを送る
             params = mcp.InitializeRequestParams(protocol_version=mcp.MCP_VERSION,
@@ -49,6 +49,7 @@ class MCPClient:
             # versionを検証する
             if init.protocol_version != mcp.MCP_VERSION:
                 raise mcp.MCPProtocolError(f"未対応のプロトコルバージョン: {init.protocol_version}")
+            self.transport.set_protocol_version(mcp.MCP_VERSION)
 
             # 保存してサーバーへ通知
             self.server_info = init.server_info
@@ -90,27 +91,8 @@ class MCPClient:
         self._request(mcp.Method.PING)        # 返ってくる result は {} なので、中身は使わない
 
     def close(self) -> None:
-        """プロセスを安全に終了させる"""
-        # process属性が存在しているか　and sub_processが終了していないか
-        if not hasattr(self, 'process') or self.process.poll() is not None:
-            return
-        assert self.process.stdin is not None
-
-        # 1. EOFを送る EOF=0
-        self.process.stdin.close()
-        try:
-            self.process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-
-            # 2. 正常終了信号を送る SIGTERM=-15
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-
-                # 3. 強制終了信号を送る terminater「Hasta la vista, baby.」 SIGKILL=-9
-                self.process.kill()
-                self.process.wait()
+        """サーバーとの接続を閉じる."""
+        self.transport.close()
 
     def _request(self, method: str, params: mcp.MCPModel | None = None) -> dict[str, Any]:
         """リクエストを送り、同じ id の応答の result を返す。エラー応答なら例外."""
@@ -142,24 +124,12 @@ class MCPClient:
         self._send(notification)
 
     def _send(self, message: rpc.JSONRPCMessage) -> None:
-        """封筒を1行の JSON にしてサーバーの stdin に書き込む."""
-        assert self.process.stdin is not None
-        self.process.stdin.write(message.model_dump_json(by_alias=True, exclude_unset=True) + "\n")
-        self.process.stdin.flush()
+        """サーバーにメッセージを送る."""
+        self.transport.send(message)
 
     def _receive(self) -> rpc.JSONRPCMessage:
-        """サーバーの stdout から1通読み、JSON-RPCの型に変換して返す."""
-        assert self.process.stdout is not None
-        # MCPサーバーからの標準出力を待つ
-        line = self.process.stdout.readline()
-        if not line:
-            raise mcp.MCPConnectionError("サーバーとの接続が切れました。")
-
-        # JSON-RPCの型に変換する
-        try:
-            return rpc.jsonrpc_message_adapter.validate_json(line)
-        except ValidationError as e:
-            raise mcp.MCPProtocolError(f"サーバから不正なメッセージを受信しました。{line!r}") from e
+        """サーバーからのレスポンスをJSON-RPCの型に変換して返す."""
+        return self.transport.receive()
 
     def _answer_server_request(self, msg: rpc.JSONRPCRequest) -> None:
         """サーバーからのリクエストに応答する."""
@@ -174,32 +144,9 @@ class MCPClient:
 if __name__ == "__main__":
     print("[Client] MCPクライアントを起動します...")
     try:
-        with StdioMCPClient("python mcp_tools_mbpp.py") as c:
+        from src.mcp_core.client.transport import StdioClientTransport
+        with MCPClient(StdioClientTransport("python mcp_tools_mbpp.py")) as c:
             c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
             pass
     except Exception as e:
         print(e)
-
-    # def call_tool(self, tool_name: str, args: dict[str, str]) -> dict[str, str]:
-    #     """サーバーにツール実行を依頼し、結果を受け取る"""
-    #     # 1. リクエストJSONを作成
-    #     request_data = {
-    #         "method": "call_tool",
-    #         "tool": tool_name,
-    #         "args": args
-    #     }
-
-    #     # 2. サーバーの標準入力に書き込み、改行で区切る
-    #     self.process.stdin.write(json.dumps(request_data) + "\n")
-
-    #     # 【超重要】バッファに溜めず、即座に送信を確定させる
-    #     self.process.stdin.flush()
-
-    #     # 3. サーバーからの標準出力を1行読み取る（結果が来るまで待機）
-    #     response_line = self.process.stdout.readline()
-
-    #     if not response_line:
-    #         raise RuntimeError("MCPサーバーとの通信が切断されました")
-
-    #     # 4. 受け取ったJSONを辞書に戻して返す
-    #     return json.loads(response_line)

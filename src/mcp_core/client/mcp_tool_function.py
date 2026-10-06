@@ -1,13 +1,13 @@
 from typing import Any
 
 from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.client.client import StdioMCPClient
+from src.mcp_core.client.client import MCPClient
 
 
 class MCPToolFunction:
     """MCP のツール1つを、サンドボックスから普通の関数として呼べるようにする."""
 
-    def __init__(self, client: StdioMCPClient, tool: mcp.Tool) -> None:
+    def __init__(self, client: MCPClient, tool: mcp.Tool) -> None:
         self.client = client
         self.name = tool.name
         self.description = tool.description          # ← _tool_doc が読む
