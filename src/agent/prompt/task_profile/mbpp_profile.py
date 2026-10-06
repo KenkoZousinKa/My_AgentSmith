@@ -1,50 +1,69 @@
-"""MBPPのタスクプロファイルを定義するモジュール."""
-from src.models.sandbox_base import SandboxBase
+"""MBPPタスク用のTaskProfileを定義するモジュール."""
 from src.agent.prompt.task_profile.task_profile import TaskProfile
+from src.models.sandbox_base import SandboxBase
 
 
 class MBPPProfile(TaskProfile):
-    """MBPPのタスクプロファイルを定義するクラス."""
+    """MBPP(単一の関数の実装課題)用のTaskProfileを定義するクラス."""
+    name = "mbpp"
+    _MBPP_FEW_SHOT_EXAMPLE = """Thought: I'll write the function, then quickly check it with print.
+    ```python
+    def add(a, b):
+        return a + b
 
-    def task_instructions(self, task_name: str) -> str:
-        """MBPPのタスクの指示を取得する.
+    print(add(2, 3))
+    ```
+    <end_code>
+    Observation:
+    [OK] Executed successfully.
+    --- stdout ---
+    5
+    Thought: The output is correct, so I'll submit the function source.
+    ```python
+    final_answer("def add(a, b):\\n    return a + b")
+    ```
+    <end_code>
+    """
 
-        Args:
-            task_name (str): タスク名(mbpp)
+    def task_instructions(self) -> str:
+        """MBPPタスクの進め方を返す.
 
         Returns:
             str: タスクの指示
         """
-        return "Please solve the following MBPP task."
+        return (
+            "This is an MBPP task: inplement a single Python function theat satisfies the "
+            "behavior described in the next user message. Write the function, test it by "
+            "calling it inside print(...), and iterate until it is correct. Then submit the function's source code with final_answer."
+        )
 
     def final_answer_specification(self) -> str:
-        """最終的な回答の仕様を取得する.
+        """final_answer()に何を渡すべきか、最終的な回答の仕方を返す.
 
         Returns:
             str: 最終的な回答の仕様
         """
-        return "The final answer should be a valid Python code snippet."
+        return (
+            "Pass the full source code of your solution function to final_answer as a string, "
+            'e.g. final_answer("def solve(n):\\n    return n * 2").'
+        )
 
-    def few_shot_examples(self) -> list:
-        """Few-shotの例を取得する.
+    def few_shot_example(self) -> str:
+        """出力形式を教えるためのFew-shotの例を返す.
+
+        Thought -> Code -> Observation -> final_answer
+        実タスクとは無関係な例。形式を示すためだけの固定のテキスト。
 
         Returns:
-            list: Few-shotの例
+            str: Few-shotの例
         """
-        return [
-            {
-                "input": "Write a function to add two numbers.",
-                "output": "def add(a, b):\n    return a + b"
-            },
-            {
-                "input": "Write a function to check if a number is prime.",
-                "output": "def is_prime(n):\n    if n <= 1:\n        return False\n    "
-                "for i in range(2, int(n**0.5) + 1):\n        if n % i == 0:\n            return False\n    return True"
-            }
-        ]
+        return self._MBPP_FEW_SHOT_EXAMPLE
 
     def manual(self, sandbox: SandboxBase) -> str:
-        """接続中MCPサーバーのツールスキーマから動的生成した、LLM向けツールマニュアルを取得する.
+        """接続中MCPサーバーのツールスキーマから動的生成した、LLM向けツールマニュアルを返す.
+
+        このタスクで使えるツール / 環境の説明を返す。
+        ツールはハードコードせずに、sandbox.manual()から動的に取得する。
 
         Args:
             sandbox (SandboxBase): サンドボックスのインスタンス
@@ -52,5 +71,4 @@ class MBPPProfile(TaskProfile):
         Returns:
             str: LLM向けツールマニュアル
         """
-        # サンドボックスからツールスキーマを取得し、マニュアルを生成するロジックを実装する
-        return "Tool manual for MBPP tasks."
+        return sandbox.manual()
