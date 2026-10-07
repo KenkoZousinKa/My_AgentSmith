@@ -1,70 +1,140 @@
 """LLMプロバイダの抽象クラスと設定情報を定義するモジュール。
 
 1リクエストを送って結果 / 例外を返すだけ。
+generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
+プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
 認証、リトライ、キーローテーション、フォールバックなどの機能はProvider / KeyManagerが担当。
+実際のHTTP送信は HTTPTransportが担当する。
 
 OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / GeminiProvider 等
 具体的なプロバイダは、この抽象クラスを継承して実装する。
 プロバイダURL / モデル名 / キー郡などはJSONか.envで設定し、コードの変更なしでモデルを差し替えて
 ベンチマークを実行できるようにする。
-
-- [ ] 抽象クラスはmodels/以下に移動、各プロバイダのサブクラスは別途provider/以下に配置。
 """
+import time
 from abc import ABC, abstractmethod
 from typing import Any
+from pydantic import BaseModel, ConfigDict
 
-from pydantic import BaseModel
+from src.agent.llm.transport.transport import HttpTransport
 
 
 class ProviderConfig(BaseModel):
-    """LLMプロバイダの設定情報。"""
+    """LLMプロバイダ一件分の設定情報.(provider.jsonの1要素に相当)
+
+    Attributes:
+        name (str): プロバイダ名。openrouter / groq / together / fireworks / gemini など。
+        provider_url (str): プロバイダのAPIエンドポイントURL。
+        model (str): 使用するモデルの名前。識別子。"qwen/qwen-7b-chat"など。
+        keys_env (str): APIキーを格納した環境変数名。
+        priority (int): プロバイダのフォールバック優先度。小さいほど優先度が高い。
+        request_timeout_sec (float): HTTPリクエストのタイムアウト秒数。デフォルト60秒。MBPPの120秒にあわせる。
+        additional_params (dict[str, Any]): プロバイダ固有のbodyに足す追加パラメータ。必要に応じて使用する。
+    """
+    model_config = ConfigDict(extra="forbid")
+
     name: str
-    description: str
-    model_name: str
-    api_key: str | None = None
+    provider_url: str
+    model: str  # API body / provider.jsonのキーと同名
+    keys_env: str
+    priority: int = 1
+    request_timeout_sec: float = 60.0
     additional_params: dict[str, Any] = {}
 
 
 class LLMResponse(BaseModel):
-    """1回のLLM生成の結果。StepMetricsへ直結."""
-    # コード抽出前の生のレスポンス文字列。LLMの出力をそのまま保持する。
+    """1回のLLM生成の結果。StepMetricsへ直結.
+
+    Attributes:
+        text (str): コード抽出前の生のレスポンス文字列。LLMの出力をそのまま保持する。
+        input_tokens (int): 入力、プロンプトのトークン数。usage.pyで集計する。
+        output_tokens (int): 生成に使用されたトークン数。usage.pyで集計する。
+        request_time_ms (float): APIリクエストの応答時間(秒)をミリ秒単位で保持する。LLMの応答時間を計測する。
+        api_url (str): "https://openrouter.ai/api/v1"
+        model_name (str): 使用したモデル名
+        retries (int): 成功までのリトライ回数(0なら初回で成功)
+    """
     text: str
-    # 生成に使用されたトークン数。usage.pyで集計する。
     input_tokens: int
-    # 生成に使用されたトークン数。usage.pyで集計する。
     output_tokens: int
-    # APIリクエストの応答時間(秒)をミリ秒単位で保持する。LLMの応答時間を計測する。
     request_time_ms: float
-    # "https://openrouter.ai/api/v1"
     api_url: str
     model_name: str
-    # 成功までのリトライ回数(0なら初回で成功)
     retries: int
 
 
-class LLMProvider(ABC):
-    """LLMプロバイダの抽象クラス。"""
+class LLMError(RuntimeError):
+    """LLM呼び出し時の失敗を表す例外クラス。HTTPが非200系 / 解釈できない場合に発生する."""
 
-    @abstractmethod
-    def generate(self, messages: str, model_name: str, stop_sequences: str, max_tokens: int) -> LLMResponse:
-        """LLMにリクエストを送信し、レスポンスを返す.
+
+class LLMProvider(ABC):
+    """LLMプロバイダの抽象クラス。
+
+    generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
+    プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
+    """
+
+    def __init__(self, config: ProviderConfig, transport: HttpTransport, api_key: str) -> None:
+        """LLMProviderの初期化.
 
         Args:
-            messages (str): LLMに送信するメッセージ
-            model_name (str): 使用するモデルの名前
-            stop_sequences (str): 生成を停止するトークンのリスト
+            config (ProviderConfig): プロバイダの設定情報。
+            transport (HTTPTransport): HTTP POST で送信を担当するTransportクラス
+            api_key (str): APIキー。key_managerがkeys_envから取得して渡す。
+        """
+        self.config = config
+        self.transport = transport
+        self.api_key = api_key
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        """LLMに会話履歴を一回送って生成、リクエストを送信し、レスポンスを返す.
+
+        Args:
+            messages (list[dict[str, str]]): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
+            stop_sequences (list[str]): 生成を停止する文字列郡(既定は ["<end_code>"])
             max_tokens (int): 生成する最大トークン数
-            ...: その他のパラメータ
 
         Returns:
-            LLMResponse: LLMのレスポンス情報
+            LLMResponse: 生成テキストと使用量、計測値をまとめた結果。
+
+        Raises:
+            LLMError: HTTPが非200系のステータスコードを返した場合、または解釈できない場合に発生する例外。
         """
-        return LLMResponse(
-            text="",
-            input_tokens=0,
-            output_tokens=0,
-            request_time_ms=0.0,
-            api_url="",
-            model_name=model_name,
-            retries=0
-        )
+        url, headers, body = self._build_request(messages, stop_sequences, max_tokens)
+        start_time = time.perf_counter()
+        status, text = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        if not 200 <= status < 300:
+            raise LLMError(f"LLM HTTP {status}: {text[:500]}")
+
+        return self._parse_response(text, elapsed_ms)
+
+    @abstractmethod
+    def _build_request(
+        self,
+        messages: list[dict[str, str]],
+        stop_sequences: list[str],
+        max_tokens: int
+    ) -> tuple[str, dict[str, str], str]:
+        """(url, headers, body文字列)を組み立てて返す.
+
+        Args:
+            messages (list[dict[str, str]]): LLMに送信するメッセージ。
+            stop_sequences (list[str]): stop_sequences。
+            max_tokens (int): 生成する最大トークン数
+
+        Returns:
+            tuple[str, dict[str, str], str]: POST先URL、ヘッダ、JSON文字列ボディ。
+        """
+
+    @abstractmethod
+    def _parse_response(self, body: str, request_time_ms: float) -> LLMResponse:
+        """生のレスポンス本文(JSON文字列)を解釈し、LLMResponseに変換して返す.
+
+        Args:
+            body (str): 生のHTTPレスポンス本文(JSON文字列)。
+            request_time_ms (float): generate()が計測したリクエストの応答時間(ミリ秒)。
+
+        Returns:
+            LLMResponse: 共通形式に正規化した結果。
+        """

@@ -1,0 +1,21 @@
+{
+    "limits": {
+        "max_iterations": 10,
+        "max_input_tokens": 6000,
+        "max_output_tokens": 1500,
+        "total_time_sec": 120.0,
+        "time_margin_sec": 10.0
+},
+    "sandbox": {
+        "exec_timeout_sec": 10.0,
+        "memory_limit_mb": 512
+},
+    "logging": {
+        "level": "INFO",
+        "path": "logs/agent.log",
+        "trace": false
+    },
+    "manual": {
+        "verbosity": "concise"
+    }
+}
