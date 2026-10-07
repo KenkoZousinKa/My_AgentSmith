@@ -77,3 +77,13 @@ def test_select_provider_cli_overrides_primary(tmp_path: Path) -> None:
     assert primary.model == "x/y"
     assert primary.provider_url == "https://eval.test/v1"
     assert primary.keys_env == "OPENROUTER_API_KEY"
+
+def test_shipped_config_files_parse(monkeypatch: pytest.MonkeyPatch) -> None:
+    """リポジトリ直下の実 config.json / providers.json がそのままロードできる(出荷物の回帰)."""
+    repo_root = Path(__file__).resolve().parents[1]   # test/ の1つ上 = リポジトリ直下
+    monkeypatch.chdir(repo_root)                        # Settings は CWD の config.json を読む
+    settings = load_settings()
+    assert settings.limits.max_input_tokens == 6000
+    assert settings.logging.level == "INFO"
+    providers = load_providers(str(repo_root / "providers.json"))
+    assert providers[0].priority == 1                   # priority昇順で先頭が主
