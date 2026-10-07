@@ -66,10 +66,12 @@ fclean: clean ## cleanに加えて仮想環境も削除
 # -------------------
 lint: ## Flake8 / Mypy / ruffによる静的解析を実行
 	@echo "Running Linter (Standard)..."
-	-@$(UV) run flake8 $(SRC_DIR)
-	-@$(UV) run mypy $(SRC_DIR) 
+	-@$(UV) run flake8 .
+	@echo "flake8 complete."
+	-@$(UV) run mypy .
+	@echo "mypy complete."
 #	-@$(UV) run ruff check $(SRC_DIR)
-# 	-@$(UV) run ty check $(SRC_DIR)
+#	-@$(UV) run ty check $(SRC_DIR)
 	@echo "Linting complete."
 
 lint-strict: ## より厳しいMypyチェックを実行
