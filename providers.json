@@ -3,7 +3,7 @@
         {
             "name": "openrouter",
             "provider_url": "https://openrouter.ai/api/v1",
-            "model": "qwen-3.3-70b-versatile",
+            "model": "qwen/qwen3-235b-a22b-2507",
             "keys_env": "OPENROUTER_API_KEY",
             "priority": 1
         },
