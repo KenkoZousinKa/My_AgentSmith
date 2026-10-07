@@ -11,7 +11,7 @@ from src.mcp_core.models import jsonrpc as rpc
 from src.mcp_core.models import mcpmodel as mcp
 from src.mcp_core.server.tool_model import RegisteredTool
 from src.mcp_core.models.server_transport import ServerTransport
-from src.mcp_core.server.transport import StdioServerTransport
+from src.mcp_core.server.stdio import StdioServerTransport
 
 F = TypeVar("F", bound=Callable[..., Any])
 

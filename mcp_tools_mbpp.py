@@ -7,7 +7,7 @@ import tempfile
 import argparse
 
 from src.mcp_core.server.server import MCPServer
-# from src.mcp_core.server.transport import HttpServerTransport
+from src.mcp_core.server.http import HttpServerTransport
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
 TIMEOUT = 30
@@ -48,7 +48,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.transport == "http":
-        # server.run(HttpServerTransport(host=args.host, port=args.port))
+        server.run(HttpServerTransport(host=args.host, port=args.port))
         pass
     else:
         server.run()
