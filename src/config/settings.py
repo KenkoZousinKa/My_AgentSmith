@@ -21,7 +21,7 @@ from pydantic_settings import (
 from src.agent.llm.provider.provider import ProviderConfig
 
 
-class LImits(BaseModel):
+class Limits(BaseModel):
     """反復 / トークン / 時間のハード制限値.監視、打ち切りはlimits.pyで行う."""
     model_config = ConfigDict(extra="forbid")
 
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
         extra="forbid",
     )
 
-    limits: LImits = LImits()
+    limits: LImits = Limits()
     sandbox: SandboxSettings = SandboxSettings()
     logging: LoggingSettings = LoggingSettings()
     manual: ManualSettings = ManualSettings()
