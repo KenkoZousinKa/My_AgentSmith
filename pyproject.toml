@@ -13,8 +13,9 @@ authors = [
 # これがないとプログラム実行時にエラー。
 dependencies = [
 	"fire>=0.7.1",
-    "pydantic>=2.12.5",
-    "requests",
+	"pydantic>=2.12.5",
+	"pydantic-settings>=2.15.0",
+	"requests",
 ]
 # 実行ロジックに違いはないが、開発、テスト、静的解析に必要。
 [dependency-groups]
