@@ -19,11 +19,11 @@ Thought (one short line) -> ONE Python code block -> read the Observation return
 - Only what you print() (and any error or traceback) is returned in the Observation.
 
 ## Working rules
- - Iterate in small steps: run code, read the Observation, then decide the next step.
- - Your FINAL submitted answer must be SELF-CONTAINED:
- do not rely on names defined only in earlier steps.
- - Be efficient: strict limits apply to the number of iterations, tokens and time.
- Never loop forever or print huge outputs.
+- Iterate in small steps: run code, read the Observation, then decide the next step.
+- Your FINAL submitted answer must be SELF-CONTAINED:
+do not rely on names defined only in earlier steps.
+- Be efficient: strict limits apply to the number of iterations, tokens and time.
+Never loop forever or print huge outputs.
 
 ## Environment and tools
 {tools_manual}
