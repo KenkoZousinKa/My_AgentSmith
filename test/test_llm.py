@@ -68,7 +68,7 @@ def test_build_request_includes_model_messages_stop() -> None:
     payload = json.loads(data)
     assert payload["model"] == "fake/model-1"
     assert payload["messages"] == [{"role": "user", "content": "add"}]
-    assert payload["stop_sequences"] == ["<end_code>"]
+    assert payload["stop"] == ["<end_code>"]
     assert payload["max_tokens"] == 256
 
 

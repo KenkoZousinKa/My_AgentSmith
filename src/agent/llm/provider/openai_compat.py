@@ -32,8 +32,8 @@ class OpenAICompatProvider(LLMProvider):
             "messages": messages,
             "max_tokens": max_tokens,
         }
-        if stop_sequences is not None:
-            payload["stop_sequences"] = stop_sequences
+        if stop_sequences:
+            payload["stop"] = stop_sequences
 
         payload.update(self.config.additional_params)
 

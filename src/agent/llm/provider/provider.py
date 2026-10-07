@@ -45,7 +45,7 @@ class LLMResponse(BaseModel):
 
     Attributes:
         text (str): コード抽出前の生のレスポンス文字列。LLMの出力をそのまま保持する。
-        input_tokens (int): 生成に使用されたトークン数。usage.pyで集計する。
+        input_tokens (int): 入力、プロンプトのトークン数。usage.pyで集計する。
         output_tokens (int): 生成に使用されたトークン数。usage.pyで集計する。
         request_time_ms (float): APIリクエストの応答時間(秒)をミリ秒単位で保持する。LLMの応答時間を計測する。
         api_url (str): "https://openrouter.ai/api/v1"
@@ -88,8 +88,8 @@ class LLMProvider(ABC):
         """LLMに会話履歴を一回送って生成、リクエストを送信し、レスポンスを返す.
 
         Args:
-            messages (str): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
-            stop_sequences (str): 生成を停止する文字列郡(既定は ["<end_code>"])
+            messages (list[dict[str, str]]): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
+            stop_sequences (list[str]): 生成を停止する文字列郡(既定は ["<end_code>"])
             max_tokens (int): 生成する最大トークン数
 
         Returns:

@@ -19,7 +19,7 @@ def extract_token_usage(response_json: dict[str, Any], text: str) -> tuple[int, 
         tuple[int, int]: input_tokensとoutput_tokensのタプル。
         usageがない場合 input_tokensは0、output_tokensは概算値を返す。
     """
-    usage = response_json.get("usage", {})
+    usage = response_json.get("usage") or {}
     prompt_tokens = usage.get("prompt_tokens")
     completion_tokens = usage.get("completion_tokens")
     if isinstance(prompt_tokens, int) and isinstance(completion_tokens, int):
