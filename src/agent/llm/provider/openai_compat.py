@@ -28,7 +28,7 @@ class OpenAICompatProvider(LLMProvider):
             "Content-Type": "application/json"
         }
         payload: dict[str, Any] = {
-            "model": self.config.model_name,
+            "model": self.config.model,
             "messages": messages,
             "max_tokens": max_tokens,
         }
@@ -65,6 +65,6 @@ class OpenAICompatProvider(LLMProvider):
             output_tokens=output_tokens,
             request_time_ms=request_time_ms,
             api_url=self.config.provider_url,
-            model_name=self.config.model_name,
+            model_name=self.config.model,
             retries=0  # リトライ回数はgenerate()で計測するため
         )
