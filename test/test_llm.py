@@ -10,7 +10,7 @@ from src.agent.llm.transport.transport import HttpTransport
 _CONFIG = ProviderConfig(
     name="fake",
     provider_url="https://example.test/api/v1",
-    model_name="fake/model-1",
+    model="fake/model-1",
     keys_env="FAKE_API_KEY",
 )
 
