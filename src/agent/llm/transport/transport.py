@@ -9,13 +9,14 @@ class HttpTransport(ABC):
     """HTTP通信を行う抽象クラス."""
 
     @abstractmethod
-    def post(self, url: str, headers: dict[str, str], data: str) -> tuple[int, str]:
+    def post(self, url: str, headers: dict[str, str], data: str, timeout: float) -> tuple[int, str]:
         """HTTP POSTリクエストを送信する.
 
         Args:
             url (str): リクエスト先URL
             headers (dict[str, str]): リクエストヘッダ
             data (str): リクエストボディ
+            timeout (float): タイムアウト秒数
 
         Returns:
             tuple[int, str]: レスポンスのステータスコードとボディ

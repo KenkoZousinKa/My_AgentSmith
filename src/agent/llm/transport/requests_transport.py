@@ -1,12 +1,12 @@
-"""HTTP通信を抽象化するモジュール."""
+"""Requestsライブラリを使用したHTTP通信を抽象化するモジュール."""
 from src.agent.llm.transport.transport import HttpTransport
 
 
 class RequestsTransport(HttpTransport):
     """Requestsライブラリを使用したHTTP通信クラス."""
 
-    def post(self, url: str, headers: dict[str, str], data: str) -> tuple[int, str]:
+    def post(self, url: str, headers: dict[str, str], data: str, timeout: float = 60.0) -> tuple[int, str]:
         import requests
 
-        response = requests.post(url, headers=headers, data=data)
+        response = requests.post(url, headers=headers, data=data, timeout=timeout)
         return response.status_code, response.text

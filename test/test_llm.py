@@ -29,7 +29,7 @@ class _FakeTransport(HttpTransport):
         self.body = body
         self.calls: list[tuple[str, dict[str, str], str]] = []
 
-    def post(self, url: str, headers: dict[str, str], data: str) -> tuple[int, str]:
+    def post(self, url: str, headers: dict[str, str], data: str, timeout: float = 60.0) -> tuple[int, str]:
         self.calls.append((url, headers, data))
         return self.status, self.body
 
