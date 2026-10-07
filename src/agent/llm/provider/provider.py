@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from pydantic import BaseModel
 
-from src.agent.llm.transport import HTTPTransport
+from src.agent.llm.transport.transport import HttpTransport
 
 
 class ProviderConfig(BaseModel):
@@ -72,7 +72,7 @@ class LLMProvider(ABC):
     プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
     """
 
-    def __init__(self, config: ProviderConfig, transport: HTTPTransport, api_key: str) -> None:
+    def __init__(self, config: ProviderConfig, transport: HttpTransport, api_key: str) -> None:
         """LLMProviderの初期化.
 
         Args:

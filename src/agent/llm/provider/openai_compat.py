@@ -53,7 +53,7 @@ class OpenAICompatProvider(LLMProvider):
             LLMError: JSONや必須フィールドの解釈に失敗、または欠けている場合。
         """
         try:
-            data:dict[str, Any] = json.loads(body)
+            data: dict[str, Any] = json.loads(body)
             text: str = data["choices"][0]["message"]["content"]
         except (json.JSONDecodeError, KeyError, IndexError, TypeError) as e:
             raise LLMError(f"Failed to parse response: {e}: {body[:500]}") from e
