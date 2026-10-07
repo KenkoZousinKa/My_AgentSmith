@@ -70,7 +70,7 @@ class Settings(BaseSettings):
         extra="forbid",
     )
 
-    limits: LImits = Limits()
+    limits: Limits = Limits()
     sandbox: SandboxSettings = SandboxSettings()
     logging: LoggingSettings = LoggingSettings()
     manual: ManualSettings = ManualSettings()
