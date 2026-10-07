@@ -29,7 +29,7 @@ class LImits(BaseModel):
     max_input_tokens: int = 6000
     max_output_tokens: int = 1500
     total_time_sec: float = 120.0
-    time_mergin_sec: float = 10.0
+    time_margin_sec: float = 10.0
 
 
 class SandboxSettings(BaseModel):
@@ -44,9 +44,9 @@ class LoggingSettings(BaseModel):
     """ログ設定(レベル / 出力パス / トレース有無)."""
     model_config = ConfigDict(extra="forbid")
 
-    log_level: str = "INFO"
-    log_file_path: str = "logs/agent_smith.log"
-    trace_enabled: bool = False
+    level: str = "INFO"
+    path: str = "logs/agent.log"
+    trace: bool = False
 
 
 class ManualSettings(BaseModel):
