@@ -79,3 +79,13 @@ def test_profile_names() -> None:
     """name 属性が正しい."""
     assert MBPPProfile().name == "mbpp"
     assert SWEBenchProfile().name == "swebench"
+
+from src.agent.extractor.python_extractor import PythonCodeExtractor
+
+def test_mbpp_few_shot_code_is_not_indented() -> None:
+    """few-shotのコードが行頭インデント無しで、抽出→compileできる(IndentationError回帰防止)."""
+    example = MBPPProfile().few_shot_example()
+    code = PythonCodeExtractor().extract(example)
+    assert code is not None
+    assert code == code.lstrip(), "抽出コードが行頭インデントを持つ（手本が字下げされている）"
+    compile(code, "<few_shot>", "exec")  # IndentationError/SyntaxError が出ないこと
