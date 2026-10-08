@@ -3,7 +3,7 @@
         {
             "name": "openrouter",
             "provider_url": "https://openrouter.ai/api/v1",
-            "model": "qwen/qwen3-235b-a22b-2507",
+            "model": "google/gemma-4-26b-a4b:free",
             "keys_env": "OPENROUTER_API_KEY",
             "priority": 1
         },
