@@ -9,6 +9,7 @@ fireはagent_mbpp.py / agent_swebench.py から呼ばれ、
 - [ ] BaseAgentCliArgsモデルを作成して検証を拡充
 """
 from pathlib import Path
+from dotenv import load_dotenv
 
 from src.agent.extractor.python_extractor import PythonCodeExtractor
 from src.agent.llm.key_manager import resolve_api_key
@@ -60,6 +61,8 @@ def run_mbpp_agent(
     # 設定読み込みとプロバイダ解決
     settings = load_settings()
     provider_config = select_provider(load_providers(), model_name, provider_url)
+    # .envから環境変数を読み込む
+    load_dotenv()
     api_key = resolve_api_key(provider_config.keys_env)
 
     provider = OpenAICompatProvider(provider_config, RequestsTransport(), api_key)
