@@ -10,6 +10,7 @@ dependencies = [
     { name = "fire" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "requests" },
 ]
 
@@ -30,6 +31,7 @@ requires-dist = [
     { name = "fire", specifier = ">=0.7.1" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
     { name = "requests" },
 ]
 

@@ -29,6 +29,7 @@ class Limits(BaseModel):
     max_iterations: int = 10
     max_input_tokens: int = 6000
     max_output_tokens: int = 1500
+    max_output_tokens_per_iteration: int = 500
     total_time_sec: float = 120.0
     time_margin_sec: float = 10.0
 

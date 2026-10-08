@@ -1,18 +1,18 @@
 {
     "providers": [
         {
-            "name": "openrouter",
-            "provider_url": "https://openrouter.ai/api/v1",
-            "model": "qwen/qwen3-235b-a22b-2507",
-            "keys_env": "OPENROUTER_API_KEY",
-            "priority": 1
-        },
-        {
           "name": "groq",
           "provider_url": "https://api.groq.com/openai/v1",
-          "model": "llama-3.3-70b-versatile",
+          "model": "qwen/qwen3.8-27b",
           "keys_env": "GROQ_API_KEY",
-          "priority": 2
+          "priority": 1
+        },
+        {
+            "name": "openrouter",
+            "provider_url": "https://openrouter.ai/api/v1",
+            "model": "google/gemma-4-26b-a4b-it:free",
+            "keys_env": "OPENROUTER_API_KEY",
+            "priority": 2
         }
     ]
 }
