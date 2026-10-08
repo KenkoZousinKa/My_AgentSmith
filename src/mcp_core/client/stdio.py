@@ -30,7 +30,7 @@ class StdioClientTransport:
             raise mcp.MCPConnectionError(f"サーバーの起動に失敗しました。コマンド: {self.command}")
 
     def send(self, message: rpc.JSONRPCMessage) -> None:
-        """封筒を1行の JSON にしてサーバーの stdin に書き込む."""
+        """渡されたJSON-RPCオブジェクトサーバーの stdin に書き込む."""
         assert self.process.stdin is not None
         self.process.stdin.write(message.model_dump_json(by_alias=True, exclude_unset=True) + "\n")
         self.process.stdin.flush()

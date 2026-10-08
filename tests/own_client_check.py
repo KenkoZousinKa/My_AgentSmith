@@ -2,7 +2,7 @@
 
 from src.mcp_core.models import mcpmodel as mcp
 from src.mcp_core.client.client import MCPClient
-from src.mcp_core.client.transport import StdioClientTransport
+from src.mcp_core.client.stdio import StdioClientTransport
 
 with MCPClient(StdioClientTransport("python tests/sdk_fastmcp_server.py")) as client:
     print("server_info :", client.server_info)

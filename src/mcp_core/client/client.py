@@ -144,7 +144,7 @@ class MCPClient:
 if __name__ == "__main__":
     print("[Client] MCPクライアントを起動します...")
     try:
-        from src.mcp_core.client.transport import StdioClientTransport
+        from src.mcp_core.client.stdio import StdioClientTransport
         with MCPClient(StdioClientTransport("python mcp_tools_mbpp.py")) as c:
             c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
             pass
