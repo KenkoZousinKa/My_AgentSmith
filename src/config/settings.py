@@ -6,6 +6,7 @@ APIキーは.envからのみ。
 providers.jsonにはキーの値ではなく、keys_env(env変数名)だけ書く。
 providers.jsonは構造化データなので、pydanticでProviderConfigモデルに変換して扱う。
 pydantic-settingsを使うと、環境変数やJSON/YAMLファイルから設定を読み込むことができる。
+- [ ] Limits.time_margin_secのデフォルト値は実際の計測時間に合わせて調整。
 """
 import json
 from pathlib import Path
