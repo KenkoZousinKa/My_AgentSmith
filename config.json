@@ -3,6 +3,7 @@
         "max_iterations": 10,
         "max_input_tokens": 6000,
         "max_output_tokens": 1500,
+        "max_output_tokens_per_iteration": 500,
         "total_time_sec": 120.0,
         "time_margin_sec": 10.0
 },

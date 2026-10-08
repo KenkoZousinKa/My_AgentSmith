@@ -83,7 +83,10 @@ class Orchestrator:
                 )
 
             # LLMにリクエストを送信し、レスポンスを取得する
-            max_tokens = tracker.remaining_output_tokens()
+            max_tokens = min(
+                self.limits.max_output_tokens_per_iteration,
+                tracker.remaining_output_tokens()
+            )
             response: LLMResponse = self.provider.generate(
                 messages=messages,
                 stop_sequences=self.stop_sequences,
