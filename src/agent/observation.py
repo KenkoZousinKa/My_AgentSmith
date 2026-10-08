@@ -31,8 +31,8 @@ _SUMMARY: dict[Status, str] = {
 _NOTE: dict[Status, str] = {
     Status.EXCEPTION: "Fix the error shown above, then re-run.",
     Status.TIMEOUT: "Add a termination condition and avoid unbounded loops.",
-    Status.TRUNCATED: "Reduce the amount you print",
-    Status.FINAL_ANSWER_INVALID: "Call final_answer() with the actual solution its argument.",
+    Status.TRUNCATED: "Reduce the amount you printi.",
+    Status.FINAL_ANSWER_INVALID: "Call final_answer() with the actual solution as its argument.",
     Status.NO_CODE: "Write exactly one ```python ... ``` code block."
 }
 
