@@ -23,30 +23,51 @@ class Sandbox:
     def __init__(
         self,
         config: SandboxConfig | None = None,
-        tools: dict[str, Callable[..., Any]] | None = None
+        tools: dict[str, Callable[..., Any]] | None = None,
+        mcp_stdio: str | None = None,
+        mcp_server: str | None = None
     ) -> None:
         """Init the Sandbox and fork its worker."""
         self.config = config or SandboxConfig()
         self.tools: dict[str, Callable[..., Any]] = tools or {}
+        self._mcp_stdio = mcp_stdio
+        self._mcp_server = mcp_server
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
         self._tool_truncated = False
-        # self._spawn()
+        self._spawn()
+
+    def connect(self) -> None:
+        """Connect the configured MCP server and inject tools."""
+        if self._mcp_stdio:
+            self.client = StdioMCPClient(self._mcp_stdio)
+        elif self._mcp_server:
+            self.client = HttpMCPClient(self._mcp_server)
+        else:
+            return
+        self.client.connect()
+        self.tools = {
+            tool.name: MCPToolFunction(self.client, tool)
+            for tool in self.client.list_tools()
+        }
+        self.reset()
 
     def __enter__(self) -> "Sandbox":
         """Enter a context manager."""
-        self.client = StdioMCPClient("python mcp_tools_mbpp.py")
-        self.client.connect()
-        self.tools = {t.name: MCPToolFunction(self.client, t) for t in self.client.list_tools()}
-        self._spawn()
-
+        try:
+            self.connect()
+        except Exception:
+            self.close
+            raise
         return self
 
     def __exit__(self, *_exc: object) -> None:
         """Leave a context manager, killing the worker."""
         self.close()
-        self.client.close()
+        if self.client is not None:
+            self.client.close()
+            self.client = None
 
     def _spawn(self) -> None:
         """Fork a worker and keep the parent endsd of both pipes."""
@@ -75,28 +96,32 @@ class Sandbox:
         """Kill the worker's whole process group and reap it."""
         if self._pid is None:
             return
-        try:
-            os.close(self._cmd_w)
-        except OSError:
-            pass
+
+        pid = self._pid
+        self._pid = None
+
+        for fd in (self._cmd_w, self._res_r):
+            if fd >= 0:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+
+        self._cmd_w = self._res_r = -1
+
         for kill in (
-            lambda: os.killpg(self._pid, signal.SIGKILL),  # type: ignore[arg-type]
-            lambda: os.kill(self._pid, signal.SIGKILL),  # type: ignore[arg-type]
+            lambda: os.killpg(pid, signal.SIGKILL),
+            lambda: os.kill(pid, signal.SIGKILL)
         ):
             try:
                 kill()
+                break
             except (ProcessLookupError, PermissionError):
                 continue
         try:
-            os.waitpid(self._pid, 0)
+            os.waitpid(pid, 0)
         except ChildProcessError:
             pass
-        for fd in (self._cmd_w, self._res_r):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        self._pid = None
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
@@ -304,9 +329,11 @@ def main() -> int:
         if args.config else SandboxConfig()
     )
 
-    with Sandbox(config=config) as sandbox:
-        print(sandbox.manual())
-        print(sandbox.client.list_tools())
+    with Sandbox(
+        config=config,
+        mcp_stdio=args.mcp_stdio,
+        mcp_server=args.mcp_server
+    ) as sandbox:
         if args.command is not None:
             _show(sandbox.run(args.command))
         elif args.file is not None:
