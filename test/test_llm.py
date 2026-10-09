@@ -5,7 +5,7 @@ import pytest
 
 from src.agent.llm.provider.openai_compat import OpenAICompatProvider
 from src.agent.llm.provider.provider import LLMError, LLMResponse, ProviderConfig
-from src.agent.llm.transport.transport import HttpTransport
+from src.agent.llm.transport.transport import HttpResponse, HttpTransport
 
 _CONFIG = ProviderConfig(
     name="fake",
@@ -22,16 +22,18 @@ _OPENAI_JSON = json.dumps({
 
 
 class _FakeTransport(HttpTransport):
-    """送信内容を記録し固定JSONを返すモックtransport."""
+    """送信内容を記録し固定応答を返すモックtransport."""
 
-    def __init__(self, status: int = 200, body: str = _OPENAI_JSON) -> None:
+    def __init__(self, status: int = 200, body: str = _OPENAI_JSON,
+                 headers: dict[str, str] | None = None) -> None:
         self.status = status
         self.body = body
+        self.headers = headers if headers is not None else {}
         self.calls: list[tuple[str, dict[str, str], str]] = []
 
-    def post(self, url: str, headers: dict[str, str], data: str, timeout: float = 60.0) -> tuple[int, str]:
+    def post(self, url: str, headers: dict[str, str], data: str, timeout: float = 60.0) -> HttpResponse:
         self.calls.append((url, headers, data))
-        return self.status, self.body
+        return HttpResponse(status=self.status, body=self.body, headers=self.headers)
 
 
 def _make_provider(transport: HttpTransport) -> OpenAICompatProvider:
@@ -73,7 +75,7 @@ def test_build_request_includes_model_messages_stop() -> None:
 
 
 def test_non_2xx_raises_llm_error() -> None:
-    """HTTP非2xx は LLMError を送出する."""
+    """HTTP非2xx は LLMError を送出する(A12-1時点。分類はA12-2)."""
     transport = _FakeTransport(status=429, body="rate limited")
     with pytest.raises(LLMError):
         _make_provider(transport).generate(
