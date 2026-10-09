@@ -79,36 +79,26 @@ class LLMHTTPError(LLMError):
 
     Attributes:
         status_code (int): Providerが返したHTTPステータスコード
+        retry_after (float | None): リトライするまでの秒数。Noneの場合はリトライ不可。
     """
-    def __init__(self, message: str, status: int) -> None:
+    def __init__(self, message: str, status: int, retry_after: float | None = None) -> None:
         """メッセージとHTTPステータスコードを保持する.
 
         Args:
             message (str): エラーメッセージ
             status (int): Providerが返したHTTPステータスコード
+            retry_after (float | None): リトライするまでの秒数。Noneの場合はリトライ不可。
         """
-        super().__init__(message)
+        super().__init__(message, status, retry_after)
         self.status = status
+        self.retry_after = retry_after
 
 
 class RateLimitError(LLMHTTPError):
     """LLM呼び出し時のレートリミット超過を表す例外クラス.
 
     HTTPステータスコードが429の場合に発生する。
-
-    Attributes:
-        retry_after (float | None): リトライするまでの秒数。Noneの場合はリトライ不可。
     """
-    def __init__(self, message: str, status_code: int, retry_after: float | None = None) -> None:
-        super().__init__(message, status_code)
-        """メッセージとHTTPステータスコード、リトライまでの秒数を保持する.
-
-        Args:
-            message (str): エラーメッセージ
-            status_code (int): Providerが返したHTTPステータスコード
-            retry_after (float | None): リトライするまでの秒数。なければNone。
-        """
-        self.retry_after = retry_after
 
 
 class ServerError(LLMHTTPError):
