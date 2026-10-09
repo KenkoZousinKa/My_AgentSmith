@@ -102,12 +102,12 @@ class LLMProvider(ABC):
         """
         url, headers, body = self._build_request(messages, stop_sequences, max_tokens)
         start_time = time.perf_counter()
-        status, text = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
+        response = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        if not 200 <= status < 300:
-            raise LLMError(f"LLM HTTP {status}: {text[:500]}")
+        if not 200 <= response.status < 300:
+            raise LLMError(f"LLM HTTP {response.status}: {response.body[:500]}")
 
-        return self._parse_response(text, elapsed_ms)
+        return self._parse_response(response.body, elapsed_ms)
 
     @abstractmethod
     def _build_request(
