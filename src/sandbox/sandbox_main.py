@@ -30,44 +30,39 @@ class Sandbox:
         """Init the Sandbox and fork its worker."""
         self.config = config or SandboxConfig()
         self.tools: dict[str, Callable[..., Any]] = tools or {}
-        self._mcp_stdio = mcp_stdio
-        self._mcp_server = mcp_server
+        self.client: Any | None = None
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
         self._tool_truncated = False
-        self._spawn()
+        if mcp_stdio:
+            self.client = StdioMCPClient(mcp_stdio)
+        elif mcp_server:
+            raise NotImplementedError(
+                "Not done yet."
+            )
+            #  self.client = HttpMCPClient(mcp_server)
+        if self.client is not None:
+            try:
+                self.client.connect()
+                self.tools = {
+                    tool.name: MCPToolFunction(self.client, tool)
+                    for tool in self.client.list_tools()
+                }
+            except Exception:
+                self.client.close()
+                self.client = None
+                raise
 
-    def connect(self) -> None:
-        """Connect the configured MCP server and inject tools."""
-        if self._mcp_stdio:
-            self.client = StdioMCPClient(self._mcp_stdio)
-        elif self._mcp_server:
-            self.client = HttpMCPClient(self._mcp_server)
-        else:
-            return
-        self.client.connect()
-        self.tools = {
-            tool.name: MCPToolFunction(self.client, tool)
-            for tool in self.client.list_tools()
-        }
-        self.reset()
+        self._spawn()
 
     def __enter__(self) -> "Sandbox":
         """Enter a context manager."""
-        try:
-            self.connect()
-        except Exception:
-            self.close
-            raise
         return self
 
     def __exit__(self, *_exc: object) -> None:
         """Leave a context manager, killing the worker."""
         self.close()
-        if self.client is not None:
-            self.client.close()
-            self.client = None
 
     def _spawn(self) -> None:
         """Fork a worker and keep the parent endsd of both pipes."""
@@ -88,15 +83,33 @@ class Sandbox:
         self._pid, self._cmd_w, self._res_r = pid, cmd_w, res_r
 
     def reset(self) -> None:
-        """Kill the worker and start a clean one (namespace is lost)."""
+        """Restart the worker, keeping the MCP client connected.
+
+        Only the sandboxed namespace is lost. The cline belongs to
+        the session.
+        """
         self.close()
         self._spawn()
 
     def close(self) -> None:
-        """Kill the worker's whole process group and reap it."""
+        """Shut down the worker and the MCP client.
+
+        Safe to call twice; the orchestrator should call it in a finaly
+        block.
+        """
+        self._close_worker()
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+
+    def _close_worker(self) -> None:
+        """Kill the worker's process group, reap it, and close pipes.
+
+        Each descriptor is closed exactly once then blanked:
+        a freed fd number can be reused.
+        """
         if self._pid is None:
             return
-
         pid = self._pid
         self._pid = None
 
@@ -199,7 +212,7 @@ class Sandbox:
             f"- Execution time limit: {self.config.max_execution_time_seconds}s "
             f"(tool calls are not counted against this limit).",
             f"- Memory limit: {self.config.max_memory_mb}MB.",
-            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)) + ", ",
+            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)),
             "- Dunder attribute access (__class__, __globals__) is blocked.",
             "",
             "## final_answer",
