@@ -88,7 +88,7 @@ class Sandbox:
         Only the sandboxed namespace is lost. The cline belongs to
         the session.
         """
-        self.close()
+        self._close_worker()
         self._spawn()
 
     def close(self) -> None:
