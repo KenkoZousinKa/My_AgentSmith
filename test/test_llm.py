@@ -4,8 +4,16 @@ import json
 import pytest
 
 from src.agent.llm.provider.openai_compat import OpenAICompatProvider
-from src.agent.llm.provider.provider import LLMError, LLMResponse, ProviderConfig
 from src.agent.llm.transport.transport import HttpResponse, HttpTransport
+from src.agent.llm.provider.provider import (
+    AuthenticationError,
+    BadRequestError,
+    LLMError,
+    LLMResponse,
+    ProviderConfig,
+    RateLimitError,
+    ServerError,
+)
 
 _CONFIG = ProviderConfig(
     name="fake",
@@ -74,10 +82,62 @@ def test_build_request_includes_model_messages_stop() -> None:
     assert payload["max_tokens"] == 256
 
 
-def test_non_2xx_raises_llm_error() -> None:
-    """HTTP非2xx は LLMError を送出する(A12-1時点。分類はA12-2)."""
-    transport = _FakeTransport(status=429, body="rate limited")
-    with pytest.raises(LLMError):
+def test_429_raises_rate_limit_error_with_retry_after() -> None:
+    """HTTP 429 は RateLimitError を送出し、retry-afterヘッダを秒数に解釈する."""
+    transport = _FakeTransport(status=429, body="rate limited", headers={"retry-after": "3"})
+    with pytest.raises(RateLimitError) as exc_info:
+        _make_provider(transport).generate(
+            messages=[{"role": "user", "content": "x"}], stop_sequences=[], max_tokens=16
+        )
+    assert exc_info.value.status == 429
+    assert exc_info.value.retry_after == 3.0
+    # 後方互換: RateLimitError は LLMError の子孫
+    assert isinstance(exc_info.value, LLMError)
+
+
+def test_429_without_retry_after_header_is_none() -> None:
+    """retry-afterヘッダが無い429では retry_after は None(既定バックオフにフォールバック)."""
+    transport = _FakeTransport(status=429, body="slow down")
+    with pytest.raises(RateLimitError) as exc_info:
+        _make_provider(transport).generate(
+            messages=[{"role": "user", "content": "x"}], stop_sequences=[], max_tokens=16
+        )
+    assert exc_info.value.retry_after is None
+
+
+def test_429_with_http_date_retry_after_is_none() -> None:
+    """retry-afterがHTTP-date形式(非数値)なら解釈せず None を返す."""
+    transport = _FakeTransport(status=429, headers={"retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"})
+    with pytest.raises(RateLimitError) as exc_info:
+        _make_provider(transport).generate(
+            messages=[{"role": "user", "content": "x"}], stop_sequences=[], max_tokens=16
+        )
+    assert exc_info.value.retry_after is None
+
+
+def test_5xx_raises_server_error() -> None:
+    """HTTP 5xx は ServerError を送出する."""
+    transport = _FakeTransport(status=503, body="service unavailable")
+    with pytest.raises(ServerError) as exc_info:
+        _make_provider(transport).generate(
+            messages=[{"role": "user", "content": "x"}], stop_sequences=[], max_tokens=16
+        )
+    assert exc_info.value.status == 503
+
+
+def test_401_raises_auth_error() -> None:
+    """HTTP 401 は AuthenticationError を送出する."""
+    transport = _FakeTransport(status=401, body="invalid api key")
+    with pytest.raises(AuthenticationError):
+        _make_provider(transport).generate(
+            messages=[{"role": "user", "content": "x"}], stop_sequences=[], max_tokens=16
+        )
+
+
+def test_400_raises_bad_request_error() -> None:
+    """その他4xx(400) は BadRequestError を送出する."""
+    transport = _FakeTransport(status=400, body="bad payload")
+    with pytest.raises(BadRequestError):
         _make_provider(transport).generate(
             messages=[{"role": "user", "content": "x"}], stop_sequences=[], max_tokens=16
         )
