@@ -20,6 +20,10 @@ class Method(StrEnum):
     PING = "ping"
     TOOLS_LIST = "tools/list"
     TOOLS_CALL = "tools/call"
+    RESOURCES_LIST = "resources/list"
+    RESOURCES_READ = "resources/read"
+    PROMPTS_LIST = "prompts/list"
+    PROMPTS_GET = "prompts/get"
 
 
 class MCPModel(BaseModel):
@@ -102,6 +106,99 @@ class CallToolResult(MCPModel):
 
 class EmptyResult(MCPModel):
     """中身のない成功応答(ping)"""
+
+
+# ===== resources/ Class =====
+
+class ContentBlock(MCPModel):
+    """メッセージの中身の1つ分（テキスト、画像、音声など）."""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="allow")
+    # ↑ extra="allow"：知らない項目（画像の data や mimeType など）も捨てずに持っておく。
+    #   未知のサーバーは、テキスト以外の中身を送ってくることがあるため。
+    #   model_config を書き直すと MCPModel の設定が上書きされるので、alias の設定も書き直している
+    type: str
+    # ↑ "text"、"image"、"audio"、"resource" など。Literal にすると、知らない種類で検証に失敗する
+    text: str | None = None
+    # ↑ type が "text" のときだけ入る。それ以外は None
+
+
+class Resource(MCPModel):
+    """resources/list で返される、資料1つ分の情報."""
+    uri: str
+    # ↑ 資料を指す名前。"file:///…"、"test://hello" など。サーバーが自由に決める
+    name: str
+    description: str | None = None
+    mime_type: str | None = None
+    # ↑ JSON では "mimeType"。"text/plain"、"application/json" など
+
+
+class ListResourcesResult(MCPModel):
+    """resources/list リクエストへの応答の result."""
+    resources: list[Resource]
+
+
+class ReadResourceRequestParams(MCPModel):
+    """resources/read リクエストのパラメータ（クライアント → サーバー）."""
+    uri: str
+
+
+class ResourceContents(MCPModel):
+    """resources/read で返される、資料の中身1つ分."""
+    uri: str
+    mime_type: str | None = None
+    text: str | None = None
+    # ↑ 文字の資料なら text に入る
+    blob: str | None = None
+    # ↑ 画像などのバイナリなら、base64 という形式の文字列で blob に入る（text と blob はどちらか一方）
+
+
+class ReadResourceResult(MCPModel):
+    """resources/read リクエストへの応答の result."""
+    contents: list[ResourceContents]
+    # ↑ 1つの URI に、中身が複数返ることもある（フォルダーを指す URI など）
+
+
+# ===== prompts/ Class =====
+
+
+class PromptArgument(MCPModel):
+    """prompt が受け取る引数1つ分の説明."""
+    name: str
+    description: str | None = None
+    required: bool = False
+
+
+class Prompt(MCPModel):
+    """prompts/list で返される、指示の雛形1つ分の情報."""
+    name: str
+    description: str | None = None
+    arguments: list[PromptArgument] = Field(default_factory=list)
+    # ↑ 引数の無い prompt では、サーバーが arguments を省略してくることがある
+
+
+class ListPromptsResult(MCPModel):
+    """prompts/list リクエストへの応答の result."""
+    prompts: list[Prompt]
+
+
+class GetPromptRequestParams(MCPModel):
+    """prompts/get リクエストのパラメータ（クライアント → サーバー）."""
+    name: str
+    arguments: dict[str, str] | None = None
+    # ↑ 仕様で、prompt の引数の値は文字列だけと決まっている（tools の引数は何でもよいのと違う）
+
+
+class PromptMessage(MCPModel):
+    """雛形を埋めた結果の、メッセージ1つ分."""
+    role: Literal["user", "assistant"]
+    # ↑ LLM との会話の、誰の発言か。仕様で、この2つだけと決まっている
+    content: ContentBlock
+
+
+class GetPromptResult(MCPModel):
+    """prompts/get リクエストへの応答の result."""
+    description: str | None = None
+    messages: list[PromptMessage]
 
 
 # ===== Error Class =====
