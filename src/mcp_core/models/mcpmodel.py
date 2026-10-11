@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Final, Literal
 from pydantic import (
     BaseModel,
-    ConfigDict
+    ConfigDict,
+    Field
 )
 from pydantic.alias_generators import to_camel
 from enum import StrEnum
@@ -34,6 +35,8 @@ class MCPModel(BaseModel):
     """
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    #   alias 要素名をキャメル型に変換
+    #   populate 変換前の要素名でのインポートをエラーとしない
 
 
 # ===== initialize/ Class =====
@@ -110,17 +113,6 @@ class EmptyResult(MCPModel):
 
 # ===== resources/ Class =====
 
-class ContentBlock(MCPModel):
-    """メッセージの中身の1つ分（テキスト、画像、音声など）."""
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="allow")
-    # ↑ extra="allow"：知らない項目（画像の data や mimeType など）も捨てずに持っておく。
-    #   未知のサーバーは、テキスト以外の中身を送ってくることがあるため。
-    #   model_config を書き直すと MCPModel の設定が上書きされるので、alias の設定も書き直している
-    type: str
-    # ↑ "text"、"image"、"audio"、"resource" など。Literal にすると、知らない種類で検証に失敗する
-    text: str | None = None
-    # ↑ type が "text" のときだけ入る。それ以外は None
-
 
 class Resource(MCPModel):
     """resources/list で返される、資料1つ分の情報."""
@@ -161,6 +153,18 @@ class ReadResourceResult(MCPModel):
 # ===== prompts/ Class =====
 
 
+class ContentBlock(MCPModel):
+    """メッセージの中身の1つ分（テキスト、画像、音声など）."""
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="allow")
+    # ↑ extra="allow"：知らない項目（画像の data や mimeType など）も捨てずに持っておく。
+    #   未知のサーバーは、テキスト以外の中身を送ってくることがあるため。
+    #   model_config を書き直すと MCPModel の設定が上書きされるので、alias の設定も書き直している
+    type: str
+    # ↑ "text"、"image"、"audio"、"resource" など。
+    text: str | None = None
+    # ↑ type が "text" のときだけ入る。それ以外は None
+
+
 class PromptArgument(MCPModel):
     """prompt が受け取る引数1つ分の説明."""
     name: str
@@ -169,11 +173,10 @@ class PromptArgument(MCPModel):
 
 
 class Prompt(MCPModel):
-    """prompts/list で返される、指示の雛形1つ分の情報."""
+    """prompts/list で返される、指示の1つ分の情報."""
     name: str
     description: str | None = None
     arguments: list[PromptArgument] = Field(default_factory=list)
-    # ↑ 引数の無い prompt では、サーバーが arguments を省略してくることがある
 
 
 class ListPromptsResult(MCPModel):
@@ -185,23 +188,25 @@ class GetPromptRequestParams(MCPModel):
     """prompts/get リクエストのパラメータ（クライアント → サーバー）."""
     name: str
     arguments: dict[str, str] | None = None
-    # ↑ 仕様で、prompt の引数の値は文字列だけと決まっている（tools の引数は何でもよいのと違う）
+    # ↑ 仕様で、prompt の引数の値は文字列だけと決まっている
 
 
 class PromptMessage(MCPModel):
-    """雛形を埋めた結果の、メッセージ1つ分."""
+    """結果の、メッセージ1つ分."""
     role: Literal["user", "assistant"]
-    # ↑ LLM との会話の、誰の発言か。仕様で、この2つだけと決まっている
+    # ↑ LLM との会話の、誰の発言か。
     content: ContentBlock
 
 
 class GetPromptResult(MCPModel):
     """prompts/get リクエストへの応答の result."""
-    description: str | None = None
+    description: str | None = None  # 完成したプロンプト全体の説明
     messages: list[PromptMessage]
 
 
 # ===== Error Class =====
+
+RESOURCE_NOT_FOUND: Final = -32002
 
 
 class MCPClientError(Exception):

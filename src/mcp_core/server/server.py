@@ -9,9 +9,13 @@ from pydantic import ValidationError, create_model, BaseModel
 
 from src.mcp_core.models import jsonrpc as rpc
 from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.server.tool_model import RegisteredTool
 from src.mcp_core.models.server_transport import ServerTransport
 from src.mcp_core.server.stdio import StdioServerTransport
+from src.mcp_core.server.tool_model import (
+    RegisteredTool,
+    RegisteredPrompt,
+    RegisteredResource,
+)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
@@ -22,10 +26,17 @@ class MCPServer:
             mcp.Method.INITIALIZE: self._handle_initialize,
             mcp.Method.PING: self._handle_ping,
             mcp.Method.TOOLS_LIST: self._handle_tools_list,
-            mcp.Method.TOOLS_CALL: self._handle_call_tool
+            mcp.Method.TOOLS_CALL: self._handle_call_tool,
+            mcp.Method.RESOURCES_LIST: self._handle_resources_list,
+            mcp.Method.RESOURCES_READ: self._handle_resources_read,
+            mcp.Method.PROMPTS_LIST: self._handle_prompts_list,
+            mcp.Method.PROMPTS_GET: self._handle_prompts_get,
         }
-        self.tools: dict[str, RegisteredTool] = {}
         self.server_info = mcp.Implementation(name=name, version=version)
+
+        self.tools: dict[str, RegisteredTool] = {}
+        self.resources: dict[str, RegisteredResource] = {}
+        self.prompts: dict[str, RegisteredPrompt] = {}
 
     def run(self, transport: ServerTransport | None = None) -> None:
         """サーバーの受付を担当する."""
@@ -124,12 +135,46 @@ class MCPServer:
         text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)  # 日本語をそのまま出力する
         return mcp.CallToolResult(content=[mcp.TextContent(text=text)])
 
+    def _handle_resources_list(self, params: dict[str, Any] | None) -> mcp.ListResourcesResult:
+        """登録された資料の一覧を返す."""
+        return mcp.ListResourcesResult(resources=[r.to_resource() for r in self.resources.values()])
+
+    def _handle_resources_read(self, params: dict[str, Any] | None) -> mcp.ReadResourceResult:
+        """uri の資料の中身を返す."""
+        p = mcp.ReadResourceRequestParams.model_validate(params)
+        resource = self.resources.get(p.uri)
+        if resource is None:
+            raise mcp.MCPError(mcp.RESOURCE_NOT_FOUND, f"Resource not found: {p.uri}", {"uri": p.uri})
+        value = resource.func()
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        return mcp.ReadResourceResult(contents=[mcp.ResourceContents(uri=p.uri, mime_type=resource.mime_type, text=text)])
+
+    def _handle_prompts_list(self, params: dict[str, Any] | None) -> mcp.ListPromptsResult:
+        """登録された雛形の一覧を返す."""
+        return mcp.ListPromptsResult(prompts=[p.to_prompt() for p in self.prompts.values()])
+
+    def _handle_prompts_get(self, params: dict[str, Any] | None) -> mcp.GetPromptResult:
+        """雛形に引数を埋めて、メッセージとして返す."""
+        p = mcp.GetPromptRequestParams.model_validate(params)
+        prompt = self.prompts.get(p.name)
+        if prompt is None:
+            raise mcp.MCPError(rpc.ErrorCode.INVALID_PARAMS, f"Unknown prompt: {p.name}", None)
+        args = p.arguments or {}
+        missing = [a.name for a in prompt.arguments if a.required and a.name not in args]
+        if missing:
+            raise mcp.MCPError(rpc.ErrorCode.INVALID_PARAMS,
+                               f"Missing arguments for prompt {p.name}: {', '.join(missing)}", None)
+        value = prompt.func(**args)
+        return mcp.GetPromptResult(description=prompt.description,
+                                   messages=[mcp.PromptMessage(role="user",
+                                                               content=mcp.ContentBlock(type="text", text=str(value)))])
+
     def _capabilities(self) -> dict[str, Any]:
         """サーバーの提供する機能を動的に取得して返す."""
         registries = {
             "tools": self.tools,
-            # "resources": self.resources,
-            # "prompts": self.prompts,
+            "resources": self.resources,
+            "prompts": self.prompts,
         }
         return {name: {} for name, registry in registries.items() if registry}
 
@@ -153,6 +198,31 @@ class MCPServer:
 
             self.tools[name] = RegisteredTool(name, doc, func, arguments_model)     # 4. 登録簿に載せる
             return func                                                             # 5. 関数はそのまま返す
+        return register
+
+    def resource(self, uri: str, description: str | None = None,
+                 mime_type: str = "text/plain") -> Callable[[F], F]:
+        """関数を、uri で読める資料として登録する."""
+        def register(func: F) -> F:
+            doc = description or inspect.getdoc(func)
+            self.resources[uri] = RegisteredResource(uri, func.__name__, doc, mime_type, func)
+            # ↑ 登録簿の鍵は uri。resources/read が uri で探すため（tools は名前で探した）
+            return func
+        return register
+
+    def prompt(self, description: str | None = None) -> Callable[[F], F]:
+        """関数を、指示の雛形として登録する。引数はすべて文字列."""
+        def register(func: F) -> F:
+            arguments = []
+            for param in inspect.signature(func).parameters.values():
+                if param.annotation is not str:  # prompt の引数は文字列だけ
+                    raise TypeError(f"{func.__name__} の引数 {param.name} は str にしてください")
+                arguments.append(mcp.PromptArgument(
+                    name=param.name,
+                    required=param.default is inspect.Parameter.empty))  # 初期値が無い引数は「必須」
+            doc = description or inspect.getdoc(func)
+            self.prompts[func.__name__] = RegisteredPrompt(func.__name__, doc, func, arguments)
+            return func
         return register
 
     def _build_argumetns_model(self, func: Callable[..., Any]) -> type[BaseModel]:

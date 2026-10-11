@@ -86,6 +86,45 @@ class MCPClient:
 
         return result_model
 
+    def list_resources(self) -> list[mcp.Resource]:
+        """サーバーに資料の一覧を依頼する."""
+        if "resources" not in self.server_capabilities:   # 資料の機能が無いサーバーには頼まない
+            return []
+        result = self._request(mcp.Method.RESOURCES_LIST)
+        try:
+            return mcp.ListResourcesResult.model_validate(result).resources
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"resources/listの応答が不正です: {result}") from e
+
+    def read_resource(self, uri: str) -> mcp.ReadResourceResult:
+        """URI を指定して、資料の中身を読む."""
+        params = mcp.ReadResourceRequestParams(uri=uri)
+        result = self._request(mcp.Method.RESOURCES_READ, params)
+        # ↑ 知らない URI なら、サーバーが JSON-RPC のエラー（-32002）を返し、_request が MCPError にする
+        try:
+            return mcp.ReadResourceResult.model_validate(result)
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"resources/readの応答が不正です: {result}") from e
+
+    def list_prompts(self) -> list[mcp.Prompt]:
+        """サーバーに指示の雛形の一覧を依頼する."""
+        if "prompts" not in self.server_capabilities:
+            return []
+        result = self._request(mcp.Method.PROMPTS_LIST)
+        try:
+            return mcp.ListPromptsResult.model_validate(result).prompts
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"prompts/listの応答が不正です: {result}") from e
+
+    def get_prompt(self, name: str, arguments: dict[str, str] | None = None) -> mcp.GetPromptResult:
+        """雛形の名前と引数を渡して、埋めたメッセージを受け取る."""
+        params = mcp.GetPromptRequestParams(name=name, arguments=arguments)
+        result = self._request(mcp.Method.PROMPTS_GET, params)
+        try:
+            return mcp.GetPromptResult.model_validate(result)
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"prompts/getの応答が不正です: {result}") from e
+
     def ping(self) -> None:
         """サーバーが応答するか確かめる。応答が無ければ例外."""
         self._request(mcp.Method.PING)        # 返ってくる result は {} なので、中身は使わない
