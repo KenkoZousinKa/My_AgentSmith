@@ -23,30 +23,46 @@ class Sandbox:
     def __init__(
         self,
         config: SandboxConfig | None = None,
-        tools: dict[str, Callable[..., Any]] | None = None
+        tools: dict[str, Callable[..., Any]] | None = None,
+        mcp_stdio: str | None = None,
+        mcp_server: str | None = None
     ) -> None:
         """Init the Sandbox and fork its worker."""
         self.config = config or SandboxConfig()
         self.tools: dict[str, Callable[..., Any]] = tools or {}
+        self.client: Any | None = None
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
         self._tool_truncated = False
-        # self._spawn()
+        if mcp_stdio:
+            self.client = StdioMCPClient(mcp_stdio)
+        elif mcp_server:
+            raise NotImplementedError(
+                "Not done yet."
+            )
+            #  self.client = HttpMCPClient(mcp_server)
+        if self.client is not None:
+            try:
+                self.client.connect()
+                self.tools = {
+                    tool.name: MCPToolFunction(self.client, tool)
+                    for tool in self.client.list_tools()
+                }
+            except Exception:
+                self.client.close()
+                self.client = None
+                raise
+
+        self._spawn()
 
     def __enter__(self) -> "Sandbox":
         """Enter a context manager."""
-        self.client = StdioMCPClient("python mcp_tools_mbpp.py")
-        self.client.connect()
-        self.tools = {t.name: MCPToolFunction(self.client, t) for t in self.client.list_tools()}
-        self._spawn()
-
         return self
 
     def __exit__(self, *_exc: object) -> None:
         """Leave a context manager, killing the worker."""
         self.close()
-        self.client.close()
 
     def _spawn(self) -> None:
         """Fork a worker and keep the parent endsd of both pipes."""
@@ -67,36 +83,58 @@ class Sandbox:
         self._pid, self._cmd_w, self._res_r = pid, cmd_w, res_r
 
     def reset(self) -> None:
-        """Kill the worker and start a clean one (namespace is lost)."""
-        self.close()
+        """Restart the worker, keeping the MCP client connected.
+
+        Only the sandboxed namespace is lost. The cline belongs to
+        the session.
+        """
+        self._close_worker()
         self._spawn()
 
     def close(self) -> None:
-        """Kill the worker's whole process group and reap it."""
+        """Shut down the worker and the MCP client.
+
+        Safe to call twice; the orchestrator should call it in a finaly
+        block.
+        """
+        self._close_worker()
+        if self.client is not None:
+            self.client.close()
+            self.client = None
+
+    def _close_worker(self) -> None:
+        """Kill the worker's process group, reap it, and close pipes.
+
+        Each descriptor is closed exactly once then blanked:
+        a freed fd number can be reused.
+        """
         if self._pid is None:
             return
-        try:
-            os.close(self._cmd_w)
-        except OSError:
-            pass
+        pid = self._pid
+        self._pid = None
+
+        for fd in (self._cmd_w, self._res_r):
+            if fd >= 0:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+
+        self._cmd_w = self._res_r = -1
+
         for kill in (
-            lambda: os.killpg(self._pid, signal.SIGKILL),  # type: ignore[arg-type]
-            lambda: os.kill(self._pid, signal.SIGKILL),  # type: ignore[arg-type]
+            lambda: os.killpg(pid, signal.SIGKILL),
+            lambda: os.kill(pid, signal.SIGKILL)
         ):
             try:
                 kill()
+                break
             except (ProcessLookupError, PermissionError):
                 continue
         try:
-            os.waitpid(self._pid, 0)
+            os.waitpid(pid, 0)
         except ChildProcessError:
             pass
-        for fd in (self._cmd_w, self._res_r):
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        self._pid = None
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
@@ -174,7 +212,7 @@ class Sandbox:
             f"- Execution time limit: {self.config.max_execution_time_seconds}s "
             f"(tool calls are not counted against this limit).",
             f"- Memory limit: {self.config.max_memory_mb}MB.",
-            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)) + ", ",
+            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)),
             "- Dunder attribute access (__class__, __globals__) is blocked.",
             "",
             "## final_answer",
@@ -304,9 +342,11 @@ def main() -> int:
         if args.config else SandboxConfig()
     )
 
-    with Sandbox(config=config) as sandbox:
-        print(sandbox.manual())
-        print(sandbox.client.list_tools())
+    with Sandbox(
+        config=config,
+        mcp_stdio=args.mcp_stdio,
+        mcp_server=args.mcp_server
+    ) as sandbox:
         if args.command is not None:
             _show(sandbox.run(args.command))
         elif args.file is not None:
