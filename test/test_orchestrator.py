@@ -1,4 +1,5 @@
 """Orchestrator(orchestrator.py)のループ制御テスト。LLMはStubProviderで決定的に差替."""
+from src.agent.llm.resilient_client import AllProvidersExhausted
 from src.agent.extractor.python_extractor import PythonCodeExtractor
 from src.agent.llm.provider.provider import LLMProvider, LLMResponse
 from src.agent.orchestrator import Orchestrator
@@ -96,3 +97,92 @@ def test_solution_metrics_totals() -> None:
     assert solution.total_output_tokens == 10
     assert solution.total_requests == 2
     assert solution.iterations == 2
+
+
+class _RaisingProvider:
+    """generate が必ず AllProvidersExhausted を送出する(全滅の再現)."""
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        raise AllProvidersExhausted("all providers/keys exhausted")
+
+
+def test_llm_unavailable_is_graceful() -> None:
+    """generateが全滅例外でもクラッシュせず success=False / error=LLM_UNAVAILABLE を返す."""
+    orchestrator = Orchestrator(
+        provider=_RaisingProvider(), extractor=PythonCodeExtractor(), sandbox=MockSandbox(),
+        profile=MBPPProfile(), limits=_limits(),
+    )
+    solution = orchestrator.run("82", "mbpp", "task")
+    assert solution.success is False
+    assert solution.error == "LLM_UNAVAILABLE"
+    assert solution.steps == []
+    assert solution.solution == ""
+    assert solution.total_requests == 0  # attempts未指定(=0)の全滅なら試行加算も0
+
+
+class _RetryingStub(LLMProvider):
+    """各応答に retries 回数を持たせて返すスタブ(total_requests計上の検証用)."""
+
+    def __init__(self, responses: list[tuple[str, int]]) -> None:
+        self._responses = responses
+        self._index = 0
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        text, retries = self._responses[self._index]
+        self._index += 1
+        return LLMResponse(
+            text=text, input_tokens=10, output_tokens=5, request_time_ms=1.0,
+            api_url="stub", model_name="stub", retries=retries,
+        )
+
+    def _build_request(self, messages, stop_sequences, max_tokens):  # type: ignore[no-untyped-def]
+        raise NotImplementedError
+
+    def _parse_response(self, body: str, request_time_ms: float) -> LLMResponse:
+        raise NotImplementedError
+
+
+def test_total_requests_includes_retries() -> None:
+    """total_requests は各stepの (retries+1) 合計(HTTP試行数、リトライ込み)."""
+    provider = _RetryingStub([(_RESP_PRINT, 2), (_RESP_FINAL, 0)])
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(),
+        profile=MBPPProfile(), limits=_limits(),
+    )
+    solution = orchestrator.run("82", "mbpp", "task")
+    # step1: retries=2 -> 3試行, step2: retries=0 -> 1試行 => 合計4
+    assert solution.total_requests == 4
+    assert solution.steps[0].retries == 2
+
+
+class _ExhaustAfterFirstProvider:
+    """1回目のgenerateは成功、2回目で attempts を消費して全滅する(途中全滅の再現)."""
+
+    def __init__(self, first: LLMResponse, attempts: int) -> None:
+        self._first = first
+        self._attempts = attempts
+        self._called = 0
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        self._called += 1
+        if self._called == 1:
+            return self._first
+        raise AllProvidersExhausted("exhausted", attempts=self._attempts)
+
+
+def test_total_requests_includes_failed_attempts() -> None:
+    """途中で全滅した場合、成功step分 + 全滅時の試行数が total_requests に入る."""
+    first = LLMResponse(
+        text=_RESP_PRINT, input_tokens=10, output_tokens=5,
+        request_time_ms=1.0, api_url="stub", model_name="stub", retries=0,
+    )
+    provider = _ExhaustAfterFirstProvider(first, attempts=3)
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(),
+        profile=MBPPProfile(), limits=_limits(),
+    )
+    solution = orchestrator.run("82", "mbpp", "task")
+    assert solution.success is False
+    assert solution.error == "LLM_UNAVAILABLE"
+    assert len(solution.steps) == 1          # 1回目のstepだけ積まれる
+    assert solution.total_requests == 1 + 3  # step1の1試行 + 全滅時の3試行

@@ -18,5 +18,11 @@
     },
     "manual": {
         "verbosity": "concise"
+    },
+    "retry": {
+        "max_retries_per_key": 2,
+        "backoff_base_seconds": 1.0,
+        "backoff_max_seconds": 8.0,
+        "safety_margin_seconds": 2.0
     }
 }

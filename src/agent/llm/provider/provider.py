@@ -12,11 +12,11 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 ベンチマークを実行できるようにする。
 """
 import time
+from typing import Any, Protocol
 from abc import ABC, abstractmethod
-from typing import Any
 from pydantic import BaseModel, ConfigDict
 
-from src.agent.llm.transport.transport import HttpTransport
+from src.agent.llm.transport.transport import HttpTransport, HttpResponse
 
 
 class ProviderConfig(BaseModel):
@@ -64,7 +64,124 @@ class LLMResponse(BaseModel):
 
 
 class LLMError(RuntimeError):
-    """LLM呼び出し時の失敗を表す例外クラス。HTTPが非200系 / 解釈できない場合に発生する."""
+    """LLM呼び出し時の失敗を表す基底例外クラス.
+
+    HTTPステータス由来の失敗(LLMHTTPErrorとその子孫)と、
+    解釈できないレスポンス由来の失敗(LLMError)をまとめる。
+    上位はこのLLMErrorを捕まえて、全失敗を一括で扱える。
+    """
+
+
+class LLMHTTPError(LLMError):
+    """LLM呼び出し時のHTTPステータス由来の失敗を表す例外クラス.
+
+    HTTPステータスコードが200系以外の場合に発生する。
+
+    Attributes:
+        status_code (int): Providerが返したHTTPステータスコード
+        retry_after (float | None): リトライするまでの秒数。Noneの場合はリトライ不可。
+    """
+    def __init__(self, message: str, status: int, retry_after: float | None = None) -> None:
+        """メッセージとHTTPステータスコードを保持する.
+
+        Args:
+            message (str): エラーメッセージ
+            status (int): Providerが返したHTTPステータスコード
+            retry_after (float | None): リトライするまでの秒数。Noneの場合はリトライ不可。
+        """
+        super().__init__(message, status, retry_after)
+        self.status = status
+        self.retry_after = retry_after
+
+
+class RateLimitError(LLMHTTPError):
+    """LLM呼び出し時のレートリミット超過を表す例外クラス.
+
+    HTTPステータスコードが429の場合に発生する。
+    """
+
+
+class ServerError(LLMHTTPError):
+    """サーバーエラー(HTTP 500系)の場合に発生、再送で成功する可能性がある例外クラス."""
+
+
+class AuthenticationError(LLMHTTPError):
+    """認証 / 権限 / クォータ枯れ(HTTP 401 / 403)エラーを表す例外クラス.
+
+    同じキーの再送は無意味なので、プロバイダを切り替えるか、キーを差し替える必要がある。
+    """
+
+
+class BadRequestError(LLMHTTPError):
+    """リクエストが不正(HTTP 400系)の場合に発生する例外クラス.
+
+    リクエストの組み立てに問題がある場合に発生する。
+    設定 / コードのバグで、再送しても成功しない。
+    """
+
+
+def _parse_retry_after(header: dict[str, str]) -> float | None:
+    """retry-afterヘッダを待機秒数に解釈する.
+
+    数値のみ対応。HTTP-date形式 / 欠落時はNoneを返す。
+    呼び出し側が既定の指数バックオフにフォールバックする。
+
+    Args:
+        header (dict[str, str]): 小文字正規化済みHTTPレスポンスヘッダ
+
+    Returns:
+        float | None: 待機秒数。欠落時はNone。
+    """
+    raw = header.get("retry-after")
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+def _error_from_response(response: HttpResponse) -> LLMHTTPError:
+    """非200系のHTTPレスポンスから、ステータスに応じて型付き例外に変換して返す.
+
+    """
+    status = response.status
+    snippet = response.body[:500]
+
+    # 429はレートリミット超過なので、retry-afterヘッダを解釈して返す
+    if status == 429:
+        retry_after = _parse_retry_after(response.headers)
+        return RateLimitError(f"LLM HTTP {status}: {snippet}", status, retry_after)
+
+    # 401 / 403は認証 / 権限 / クォータ枯れなので、AuthenticationErrorを返す
+    if status in (401, 403):
+        return AuthenticationError(f"LLM HTTP {status} (auth / quota): {snippet}", status=status)
+
+    # 500系はサーバーエラーなので、ServerErrorを返す
+    if 500 <= status < 600:
+        return ServerError(f"LLM HTTP {status} (server): {snippet}", status=status)
+
+    # 400系はリクエスト不正なので、BadRequestErrorを返す
+    return BadRequestError(f"LLM HTTP {status} (bad request): {snippet}", status=status)
+
+
+class LLMGenerator(Protocol):
+    """一回の生成を行い、LLMResponseを返すプロトコル.
+
+    LLMProvider(単一プロバイダ)もResilientLLMClient(複数プロバイダで粘る上位層)もこのプロトコルに従う。
+    Orchestratorはこのプロトコルに依存することで、単一プロバイダでも複数プロバイダでも差し替え可能になる。
+
+    LLMProvider / ResilientLLMClientのどちらも、
+    generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
+    プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
+    """
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        stop_sequences: list[str],
+        max_tokens: int
+     ) -> LLMResponse:
+        ...
 
 
 class LLMProvider(ABC):
@@ -102,12 +219,12 @@ class LLMProvider(ABC):
         """
         url, headers, body = self._build_request(messages, stop_sequences, max_tokens)
         start_time = time.perf_counter()
-        status, text = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
+        response = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        if not 200 <= status < 300:
-            raise LLMError(f"LLM HTTP {status}: {text[:500]}")
+        if not 200 <= response.status < 300:
+            raise _error_from_response(response)
 
-        return self._parse_response(text, elapsed_ms)
+        return self._parse_response(response.body, elapsed_ms)
 
     @abstractmethod
     def _build_request(

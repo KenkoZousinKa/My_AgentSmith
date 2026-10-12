@@ -10,8 +10,9 @@ LimitTrackerの先頭ガード -> LLM生成 -> <end_code>除去 -> コード抽�
 """
 from src.agent.extractor.code_extractor import CodeExtractor
 from src.agent.limits import LimitTracker
-from src.agent.llm.provider.provider import LLMProvider, LLMResponse
+from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
 from src.agent.observation import build_observation, observation_no_code
+from src.agent.llm.transport.transport import TransportError
 from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.agent.prompt.template import build_system_prompt
 from src.config.settings import Limits
@@ -26,7 +27,7 @@ class Orchestrator:
 
     def __init__(
         self,
-        provider: LLMProvider,
+        provider: LLMGenerator,
         extractor: CodeExtractor,
         sandbox: SandboxBase,
         profile: TaskProfile,
@@ -87,11 +88,26 @@ class Orchestrator:
                 self.limits.max_output_tokens_per_iteration,
                 tracker.remaining_output_tokens()
             )
-            response: LLMResponse = self.provider.generate(
-                messages=messages,
-                stop_sequences=self.stop_sequences,
-                max_tokens=max_tokens
-            )
+            try:
+                response: LLMResponse = self.provider.generate(
+                    messages=messages,
+                    stop_sequences=self.stop_sequences,
+                    max_tokens=max_tokens
+                )
+            # AllProvidersExhausted / BadRequestErrorをLLMErrorで一括で補足
+            except (LLMError, TransportError) as error:
+                failed_requests = getattr(error, "attempts", 1)
+                return self._build_solution(
+                    task_id=task_id,
+                    benchmark=benchmark,
+                    success=False,
+                    solution=best_solution,
+                    tracker=tracker,
+                    steps=steps,
+                    system_prompt=system_prompt,
+                    error="LLM_UNAVAILABLE",
+                    failed_requests=failed_requests
+                )
             tracker.record_usage(
                 response.input_tokens,
                 response.output_tokens,
@@ -180,7 +196,8 @@ class Orchestrator:
         tracker: LimitTracker,
         steps: list[StepMetrics],
         system_prompt: str,
-        error: str | None = None
+        error: str | None = None,
+        failed_requests: int = 0
     ) -> SolutionOutput:
         """ループの結果からSolutionOutputを構築するヘルパー関数.(成功 / 打ち切り共通)
 
@@ -195,6 +212,7 @@ class Orchestrator:
             system_prompt (str): LLMに送信された完全なシステムプロンプト（出所確認用）
             error (str | None): エージェントが失敗した場合のエラーメッセージ
                 （成功した場合はNone）
+            failed_requests (int): LLM呼び出しが失敗した場合の総試行回数（リトライを含む / 既定0）
         """
         return SolutionOutput(
             task_id=task_id,
@@ -202,7 +220,7 @@ class Orchestrator:
             success=success,
             solution=solution,
             iterations=tracker.iterations,
-            total_requests=len(steps),
+            total_requests=sum(step.retries + 1 for step in steps) + failed_requests,
             total_input_tokens=tracker.total_input_tokens,
             total_output_tokens=tracker.total_output_tokens,
             total_time_seconds=tracker.elapsed_seconds(),

@@ -58,6 +58,23 @@ class ManualSettings(BaseModel):
     verbosity: str = "concise"
 
 
+class RetrySettings(BaseModel):
+    """ResilientLLMClientのリトライ / バックオフ設定.
+
+    Attributes:
+        max_retries_per_key (int): 1つのAPIキーでの最大リトライ回数。初回除くデフォルト2回。
+        backoff_base_seconds (float): バックオフの基本秒数。指数バックオフの基準値。デフォルト1秒。
+        backoff_max_seconds (float): バックオフの1回あたりの上限、最大秒数。デフォルト8秒。
+        safety_margin_seconds (float): 時間予算からこの分を引いた範囲でしか持たない。
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    max_retries_per_key: int = 2
+    backoff_base_seconds: float = 1.0
+    backoff_max_seconds: float = 8.0
+    safety_margin_seconds: float = 2.0
+
+
 class Settings(BaseSettings):
     """config.json + env + CLIの階層設定.
 
@@ -76,6 +93,7 @@ class Settings(BaseSettings):
     sandbox: SandboxSettings = SandboxSettings()
     logging: LoggingSettings = LoggingSettings()
     manual: ManualSettings = ManualSettings()
+    retry: RetrySettings = RetrySettings()
 
     @classmethod
     def settings_customise_sources(
