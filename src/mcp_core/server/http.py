@@ -217,6 +217,3 @@ class HttpServerTransport:
         except ValueError:
             raise HttpError(400, "Bad Request")
         return (method, path, headers)
-
-
-# HttpServerTransport().serve(None)
