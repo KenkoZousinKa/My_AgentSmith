@@ -90,21 +90,23 @@ def run_mbpp_agent(
         max_execution_time_seconds=int(settings.sandbox.exec_timeout_sec),
         max_memory_mb=settings.sandbox.memory_limit_mb
     )
-    sandbox = Sandbox(config=sandbox_config,
-                      mcp_stdio="python mcp_tools_mbpp.py")
+    with Sandbox(
+        config=sandbox_config,
+        mcp_stdio="python mcp_tools_mbpp.py"
+    ) as sandbox:
 
-    # Provider(ResilientLLMClient) / Sandbox / Orchestrator 構築
-    orchestrator = Orchestrator(
-        provider=client,
-        extractor=PythonCodeExtractor(),
-        sandbox=sandbox,
-        profile=MBPPProfile(),
-        limits=settings.limits
-    )
+        # Provider(ResilientLLMClient) / Sandbox / Orchestrator 構築
+        orchestrator = Orchestrator(
+            provider=client,
+            extractor=PythonCodeExtractor(),
+            sandbox=sandbox,
+            profile=MBPPProfile(),
+            limits=settings.limits
+        )
 
-    # 実行 -> SolutionOutput 書き出し
-    solution_output = orchestrator.run(
-        str(task_input.task_id), "mbpp", format_mbpp_task(task_input)
-    )
+        # 実行 -> SolutionOutput 書き出し
+        solution_output = orchestrator.run(
+            str(task_input.task_id), "mbpp", format_mbpp_task(task_input)
+        )
     solution_output_path = Path(output_file_path)
     solution_output_path.write_text(solution_output.model_dump_json(indent=2), encoding="utf-8")
