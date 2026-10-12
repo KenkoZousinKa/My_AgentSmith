@@ -8,12 +8,14 @@ fireはagent_mbpp.py / agent_swebench.py から呼ばれ、
 
 - [ ] BaseAgentCliArgsモデルを作成して検証を拡充
 """
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 
 from src.agent.extractor.python_extractor import PythonCodeExtractor
-from src.agent.llm.key_manager import resolve_api_key
-from src.agent.llm.provider.openai_compat import OpenAICompatProvider
+from src.agent.llm.resilient_client import ResilientLLMClient
+# from src.agent.llm.key_manager import resolve_api_key
+# from src.agent.llm.provider.openai_compat import OpenAICompatProvider
 from src.agent.llm.transport.requests_transport import RequestsTransport
 from src.agent.orchestrator import Orchestrator
 from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile
@@ -56,20 +58,33 @@ def run_mbpp_agent(
         provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用
     """
     # タスクファイル読み込み
-    task_input = MBPPTaskInput.model_validate_json(Path(task_file_path).read_text(encoding="utf-8"))
+    task_input = MBPPTaskInput.model_validate_json(
+        Path(task_file_path).read_text(encoding="utf-8")
+    )
 
-    # 設定読み込みとプロバイダ解決
+    # 設定読み込み
     settings = load_settings()
-    provider_config = select_provider(load_providers(), model_name, provider_url)
     # .envから環境変数を読み込む
     load_dotenv()
-    api_key = resolve_api_key(provider_config.keys_env)
 
-    provider = OpenAICompatProvider(provider_config, RequestsTransport(), api_key)
+    providers = load_providers()
+    primary_provider = select_provider(providers, model_name, provider_url)
+    # primary_providerを先頭にして優先度順に並べる
+    providers = [primary_provider, *providers[1:]]
 
-    # Provider / Sandbox / Orchestrator 構築
+    # 時間制限を使い果たさないようにデッドラインを計算
+    # バックオフ待機はこの残予算にクランプされる
+    dead_line = time.monotonic() + settings.limits.total_time_sec - settings.limits.time_margin_sec
+    client = ResilientLLMClient(
+        providers=providers,
+        transport=RequestsTransport(),
+        retry=settings.retry,
+        time_remaining=lambda: max(0, dead_line - time.monotonic()),
+    )
+
+    # Provider(ResilientLLMClient) / Sandbox / Orchestrator 構築
     orchestrator = Orchestrator(
-        provider=provider,
+        provider=client,
         extractor=PythonCodeExtractor(),
         sandbox=MockSandbox(),
         profile=MBPPProfile(),

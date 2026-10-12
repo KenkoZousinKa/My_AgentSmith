@@ -7,11 +7,15 @@ LimitTrackerの先頭ガード -> LLM生成 -> <end_code>除去 -> コード抽�
  -> Observation生成 -> 履歴 / StepMetric追加
  のループを回す。
  final_answer()で成功終了、ハード制限で打ち切り。
+
+ - [ ] 最後のstepで生成が全滅し例外が出た場合、stepに積まれないのでtotal_requestsが正しく増えない。
+    成功したgenerateの試行に足すために例外側でも試行数をカウントする必要がある。
 """
 from src.agent.extractor.code_extractor import CodeExtractor
 from src.agent.limits import LimitTracker
-from src.agent.llm.provider.provider import LLMProvider, LLMResponse
+from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
 from src.agent.observation import build_observation, observation_no_code
+from src.agent.llm.transport.transport import TransportError
 from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.agent.prompt.template import build_system_prompt
 from src.config.settings import Limits
@@ -26,7 +30,7 @@ class Orchestrator:
 
     def __init__(
         self,
-        provider: LLMProvider,
+        provider: LLMGenerator,
         extractor: CodeExtractor,
         sandbox: SandboxBase,
         profile: TaskProfile,
@@ -87,11 +91,24 @@ class Orchestrator:
                 self.limits.max_output_tokens_per_iteration,
                 tracker.remaining_output_tokens()
             )
-            response: LLMResponse = self.provider.generate(
-                messages=messages,
-                stop_sequences=self.stop_sequences,
-                max_tokens=max_tokens
-            )
+            try:
+                response: LLMResponse = self.provider.generate(
+                    messages=messages,
+                    stop_sequences=self.stop_sequences,
+                    max_tokens=max_tokens
+                )
+            # AllProvidersExhausted / BadRequestErrorをLLMErrorで一括で補足
+            except (LLMError, TransportError):
+                return self._build_solution(
+                    task_id=task_id,
+                    benchmark=benchmark,
+                    success=False,
+                    solution=best_solution,
+                    tracker=tracker,
+                    steps=steps,
+                    system_prompt=system_prompt,
+                    error="LLM_UNAVAILABLE"
+                )
             tracker.record_usage(
                 response.input_tokens,
                 response.output_tokens,
@@ -202,7 +219,7 @@ class Orchestrator:
             success=success,
             solution=solution,
             iterations=tracker.iterations,
-            total_requests=len(steps),
+            total_requests=sum(step.retries + 1 for step in steps),
             total_input_tokens=tracker.total_input_tokens,
             total_output_tokens=tracker.total_output_tokens,
             total_time_seconds=tracker.elapsed_seconds(),

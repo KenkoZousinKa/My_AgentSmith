@@ -12,7 +12,7 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 ベンチマークを実行できるようにする。
 """
 import time
-from typing import Any
+from typing import Any, Protocol
 from abc import ABC, abstractmethod
 from pydantic import BaseModel, ConfigDict
 
@@ -163,6 +163,25 @@ def _error_from_response(response: HttpResponse) -> LLMHTTPError:
 
     # 400系はリクエスト不正なので、BadRequestErrorを返す
     return BadRequestError(f"LLM HTTP {status} (bad request): {snippet}", status=status)
+
+
+class LLMGenerator(Protocol):
+    """一回の生成を行い、LLMResponseを返すプロトコル.
+
+    LLMProvider(単一プロバイダ)もResilientLLMClient(複数プロバイダで粘る上位層)もこのプロトコルに従う。
+    Orchestratorはこのプロトコルに依存することで、単一プロバイダでも複数プロバイダでも差し替え可能になる。
+
+    LLMProvider / ResilientLLMClientのどちらも、
+    generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
+    プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
+    """
+    def generate(
+        self,
+        messages: list[dict[str, str]],
+        stop_sequences: list[str],
+        max_tokens: int
+     ) -> LLMResponse:
+        ...
 
 
 class LLMProvider(ABC):
