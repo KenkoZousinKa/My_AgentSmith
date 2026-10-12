@@ -167,6 +167,7 @@ def test_all_exhausted_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(AllProvidersExhausted) as exc_info:
         _gen(client)
     assert isinstance(exc_info.value.__cause__, TransportError)
+    assert exc_info.value.attempts == 1  # key1つ×max_retries_per_key=0 => 1試行で全滅
 
 
 def test_bad_request_aborts_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
