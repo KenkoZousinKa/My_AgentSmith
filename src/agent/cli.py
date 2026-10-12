@@ -21,7 +21,9 @@ from src.agent.orchestrator import Orchestrator
 from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile
 from src.config.settings import load_providers, load_settings, select_provider
 from src.models.input import MBPPTaskInput
-from src.sandbox.mock import MockSandbox
+from src.sandbox.sandbox_main import Sandbox
+from src.models.sandbox_config import SandboxConfig
+# from src.sandbox.mock import MockSandbox
 
 
 def format_mbpp_task(task_input: MBPPTaskInput) -> str:
@@ -83,11 +85,19 @@ def run_mbpp_agent(
         time_remaining=lambda: max(0, dead_line - time.monotonic()),
     )
 
+    # Sandbox構築
+    sandbox_config = SandboxConfig(
+        max_execution_time_seconds=int(settings.sandbox.exec_timeout_sec),
+        max_memory_mb=settings.sandbox.memory_limit_mb
+    )
+    sandbox = Sandbox(config=sandbox_config,
+                      mcp_stdio="python mcp_tools_mbpp.py")
+
     # Provider(ResilientLLMClient) / Sandbox / Orchestrator 構築
     orchestrator = Orchestrator(
         provider=client,
         extractor=PythonCodeExtractor(),
-        sandbox=MockSandbox(),
+        sandbox=sandbox,
         profile=MBPPProfile(),
         limits=settings.limits
     )
