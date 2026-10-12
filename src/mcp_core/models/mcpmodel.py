@@ -9,13 +9,13 @@ from pydantic import (
     Field
 )
 from pydantic.alias_generators import to_camel
-from enum import StrEnum
+from enum import Enum
 
 
 MCP_VERSION: Final[Literal["2025-06-18"]] = "2025-06-18"
 
 
-class Method(StrEnum):
+class Method(str, Enum):
     INITIALIZE = "initialize"
     INITIALIZED = "notifications/initialized"
     PING = "ping"
