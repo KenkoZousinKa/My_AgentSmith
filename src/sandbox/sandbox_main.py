@@ -6,8 +6,10 @@ from src.sandbox.code_lint import check_code, _BLOCKED
 from src.sandbox.sandbox_helper import _send, _recv, _truncate
 from src.sandbox.sandbox_child import _child_main
 from src.models.output import ExecuteResult
-from src.sandbox.mcp_tool_function import MCPToolFunction
-from src.sandbox.client import StdioMCPClient
+from src.mcp_core.client.mcp_tool_function import MCPToolFunction
+from src.mcp_core.client.client import MCPClient
+from src.mcp_core.client.stdio import StdioClientTransport
+from src.mcp_core.client.http import HttpClientTransport
 from typing import Any, Callable
 from pathlib import Path
 import os
@@ -30,18 +32,15 @@ class Sandbox:
         """Init the Sandbox and fork its worker."""
         self.config = config or SandboxConfig()
         self.tools: dict[str, Callable[..., Any]] = tools or {}
-        self.client: Any | None = None
+        self.client: MCPClient | None = None
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
         self._tool_truncated = False
         if mcp_stdio:
-            self.client = StdioMCPClient(mcp_stdio)
+            self.client = MCPClient(StdioClientTransport(mcp_stdio))
         elif mcp_server:
-            raise NotImplementedError(
-                "Not done yet."
-            )
-            #  self.client = HttpMCPClient(mcp_server)
+            self.client = MCPClient(HttpClientTransport(mcp_server))
         if self.client is not None:
             try:
                 self.client.connect()
@@ -49,11 +48,13 @@ class Sandbox:
                     tool.name: MCPToolFunction(self.client, tool)
                     for tool in self.client.list_tools()
                 }
+                print(self.client.list_tools())
+                print(self.client.list_resources())
+                print(self.client.list_prompts())
             except Exception:
                 self.client.close()
                 self.client = None
                 raise
-
         self._spawn()
 
     def __enter__(self) -> "Sandbox":

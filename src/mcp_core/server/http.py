@@ -192,14 +192,6 @@ class HttpServerTransport:
             raise ConnectionError("client closed the connection")
         return data
 
-    # def _write_response(self, conn: socket.socket, response: HttpResponse) -> None:
-        """
-        Content-Length を len(response.body) から作る（本文は bytes なので、これがバイト数になる）。
-        Connection: close を付ける。
-        1行目の理由の文字列は、HTTPStatus(response.status).phrase から作る。
-        ヘッダーを \r\n でつなぎ、空行を足し、本文をつなげて、sendall する。
-        """
-
     def _parse_head(self, head: bytes) -> tuple[str, str, dict[str, str]]:
         """head部の解析とオブジェクト化."""
         # decodeしたあと、行ごとにリスト化

@@ -2,6 +2,7 @@
 
 
 import uuid
+import sys
 from typing import Any
 from pydantic import ValidationError
 
@@ -55,9 +56,11 @@ class MCPClient:
             self.server_info = init.server_info
             self.server_capabilities = init.capabilities
             self._notify(method=mcp.Method.INITIALIZED)
+            print(f"[Client] MCPクライアントが正常に起動しました。 ({self.transport.__class__.__name__})", file=sys.stderr)
 
         except Exception:
             self.close()
+            print(f"[Client] MCPクライアントの起動に失敗しました。({self.transport.__class__.__name__})", file=sys.stderr)
             raise
 
     def list_tools(self) -> list[mcp.Tool]:
