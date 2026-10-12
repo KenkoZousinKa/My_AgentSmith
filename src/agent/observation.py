@@ -5,7 +5,7 @@
 """
 from enum import Enum
 
-from src.models.sandbox_base import ExecuteResult
+from src.models.output import ExecuteResult
 
 
 class Status(str, Enum):

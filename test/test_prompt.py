@@ -4,7 +4,7 @@ import pytest
 from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile
 from src.agent.prompt.task_profile.swebench_profile import SWEBenchProfile
 from src.agent.prompt.template import build_system_prompt
-from src.models.sandbox_base import ExecuteResult
+from src.models.output import ExecuteResult
 
 _FAKE_MANUAL = "## Tools\nfinal_answer(value): submit your verified answer."
 
