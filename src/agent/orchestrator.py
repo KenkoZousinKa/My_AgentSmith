@@ -7,9 +7,6 @@ LimitTrackerの先頭ガード -> LLM生成 -> <end_code>除去 -> コード抽�
  -> Observation生成 -> 履歴 / StepMetric追加
  のループを回す。
  final_answer()で成功終了、ハード制限で打ち切り。
-
- - [ ] 最後のstepで生成が全滅し例外が出た場合、stepに積まれないのでtotal_requestsが正しく増えない。
-    成功したgenerateの試行に足すために例外側でも試行数をカウントする必要がある。
 """
 from src.agent.extractor.code_extractor import CodeExtractor
 from src.agent.limits import LimitTracker
@@ -98,7 +95,8 @@ class Orchestrator:
                     max_tokens=max_tokens
                 )
             # AllProvidersExhausted / BadRequestErrorをLLMErrorで一括で補足
-            except (LLMError, TransportError):
+            except (LLMError, TransportError) as error:
+                failed_requests = getattr(error, "attempts", 0)
                 return self._build_solution(
                     task_id=task_id,
                     benchmark=benchmark,
@@ -107,7 +105,8 @@ class Orchestrator:
                     tracker=tracker,
                     steps=steps,
                     system_prompt=system_prompt,
-                    error="LLM_UNAVAILABLE"
+                    error="LLM_UNAVAILABLE",
+                    failed_requests=failed_requests
                 )
             tracker.record_usage(
                 response.input_tokens,
@@ -197,7 +196,8 @@ class Orchestrator:
         tracker: LimitTracker,
         steps: list[StepMetrics],
         system_prompt: str,
-        error: str | None = None
+        error: str | None = None,
+        failed_requests: int = 0
     ) -> SolutionOutput:
         """ループの結果からSolutionOutputを構築するヘルパー関数.(成功 / 打ち切り共通)
 
@@ -212,6 +212,7 @@ class Orchestrator:
             system_prompt (str): LLMに送信された完全なシステムプロンプト（出所確認用）
             error (str | None): エージェントが失敗した場合のエラーメッセージ
                 （成功した場合はNone）
+            failed_requests (int): LLM呼び出しが失敗した場合の総試行回数（リトライを含む / 既定0）
         """
         return SolutionOutput(
             task_id=task_id,
@@ -219,7 +220,7 @@ class Orchestrator:
             success=success,
             solution=solution,
             iterations=tracker.iterations,
-            total_requests=sum(step.retries + 1 for step in steps),
+            total_requests=sum(step.retries + 1 for step in steps) + failed_requests,
             total_input_tokens=tracker.total_input_tokens,
             total_output_tokens=tracker.total_output_tokens,
             total_time_seconds=tracker.elapsed_seconds(),

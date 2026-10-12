@@ -47,7 +47,15 @@ ProviderFactory = Callable[[ProviderConfig, HttpTransport, str], LLMProvider]
 
 
 class AllProvidersExhausted(LLMError):
-    """全プロバイダ・全キーを試しても成功しなかったことを表す例外クラス."""
+    """全プロバイダ・全キーを試しても成功しなかったことを表す例外クラス.
+
+    Attributes:
+        attempts (int): 試行回数。成功までのリトライを含む。
+            上位のOrchestratorはこの例外を捕まえて、tortal_requestsに加算する。
+    """
+    def __init__(self, message: str, attempts: int = 0) -> None:
+        super().__init__(message, attempts)
+        self.attempts = attempts
 
 
 class ResilientLLMClient:
@@ -212,5 +220,10 @@ class ResilientLLMClient:
                         )
                         return response
 
+        # すべてのプロバイダ / すべてのキーを試しても成功しなかった場合は、AllProvidersExhaustedを送出
+        # 上位のOrchestratorはこの例外を捕まえて、success=Falseで返す。
+        # attemptsはリトライを含む総試行回数
         raise AllProvidersExhausted(
-            f"All providers/keys exhausted after {attempts} attempt(s).") from last_error
+            f"All providers/keys exhausted after {attempts} attempt(s).",
+            attempts=attempts
+        ) from last_error

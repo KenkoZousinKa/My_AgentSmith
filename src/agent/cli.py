@@ -68,6 +68,7 @@ def run_mbpp_agent(
     load_dotenv()
 
     providers = load_providers()
+    # select_providerはpriority[0](最小)を基点に上書きコピーを返す
     primary_provider = select_provider(providers, model_name, provider_url)
     # primary_providerを先頭にして優先度順に並べる
     providers = [primary_provider, *providers[1:]]
