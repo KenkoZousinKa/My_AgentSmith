@@ -1,24 +1,23 @@
-"""stdioMCPClient:"""
+"""MCPClient:"""
 
 
-import subprocess
 import uuid
-import time
-import shlex
+import sys
 from typing import Any
 from pydantic import ValidationError
 
-from src.models import jsonrpc as rpc
-from src.models import mcpmodel as mcp
+from src.mcp_core.models import jsonrpc as rpc
+from src.mcp_core.models import mcpmodel as mcp
+from src.mcp_core.models.client_transport import ClientTransport
 
 
-class StdioMCPClient:
-    def __init__(self, command: str):
-        self.command = command
+class MCPClient:
+    def __init__(self, transport: ClientTransport):
+        self.transport = transport
         self.server_info: mcp.Implementation
         self.server_capabilities: dict[str, Any]
 
-    def __enter__(self) -> "StdioMCPClient":
+    def __enter__(self) -> "MCPClient":
         self.connect()
         return self
 
@@ -33,19 +32,8 @@ class StdioMCPClient:
         """MCPサーバーとの接続を確立する."""
 
         try:
-            # サーバープロセスを起動し、入出力をパイプで繋ぐ
-            # text=True により、バイト列ではなく文字列として扱える
-            # 例: command = ["python", "mcp_tools_mbpp.py"]
-            self.process = subprocess.Popen(
-                args=shlex.split(self.command),
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                text=True       # 送信時に文字列が壊れないように
-            )
-            # 起動直後の即死チェック
-            time.sleep(0.1)
-            if self.process.poll() is not None:
-                raise mcp.MCPConnectionError(f"サーバーの起動に失敗しました。コマンド: {self.command}")
+            # transportクラスでサーバーの立ち上げと接続
+            self.transport.open()
 
             # requestを送る
             params = mcp.InitializeRequestParams(protocol_version=mcp.MCP_VERSION,
@@ -62,14 +50,17 @@ class StdioMCPClient:
             # versionを検証する
             if init.protocol_version != mcp.MCP_VERSION:
                 raise mcp.MCPProtocolError(f"未対応のプロトコルバージョン: {init.protocol_version}")
+            self.transport.set_protocol_version(mcp.MCP_VERSION)
 
             # 保存してサーバーへ通知
             self.server_info = init.server_info
             self.server_capabilities = init.capabilities
             self._notify(method=mcp.Method.INITIALIZED)
+            print(f"[Client] MCPクライアントが正常に起動しました。 ({self.transport.__class__.__name__})", file=sys.stderr)
 
         except Exception:
             self.close()
+            print(f"[Client] MCPクライアントの起動に失敗しました。({self.transport.__class__.__name__})", file=sys.stderr)
             raise
 
     def list_tools(self) -> list[mcp.Tool]:
@@ -98,32 +89,52 @@ class StdioMCPClient:
 
         return result_model
 
+    def list_resources(self) -> list[mcp.Resource]:
+        """サーバーに資料の一覧を依頼する."""
+        if "resources" not in self.server_capabilities:   # 資料の機能が無いサーバーには頼まない
+            return []
+        result = self._request(mcp.Method.RESOURCES_LIST)
+        try:
+            return mcp.ListResourcesResult.model_validate(result).resources
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"resources/listの応答が不正です: {result}") from e
+
+    def read_resource(self, uri: str) -> mcp.ReadResourceResult:
+        """URI を指定して、資料の中身を読む."""
+        params = mcp.ReadResourceRequestParams(uri=uri)
+        result = self._request(mcp.Method.RESOURCES_READ, params)
+        # ↑ 知らない URI なら、サーバーが JSON-RPC のエラー（-32002）を返し、_request が MCPError にする
+        try:
+            return mcp.ReadResourceResult.model_validate(result)
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"resources/readの応答が不正です: {result}") from e
+
+    def list_prompts(self) -> list[mcp.Prompt]:
+        """サーバーに指示の雛形の一覧を依頼する."""
+        if "prompts" not in self.server_capabilities:
+            return []
+        result = self._request(mcp.Method.PROMPTS_LIST)
+        try:
+            return mcp.ListPromptsResult.model_validate(result).prompts
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"prompts/listの応答が不正です: {result}") from e
+
+    def get_prompt(self, name: str, arguments: dict[str, str] | None = None) -> mcp.GetPromptResult:
+        """雛形の名前と引数を渡して、埋めたメッセージを受け取る."""
+        params = mcp.GetPromptRequestParams(name=name, arguments=arguments)
+        result = self._request(mcp.Method.PROMPTS_GET, params)
+        try:
+            return mcp.GetPromptResult.model_validate(result)
+        except ValidationError as e:
+            raise mcp.MCPProtocolError(f"prompts/getの応答が不正です: {result}") from e
+
     def ping(self) -> None:
         """サーバーが応答するか確かめる。応答が無ければ例外."""
         self._request(mcp.Method.PING)        # 返ってくる result は {} なので、中身は使わない
 
     def close(self) -> None:
-        """プロセスを安全に終了させる"""
-        # process属性が存在しているか　and sub_processが終了していないか
-        if not hasattr(self, 'process') or self.process.poll() is not None:
-            return
-        assert self.process.stdin is not None
-
-        # 1. EOFを送る EOF=0
-        self.process.stdin.close()
-        try:
-            self.process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-
-            # 2. 正常終了信号を送る SIGTERM=-15
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-
-                # 3. 強制終了信号を送る terminater「Hasta la vista, baby.」 SIGKILL=-9
-                self.process.kill()
-                self.process.wait()
+        """サーバーとの接続を閉じる."""
+        self.transport.close()
 
     def _request(self, method: str, params: mcp.MCPModel | None = None) -> dict[str, Any]:
         """リクエストを送り、同じ id の応答の result を返す。エラー応答なら例外."""
@@ -155,24 +166,12 @@ class StdioMCPClient:
         self._send(notification)
 
     def _send(self, message: rpc.JSONRPCMessage) -> None:
-        """封筒を1行の JSON にしてサーバーの stdin に書き込む."""
-        assert self.process.stdin is not None
-        self.process.stdin.write(message.model_dump_json(by_alias=True, exclude_unset=True) + "\n")
-        self.process.stdin.flush()
+        """サーバーにメッセージを送る."""
+        self.transport.send(message)
 
     def _receive(self) -> rpc.JSONRPCMessage:
-        """サーバーの stdout から1通読み、JSON-RPCの型に変換して返す."""
-        assert self.process.stdout is not None
-        # MCPサーバーからの標準出力を待つ
-        line = self.process.stdout.readline()
-        if not line:
-            raise mcp.MCPConnectionError("サーバーとの接続が切れました。")
-
-        # JSON-RPCの型に変換する
-        try:
-            return rpc.jsonrpc_message_adapter.validate_json(line)
-        except ValidationError as e:
-            raise mcp.MCPProtocolError(f"サーバから不正なメッセージを受信しました。{line!r}") from e
+        """サーバーからのレスポンスをJSON-RPCの型に変換して返す."""
+        return self.transport.receive()
 
     def _answer_server_request(self, msg: rpc.JSONRPCRequest) -> None:
         """サーバーからのリクエストに応答する."""
@@ -186,33 +185,18 @@ class StdioMCPClient:
 
 if __name__ == "__main__":
     print("[Client] MCPクライアントを起動します...")
-    try:
-        with StdioMCPClient("python mcp_tools_mbpp.py") as c:
-            c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
-            pass
-    except Exception as e:
-        print(e)
+    # try:
+    # from src.mcp_core.client.stdio import StdioClientTransport
+    from src.mcp_core.client.http import HttpClientTransport
+    # with MCPClient(StdioClientTransport("python mcp_tools_mbpp.py")) as c:
+    #     c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
+    #     pass
 
-    # def call_tool(self, tool_name: str, args: dict[str, str]) -> dict[str, str]:
-    #     """サーバーにツール実行を依頼し、結果を受け取る"""
-    #     # 1. リクエストJSONを作成
-    #     request_data = {
-    #         "method": "call_tool",
-    #         "tool": tool_name,
-    #         "args": args
-    #     }
-
-    #     # 2. サーバーの標準入力に書き込み、改行で区切る
-    #     self.process.stdin.write(json.dumps(request_data) + "\n")
-
-    #     # 【超重要】バッファに溜めず、即座に送信を確定させる
-    #     self.process.stdin.flush()
-
-    #     # 3. サーバーからの標準出力を1行読み取る（結果が来るまで待機）
-    #     response_line = self.process.stdout.readline()
-
-    #     if not response_line:
-    #         raise RuntimeError("MCPサーバーとの通信が切断されました")
-
-    #     # 4. 受け取ったJSONを辞書に戻して返す
-    #     return json.loads(response_line)
+    with MCPClient(HttpClientTransport(url="http://127.0.0.1:8000/mcp")) as c:
+        print('pin')
+        print(c.list_tools())
+        print()
+        print(c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']}))
+        pass
+    # except Exception as e:
+    #     print(e)
