@@ -51,7 +51,7 @@ class AllProvidersExhausted(LLMError):
 
     Attributes:
         attempts (int): 試行回数。成功までのリトライを含む。
-            上位のOrchestratorはこの例外を捕まえて、tortal_requestsに加算する。
+            上位のOrchestratorはこの例外を捕まえて、total_requestsに加算する。
     """
     def __init__(self, message: str, attempts: int = 0) -> None:
         super().__init__(message, attempts)
