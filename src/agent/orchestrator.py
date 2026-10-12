@@ -96,7 +96,7 @@ class Orchestrator:
                 )
             # AllProvidersExhausted / BadRequestErrorをLLMErrorで一括で補足
             except (LLMError, TransportError) as error:
-                failed_requests = getattr(error, "attempts", 0)
+                failed_requests = getattr(error, "attempts", 1)
                 return self._build_solution(
                     task_id=task_id,
                     benchmark=benchmark,
