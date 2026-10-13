@@ -194,3 +194,36 @@ def test_no_time_budget_gives_up_key(monkeypatch: pytest.MonkeyPatch) -> None:
     res = _gen(client)
     assert res.model_name == "p2/model"
     assert slept == []   # 待機せずに諦めた
+
+
+def test_resilient_sends_string_model_and_iterates_models() -> None:
+    """resilient_client が各リクエストの body.model を単一 str で送り、models を順に試す."""
+    import json
+    from src.agent.llm.provider.openai_compat import OpenAICompatProvider
+    # 1モデル目は429、2モデル目で200を返す記録用transport
+    sent_models: list[object] = []
+
+    class RecordingTransport(HttpTransport):
+        def __init__(self) -> None:
+            self._n = 0
+
+        def post(self, url, headers, data, timeout=60.0) -> HttpResponse:
+            sent_models.append(json.loads(data)["model"])
+            self._n += 1
+            if self._n == 1:
+                return HttpResponse(status=429, body="{}", headers={})
+            return HttpResponse(status=200, body=_OPENAI_JSON, headers={})
+
+    cfg = ProviderConfig(
+        name="groq", provider_url="https://g.test/v1",
+        models=["m/one", "m/two"], keys_env="K_ENV",
+    )
+    client = ResilientLLMClient(
+        providers=[cfg], transport=RecordingTransport(),
+        retry=RetrySettings(), provider_factory=OpenAICompatProvider,
+    )
+    # K_ENV を1キーだけ用意(monkeypatch等): os.environ["K_ENV"]="sk-x"
+    res = client.generate([{"role": "user", "content": "x"}], ["<end_code>"], 16)
+    assert res.model_name == "m/two"
+    assert sent_models == ["m/one", "m/two"]          # ★ 順に試した
+    assert all(isinstance(m, str) for m in sent_models)  # ★ 配列でなく str を送った
