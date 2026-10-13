@@ -1,0 +1,92 @@
+"""SWE-bench の tools が使う、コマンドの実行係（ローカルか Docker か）."""
+
+import subprocess
+import time
+import uuid
+from dataclasses import dataclass
+from typing import Protocol
+
+
+@dataclass
+class CommandResult:
+    stdout: str
+    stderr: str
+    exit_code: int
+
+
+class Executor(Protocol):
+    def run(self, command: str, workdir: str, timeout: int) -> CommandResult: ...
+    def close(self) -> None: ...
+
+
+class LocalExecutor:
+    """TESTBED_PATHのフォルダーでコマンドを実行する."""
+
+    def run(self, command: str, workdir: str, timeout: int) -> CommandResult:
+        try:
+            r = subprocess.run(["bash", "-c", command], cwd=workdir, capture_output=True,
+                               text=True, timeout=timeout)
+            #  Stdoutを汚さない
+        except subprocess.TimeoutExpired as e:
+            return CommandResult(e.stdout or "", f"Timeout after {timeout}s", 124)
+            # GNUのtimeoutコマンド
+        return CommandResult(r.stdout, r.stderr, r.returncode)
+
+    def close(self) -> None:
+        pass
+
+
+class DockerExecutor:
+    """コンテナ起動後、その中でコマンドを実行する."""
+
+    def __init__(self, image: str) -> None:
+        self.image = image
+        self.name = f"agentsmith-{uuid.uuid4().hex[:12]}"  # docker name
+        self.process: subprocess.Popen[bytes] | None = None
+
+    def start(self, timeout: int = 600) -> None:
+        """コンテナを起動し、動き始めるまで待つ."""
+        self.process = subprocess.Popen(
+            ["docker", "run", "-i", "--rm", "--name", self.name,
+             "--label", "agentsmith=1", self.image, "cat"],
+            #   -i：コンテナの stdin を、docker runプロセスと繋ぐ(self.processを介してデーモンにコマンドに流せる)
+            #   cat：dockerを待機させるダミーコマンド。これがコンテナの主プロセスになる
+            #   --rm：主プロセスが終わったら、コンテナを自動で消す
+            #   --label:コンテナを後から探れるように
+            #   SIGKILLでもコンテナが残らない
+            stdin=subprocess.PIPE,  # docker runプロセスとこのプロセスをつなぐ
+            stdout=subprocess.DEVNULL,  # docker run の出力をゴミ箱へ
+        )
+        deadline = time.monotonic() + timeout
+        while not self._is_running():
+            if self.process.poll() is not None:
+                raise RuntimeError(f"コンテナの起動に失敗しました: {self.image}")
+            if time.monotonic() > deadline:
+                self.close()
+                raise RuntimeError(f"コンテナが {timeout} 秒以内に起動しませんでした: {self.image}")
+            time.sleep(0.5)
+
+    def _is_running(self) -> bool:
+        r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", self.name],
+                           capture_output=True, text=True)
+        return r.stdout.strip() == "true"
+
+    def run(self, command: str, workdir: str, timeout: int) -> CommandResult:
+        r = subprocess.run(
+            ["docker", "exec", "-w", workdir, self.name,
+             "timeout", str(timeout), "bash", "-c", command],
+            capture_output=True, text=True)  # コンテナの中のコマンドは動き続ける
+        return CommandResult(r.stdout, r.stderr, r.returncode)
+
+    def close(self) -> None:
+        """コンテナを消す."""
+        if self.process is None:
+            return
+        if self.process.stdin is not None:
+            self.process.stdin.close()            # cat に EOF
+        try:
+            self.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            # 削除コマンドを実行
+            subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
+        self.process = None

@@ -1,3 +1,4 @@
+import os
 import http.client
 import subprocess
 import shlex
@@ -15,9 +16,10 @@ SERVER_COMMAND = "python mcp_tools_mbpp.py --transport http"
 
 
 class HttpClientTransport:
-    def __init__(self, url: str, timeout: int = 60) -> None:
+    def __init__(self, url: str, timeout: int = 60, env: dict[str, str] | None = None) -> None:
         self.process: subprocess.Popen[bytes] | None = None  # 規定serverを立ち上げた際のプロセスオブジェクト
         self.url: str = url
+        self.env: dict[str, str] | None = env
         parts: SplitResult = urlsplit(url)
         if parts.scheme != "http" or parts.hostname is None:
             raise ValueError(f"http://ホスト:ポート/パス の形で指定してください: {url!r}")
@@ -41,7 +43,10 @@ class HttpClientTransport:
             raise mcp.MCPConnectionError(f"サーバーに繋がりません  URL: {self.url}")
 
         print("サーバーが見つからないため提供サーバーを立ち上げます", file=sys.stderr)
-        self.process = subprocess.Popen(shlex.split(SERVER_COMMAND))
+        self.process = subprocess.Popen(
+            args=shlex.split(SERVER_COMMAND),
+            env={**os.environ, **self.env} if self.env else None
+            )
         deadline = time.monotonic() + 10
         while not self._is_connect():
             if self.process.poll() is not None:
