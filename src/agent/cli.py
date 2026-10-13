@@ -50,6 +50,7 @@ def run_mbpp_agent(
     output_file_path: str,
     model_name: str | None = None,
     provider_url: str | None = None,
+    providers_file_path: str = "providers/providers.json"
 ) -> None:
     """MBPPタスクを1問解くエージェントを実行し、SolutionOutputを書き出す.
 
@@ -69,7 +70,7 @@ def run_mbpp_agent(
     # .envから環境変数を読み込む
     load_dotenv()
 
-    providers = load_providers()
+    providers = load_providers(providers_file_path)
     # select_providerはpriority[0](最小)を基点に上書きコピーを返す
     primary_provider = select_provider(providers, model_name, provider_url)
     # primary_providerを先頭にして優先度順に並べる

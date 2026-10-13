@@ -124,7 +124,7 @@ class Settings(BaseSettings):
         )
 
 
-def load_providers(providers_path: str = "providers.json") -> list[ProviderConfig]:
+def load_providers(providers_path: str) -> list[ProviderConfig]:
     """providers.jsonを読み込んでProviderConfigのリストに変換する.
 
     Args:
@@ -169,7 +169,7 @@ def select_provider(
     if provider_url:
         updates["provider_url"] = provider_url
     if model_name:
-        updates["model"] = model_name
+        updates["models"] = [model_name]
 
     return primary.model_copy(update=updates) if updates else primary
 
