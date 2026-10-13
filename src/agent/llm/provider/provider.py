@@ -35,7 +35,7 @@ class ProviderConfig(BaseModel):
 
     name: str
     provider_url: str
-    model: str  # API body / provider.jsonのキーと同名
+    models: list[str]  # API body / provider.jsonのキーと同名
     keys_env: str
     priority: int = 1
     request_timeout_sec: float = 60.0
@@ -191,17 +191,19 @@ class LLMProvider(ABC):
     プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
     """
 
-    def __init__(self, config: ProviderConfig, transport: HttpTransport, api_key: str) -> None:
+    def __init__(self, config: ProviderConfig, transport: HttpTransport, api_key: str, model: str) -> None:
         """LLMProviderの初期化.
 
         Args:
             config (ProviderConfig): プロバイダの設定情報。
             transport (HTTPTransport): HTTP POST で送信を担当するTransportクラス
             api_key (str): APIキー。key_managerがkeys_envから取得して渡す。
+            model (str): 使用するモデル名。
         """
         self.config = config
         self.transport = transport
         self.api_key = api_key
+        self.model = model
 
     def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
         """LLMに会話履歴を一回送って生成、リクエストを送信し、レスポンスを返す.
