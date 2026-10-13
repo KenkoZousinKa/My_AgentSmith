@@ -1,6 +1,6 @@
 """Observation 生成(observation.py)のテスト."""
 from src.agent.observation import Status, build_observation, collect_statuses, observation_no_code
-from src.models.sandbox_base import ExecuteResult
+from src.models.output import ExecuteResult
 
 
 def _result(**kw: object) -> ExecuteResult:

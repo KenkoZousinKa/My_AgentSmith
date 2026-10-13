@@ -17,7 +17,8 @@ from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.agent.prompt.template import build_system_prompt
 from src.config.settings import Limits
 from src.models.output import SolutionOutput, StepMetrics
-from src.models.sandbox_base import SandboxBase, ExecuteResult
+from src.models.sandbox_base import SandboxBase
+from src.models.output import ExecuteResult
 
 _DEFAULT_STOP_SEQUENCE = ["<end_code>"]
 
