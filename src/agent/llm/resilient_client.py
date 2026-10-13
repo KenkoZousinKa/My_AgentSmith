@@ -43,7 +43,7 @@ _LOGGER = logging.getLogger("agent.llm")
 
 # (config, transport, api_key) -> LLMProvider を生成するファクトリ型。
 # 既定はOpenAICompatProvider
-ProviderFactory = Callable[[ProviderConfig, HttpTransport, str], LLMProvider]
+ProviderFactory = Callable[[ProviderConfig, HttpTransport, str, list[str]], LLMProvider]
 
 
 class AllProvidersExhausted(LLMError):
@@ -152,7 +152,7 @@ class ResilientLLMClient:
             # すべてのキーを順番に試す。1キーで1リクエスト。
             for key_number, key in enumerate(keys, start=1):
                 # Providerを生成して、generate()を呼ぶ。
-                provider = self._provider_factory(config, self._transport, key)
+                provider = self._provider_factory(config, self._transport, key, config.models)
 
                 # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次プロバイダ の順にフォールバックする。
                 for attempt_on_key in range(self._retry.max_retries_per_key + 1):
