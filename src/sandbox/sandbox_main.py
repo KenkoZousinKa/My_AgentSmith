@@ -48,9 +48,6 @@ class Sandbox:
                     tool.name: MCPToolFunction(self.client, tool)
                     for tool in self.client.list_tools()
                 }
-                print(self.client.list_tools())
-                print(self.client.list_resources())
-                print(self.client.list_prompts())
             except Exception:
                 self.client.close()
                 self.client = None
