@@ -18,7 +18,7 @@ from src.agent.llm.provider.provider import (
 _CONFIG = ProviderConfig(
     name="fake",
     provider_url="https://example.test/api/v1",
-    model="fake/model-1",
+    models=["fake/model-1"],
     keys_env="FAKE_API_KEY",
 )
 
@@ -46,7 +46,7 @@ class _FakeTransport(HttpTransport):
 
 def _make_provider(transport: HttpTransport) -> OpenAICompatProvider:
     """テスト用に ProviderConfig/モックtransport/ダミーキーを注入した provider を作る."""
-    return OpenAICompatProvider(config=_CONFIG, transport=transport, api_key="sk-test")
+    return OpenAICompatProvider(config=_CONFIG, transport=transport, api_key="sk-test", model="fake/model-1")
 
 
 def test_generate_returns_normalized_response() -> None:

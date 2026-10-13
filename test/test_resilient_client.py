@@ -28,7 +28,7 @@ class _NullTransport(HttpTransport):
 def _config(name: str, keys_env: str, priority: int) -> ProviderConfig:
     return ProviderConfig(
         name=name, provider_url=f"https://{name}.test/v1",
-        model=f"{name}/model", keys_env=keys_env, priority=priority,
+        models=[f"{name}/model"], keys_env=keys_env, priority=priority,
     )
 
 
@@ -69,7 +69,7 @@ def _client(providers: list[ProviderConfig], scripts: dict[str, list[object]],
     """scriptsに従うフェイクProviderを注入したクライアントと、sleep記録リストを返す."""
     slept: list[float] = []
 
-    def factory(config: ProviderConfig, transport: HttpTransport, key: str) -> _ScriptedProvider:
+    def factory(config: ProviderConfig, transport: HttpTransport, key: str, model: str) -> _ScriptedProvider:
         return _ScriptedProvider(config, transport, key, scripts)
 
     client = ResilientLLMClient(
