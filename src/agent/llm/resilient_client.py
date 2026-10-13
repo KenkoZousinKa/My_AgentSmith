@@ -41,9 +41,9 @@ from src.config.settings import RetrySettings
 
 _LOGGER = logging.getLogger("agent.llm")
 
-# (config, transport, api_key) -> LLMProvider を生成するファクトリ型。
+# (config, transport, api_key, model) -> LLMProvider を生成するファクトリ型。
 # 既定はOpenAICompatProvider
-ProviderFactory = Callable[[ProviderConfig, HttpTransport, str, list[str]], LLMProvider]
+ProviderFactory = Callable[[ProviderConfig, HttpTransport, str, str], LLMProvider]
 
 
 class AllProvidersExhausted(LLMError):
@@ -151,99 +151,100 @@ class ResilientLLMClient:
 
             # すべてのキーを順番に試す。1キーで1リクエスト。
             for key_number, key in enumerate(keys, start=1):
-                # Providerを生成して、generate()を呼ぶ。
-                provider = self._provider_factory(config, self._transport, key, config.models)
+                for model in config.models:
+                    # Providerを生成して、generate()を呼ぶ。
+                    provider = self._provider_factory(config, self._transport, key, model)
 
-                # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次プロバイダ の順にフォールバックする。
-                for attempt_on_key in range(self._retry.max_retries_per_key + 1):
-                    attempts += 1
+                    # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次プロバイダ の順にフォールバックする。
+                    for attempt_on_key in range(self._retry.max_retries_per_key + 1):
+                        attempts += 1
 
-                    try:
-                        response = provider.generate(messages, stop_sequences, max_tokens)
+                        try:
+                            response = provider.generate(messages, stop_sequences, max_tokens)
 
-                    # 1. RateLimitErrorは次のキーへ。バックオフはしない。
-                    except RateLimitError as error:
-                        last_error = error
-                        self._log.warning(
-                            "provider=%s key#%d attempts=%d rate limited (retry_after=%s); advance, no backoff.",
-                            config.name,
-                            key_number,
-                            attempts,
-                            error.retry_after
-                        )
-                        break
-
-                    # 2. ServerError / 3. TransportError は一過性(500系 / ネットワークエラー)。バックオフして同一キーで再送。
-                    except (ServerError, TransportError) as error:
-                        last_error = error
-                        # 1つのキーでのリトライ回数が上限に達したら、次のキーへ。
-                        if attempt_on_key >= self._retry.max_retries_per_key:
+                        # 1. RateLimitErrorは次のキーへ。バックオフはしない。
+                        except RateLimitError as error:
+                            last_error = error
                             self._log.warning(
-                                "provider=%s key#%d attempts=%d %s; give up key",
+                                "provider=%s key#%d attempts=%d rate limited (retry_after=%s); advance, no backoff.",
                                 config.name,
                                 key_number,
                                 attempts,
-                                type(error).__name__
+                                error.retry_after
                             )
                             break
 
-                        # バックオフ秒数を計算し、残予算がなければ次のキーへ。
-                        wait = self._wait_seconds(error, attempt_on_key)
-                        if wait is None:
+                        # 2. ServerError / 3. TransportError は一過性(500系 / ネットワークエラー)。バックオフして同一キーで再送。
+                        except (ServerError, TransportError) as error:
+                            last_error = error
+                            # 1つのキーでのリトライ回数が上限に達したら、次のキーへ。
+                            if attempt_on_key >= self._retry.max_retries_per_key:
+                                self._log.warning(
+                                    "provider=%s key#%d attempts=%d %s; give up key",
+                                    config.name,
+                                    key_number,
+                                    attempts,
+                                    type(error).__name__
+                                )
+                                break
+
+                            # バックオフ秒数を計算し、残予算がなければ次のキーへ。
+                            wait = self._wait_seconds(error, attempt_on_key)
+                            if wait is None:
+                                self._log.warning(
+                                    "provider=%s key#%d attempts=%d %s; no time budget, give up key.",
+                                    config.name,
+                                    key_number,
+                                    attempts,
+                                    type(error).__name__
+                                )
+                                break
+
+                            # バックオフ秒数待機し、同一キーで再送する。
                             self._log.warning(
-                                "provider=%s key#%d attempts=%d %s; no time budget, give up key.",
+                                "provider=%s key#%d attempts=%d %s; backoff %.1fs.",
                                 config.name,
                                 key_number,
                                 attempts,
-                                type(error).__name__
+                                type(error).__name__,
+                                wait
+                            )
+                            self._sleep(wait)
+
+                        # 4. 認証エラー(401 / 403)は次のキーへ。バックオフはしない。
+                        except AuthenticationError as error:
+                            last_error = error
+                            self._log.warning(
+                                "provider=%s key#%d attempts=%d auth/quota; next key.",
+                                config.name,
+                                key_number,
+                                attempts
                             )
                             break
 
-                        # バックオフ秒数待機し、同一キーで再送する。
-                        self._log.warning(
-                            "provider=%s key#%d attempts=%d %s; backoff %.1fs.",
-                            config.name,
-                            key_number,
-                            attempts,
-                            type(error).__name__,
-                            wait
-                        )
-                        self._sleep(wait)
+                        # 5. BadRequestErrorはリクエスト不正。
+                        except BadRequestError as error:
+                            last_error = error
+                            self._log.error(
+                                "provider=%s key#%d bad request; skip key: %s.",
+                                config.name,
+                                key_number,
+                                error
+                            )
+                            break
 
-                    # 4. 認証エラー(401 / 403)は次のキーへ。バックオフはしない。
-                    except AuthenticationError as error:
-                        last_error = error
-                        self._log.warning(
-                            "provider=%s key#%d attempts=%d auth/quota; next key.",
-                            config.name,
-                            key_number,
-                            attempts
-                        )
-                        break
+                        # エラーが発生しなければ、成功。LLMResponseを返す。
+                        else:
+                            if attempts > 1:
+                                response = response.model_copy(update={"retries": attempts - 1})
 
-                    # 5. BadRequestErrorはリクエスト不正。
-                    except BadRequestError as error:
-                        last_error = error
-                        self._log.error(
-                            "provider=%s key#%d bad request; skip key: %s.",
-                            config.name,
-                            key_number,
-                            error
-                        )
-                        break
-
-                    # エラーが発生しなければ、成功。LLMResponseを返す。
-                    else:
-                        if attempts > 1:
-                            response = response.model_copy(update={"retries": attempts - 1})
-
-                        self._log.info(
-                            "provider=%s key#%d success after %d attempt(s)",
-                            config.name,
-                            key_number,
-                            attempts
-                        )
-                        return response
+                            self._log.info(
+                                "provider=%s key#%d success after %d attempt(s)",
+                                config.name,
+                                key_number,
+                                attempts
+                            )
+                            return response
 
         # すべてのプロバイダ / すべてのキーを試しても成功しなかった場合は、AllProvidersExhaustedを送出
         # 上位のOrchestratorはこの例外を捕まえて、success=Falseで返す。
