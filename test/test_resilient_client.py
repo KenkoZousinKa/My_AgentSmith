@@ -98,24 +98,25 @@ def test_first_attempt_success_no_sleep(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_retry_same_key_then_success_counts_retries(monkeypatch: pytest.MonkeyPatch) -> None:
-    """429で1回バックオフ再送し2回目で成功。retries=1、sleepが1回."""
+    """ServerError(5xx)で1回バックオフ再送し2回目で成功。retries=1、sleepが1回。"""
     monkeypatch.setenv("P1_KEY", "k1")
     providers = [_config("p1", "P1_KEY", 1)]
-    scripts: dict[str, list[object]] = {"k1": [RateLimitError("429", status=429, retry_after=None), _ok_response()]}
+    scripts = {"k1": [ServerError("500", status=500), _ok_response()]}
     client, slept = _client(providers, scripts)
     res = _gen(client)
     assert res.retries == 1
     assert len(slept) == 1
 
 
-def test_retry_after_is_used_as_wait(monkeypatch: pytest.MonkeyPatch) -> None:
-    """429のretry_afterが待機秒数として使われる."""
-    monkeypatch.setenv("P1_KEY", "k1")
+def test_rate_limit_advances_without_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    """429は待たず次のキーへ(retry_afterがあっても待たない)。"""
+    monkeypatch.setenv("P1_KEY", "k1"); monkeypatch.setenv("P1_KEY_2", "k2")
     providers = [_config("p1", "P1_KEY", 1)]
-    scripts: dict[str, list[object]] = {"k1": [RateLimitError("429", status=429, retry_after=3.0), _ok_response()]}
+    scripts = {"k1": [RateLimitError("429", status=429, retry_after=3.0)], "k2": [_ok_response()]}
     client, slept = _client(providers, scripts)
-    _gen(client)
-    assert slept == [3.0]
+    res = _gen(client)
+    assert res.retries == 1
+    assert slept == []
 
 
 def test_rotate_to_next_key_on_auth_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -170,15 +171,16 @@ def test_all_exhausted_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc_info.value.attempts == 1  # key1つ×max_retries_per_key=0 => 1試行で全滅
 
 
-def test_bad_request_aborts_immediately(monkeypatch: pytest.MonkeyPatch) -> None:
-    """BadRequestErrorは他キー/他プロバイダを試さず即送出."""
-    monkeypatch.setenv("P1_KEY", "k1")
-    monkeypatch.setenv("P1_KEY_2", "k2")
+
+def test_bad_request_skips_combo_and_continues(monkeypatch: pytest.MonkeyPatch) -> None:  # 旧 test_bad_request_aborts_immediately を置換
+    """BadRequest(不明モデルID等)はこの組合せを飛ばし、次キー/次モデルを試す。"""
+    monkeypatch.setenv("P1_KEY", "k1"); monkeypatch.setenv("P1_KEY_2", "k2")
     providers = [_config("p1", "P1_KEY", 1)]
-    scripts: dict[str, list[object]] = {"k1": [BadRequestError("400", status=400)], "k2": [_ok_response()]}
-    client, _ = _client(providers, scripts)
-    with pytest.raises(BadRequestError):
-        _gen(client)
+    scripts = {"k1": [BadRequestError("400", status=400)], "k2": [_ok_response()]}
+    client, slept = _client(providers, scripts)
+    res = _gen(client)
+    assert res.retries == 1
+    assert slept == []
 
 
 def test_no_time_budget_gives_up_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -196,34 +198,29 @@ def test_no_time_budget_gives_up_key(monkeypatch: pytest.MonkeyPatch) -> None:
     assert slept == []   # 待機せずに諦めた
 
 
-def test_resilient_sends_string_model_and_iterates_models() -> None:
-    """resilient_client が各リクエストの body.model を単一 str で送り、models を順に試す."""
+def test_resilient_sends_string_model_and_iterates_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    """各リクエストの body.model が単一 str で、models を順に試す(実 OpenAICompatProvider)。"""
     import json
     from src.agent.llm.provider.openai_compat import OpenAICompatProvider
-    # 1モデル目は429、2モデル目で200を返す記録用transport
+    ok_json = json.dumps({"choices":[{"message":{"role":"assistant","content":"ok"}}],
+                          "usage":{"prompt_tokens":1,"completion_tokens":1}})
     sent_models: list[object] = []
 
     class RecordingTransport(HttpTransport):
         def __init__(self) -> None:
             self._n = 0
 
-        def post(self, url, headers, data, timeout=60.0) -> HttpResponse:
-            sent_models.append(json.loads(data)["model"])
-            self._n += 1
-            if self._n == 1:
-                return HttpResponse(status=429, body="{}", headers={})
-            return HttpResponse(status=200, body=_OPENAI_JSON, headers={})
+        def post(self, url: str, headers: dict[str, str], data: str, timeout: float = 60.0) -> HttpResponse:
+            sent_models.append(json.loads(data)["model"]); self._n += 1
+            return HttpResponse(status=(429 if self._n == 1 else 200),
+                                body=("{}" if self._n == 1 else ok_json), headers={})
 
-    cfg = ProviderConfig(
-        name="groq", provider_url="https://g.test/v1",
-        models=["m/one", "m/two"], keys_env="K_ENV",
-    )
-    client = ResilientLLMClient(
-        providers=[cfg], transport=RecordingTransport(),
-        retry=RetrySettings(), provider_factory=OpenAICompatProvider,
-    )
-    # K_ENV を1キーだけ用意(monkeypatch等): os.environ["K_ENV"]="sk-x"
-    res = client.generate([{"role": "user", "content": "x"}], ["<end_code>"], 16)
+    monkeypatch.setenv("K_ENV", "sk-x")
+    cfg = ProviderConfig(name="groq", provider_url="https://g.test/v1",
+                         models=["m/one", "m/two"], keys_env="K_ENV")
+    client = ResilientLLMClient(providers=[cfg], transport=RecordingTransport(),
+                                retry=RetrySettings(), provider_factory=OpenAICompatProvider)
+    res = client.generate([{"role":"user","content":"x"}], ["<end_code>"], 16)
     assert res.model_name == "m/two"
-    assert sent_models == ["m/one", "m/two"]          # ★ 順に試した
-    assert all(isinstance(m, str) for m in sent_models)  # ★ 配列でなく str を送った
+    assert sent_models == ["m/one", "m/two"]
+    assert all(isinstance(m, str) for m in sent_models)

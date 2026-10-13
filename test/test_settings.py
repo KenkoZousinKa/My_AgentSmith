@@ -57,9 +57,9 @@ def test_settings_rejects_unknown_key(monkeypatch: pytest.MonkeyPatch, tmp_path:
 _PROVIDERS = {
     "providers": [
         {"name": "groq", "provider_url": "https://api.groq.com/openai/v1",
-         "model": "llama-3.3-70b-versatile", "keys_env": "GROQ_API_KEY", "priority": 2},
+         "models": ["llama-3.3-70b-versatile"], "keys_env": "GROQ_API_KEY", "priority": 2},
         {"name": "openrouter", "provider_url": "https://openrouter.ai/api/v1",
-         "model": "qwen/qwen3-235b-a22b-2507", "keys_env": "OPENROUTER_API_KEY", "priority": 1},
+         "models": ["qwen/qwen3-235b-a22b-2507"], "keys_env": "OPENROUTER_API_KEY", "priority": 1},
     ]
 }
 
@@ -74,7 +74,8 @@ def test_select_provider_cli_overrides_primary(tmp_path: Path) -> None:
     """CLIが主のmodel/urlを上書きし keys_env は維持."""
     providers = load_providers(_write(tmp_path / "providers.json", _PROVIDERS))
     primary = select_provider(providers, model_name="x/y", provider_url="https://eval.test/v1")
-    assert primary.model == "x/y"
+# test_select_provider_cli_overrides_primary:
+    assert primary.models == ["x/y"]          # model -> models
     assert primary.provider_url == "https://eval.test/v1"
     assert primary.keys_env == "OPENROUTER_API_KEY"
 
@@ -85,5 +86,6 @@ def test_shipped_config_files_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = load_settings()
     assert settings.limits.max_input_tokens == 6000
     assert settings.logging.level == "INFO"
-    providers = load_providers(str(repo_root / "providers.json"))
+# test_shipped_config_files_parse:
+    providers = load_providers(str(repo_root / "providers" / "providers.json"))
     assert providers[0].priority == 1                   # priority昇順で先頭が主
