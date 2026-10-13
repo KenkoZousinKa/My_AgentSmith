@@ -133,7 +133,7 @@ class ResilientLLMClient:
 
         Raises:
             AllProvidersExhausted: すべてのプロバイダ / すべてのキーを試しても成功しなかった場合に発生する例外。
-            BadRequestError: リクエスト不正。プロバイダ / キーを変えても直らないので即送出。
+            BadRequestError: リクエスト不正。上位のOrchestratorはこの例外を捕まえて、success=Falseで返す。
         """
         attempts = 0
         last_error: BaseException | None = None
