@@ -139,6 +139,7 @@ class ResilientLLMClient:
         last_error: BaseException | None = None
 
         for config in self._providers:
+            # config.keys_envからAPIキーを取得する。もしkeysが空なら、次のプロバイダへ。
             keys = resolve_api_keys(config.keys_env)
             if not keys:
                 self._log.warning(
@@ -148,17 +149,34 @@ class ResilientLLMClient:
                 )
                 continue
 
+            # すべてのキーを順番に試す。1キーで1リクエスト。
             for key_number, key in enumerate(keys, start=1):
+                # Providerを生成して、generate()を呼ぶ。
                 provider = self._provider_factory(config, self._transport, key)
 
+                # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次プロバイダ の順にフォールバックする。
                 for attempt_on_key in range(self._retry.max_retries_per_key + 1):
                     attempts += 1
 
                     try:
                         response = provider.generate(messages, stop_sequences, max_tokens)
 
-                    except (RateLimitError, ServerError, TransportError) as error:
+                    # 1. RateLimitErrorは次のキーへ。バックオフはしない。
+                    except RateLimitError as error:
                         last_error = error
+                        self._log.warning(
+                            "provider=%s key#%d attempts=%d rate limited (retry_after=%s); advance, no backoff.",
+                            config.name,
+                            key_number,
+                            attempts,
+                            error.retry_after
+                        )
+                        break
+
+                    # 2. ServerError / 3. TransportError は一過性(500系 / ネットワークエラー)。バックオフして同一キーで再送。
+                    except (ServerError, TransportError) as error:
+                        last_error = error
+                        # 1つのキーでのリトライ回数が上限に達したら、次のキーへ。
                         if attempt_on_key >= self._retry.max_retries_per_key:
                             self._log.warning(
                                 "provider=%s key#%d attempts=%d %s; give up key",
@@ -169,6 +187,7 @@ class ResilientLLMClient:
                             )
                             break
 
+                        # バックオフ秒数を計算し、残予算がなければ次のキーへ。
                         wait = self._wait_seconds(error, attempt_on_key)
                         if wait is None:
                             self._log.warning(
@@ -180,6 +199,7 @@ class ResilientLLMClient:
                             )
                             break
 
+                        # バックオフ秒数待機し、同一キーで再送する。
                         self._log.warning(
                             "provider=%s key#%d attempts=%d %s; backoff %.1fs.",
                             config.name,
@@ -190,6 +210,7 @@ class ResilientLLMClient:
                         )
                         self._sleep(wait)
 
+                    # 4. 認証エラー(401 / 403)は次のキーへ。バックオフはしない。
                     except AuthenticationError as error:
                         last_error = error
                         self._log.warning(
@@ -200,14 +221,18 @@ class ResilientLLMClient:
                         )
                         break
 
-                    except BadRequestError:
+                    # 5. BadRequestErrorはリクエスト不正。
+                    except BadRequestError as error:
+                        last_error = error
                         self._log.error(
-                            "provider=%s key#%d bad request; aborting.",
+                            "provider=%s key#%d bad request; skip key: %s.",
                             config.name,
-                            key_number
+                            key_number,
+                            error
                         )
-                        raise
+                        break
 
+                    # エラーが発生しなければ、成功。LLMResponseを返す。
                     else:
                         if attempts > 1:
                             response = response.model_copy(update={"retries": attempts - 1})
