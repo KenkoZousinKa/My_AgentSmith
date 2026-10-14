@@ -28,7 +28,8 @@ class LocalExecutor:
                                text=True, timeout=timeout)
             #  Stdoutを汚さない
         except subprocess.TimeoutExpired as e:
-            return CommandResult(e.stdout or "", f"Timeout after {timeout}s", 124)
+            out = e.stdout.decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            return CommandResult(out, f"Timeout after {timeout}s", 124)
             # GNUのtimeoutコマンド
         return CommandResult(r.stdout, r.stderr, r.returncode)
 
@@ -49,7 +50,7 @@ class DockerExecutor:
         self.process = subprocess.Popen(
             ["docker", "run", "-i", "--rm", "--name", self.name,
              "--label", "agentsmith=1", self.image, "cat"],
-            #   -i：コンテナの stdin を、docker runプロセスと繋ぐ(self.processを介してデーモンにコマンドに流せる)
+            #   -i：コンテナの stdin を、docker runプロセスと繋ぐ(self.processを介してデーモンにコマンドに流せる
             #   cat：dockerを待機させるダミーコマンド。これがコンテナの主プロセスになる
             #   --rm：主プロセスが終わったら、コンテナを自動で消す
             #   --label:コンテナを後から探れるように
@@ -67,6 +68,7 @@ class DockerExecutor:
             time.sleep(0.5)
 
     def _is_running(self) -> bool:
+        """コンテナが起動しているか確認する。起動していればTrueで返る."""
         r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", self.name],
                            capture_output=True, text=True)
         return r.stdout.strip() == "true"
@@ -75,7 +77,7 @@ class DockerExecutor:
         r = subprocess.run(
             ["docker", "exec", "-w", workdir, self.name,
              "timeout", str(timeout), "bash", "-c", command],
-            capture_output=True, text=True)  # コンテナの中のコマンドは動き続ける
+            capture_output=True, text=True)  # コンテナの中のコマンドを止めるためにtimeoutを設定
         return CommandResult(r.stdout, r.stderr, r.returncode)
 
     def close(self) -> None:

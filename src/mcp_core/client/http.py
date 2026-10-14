@@ -16,9 +16,11 @@ SERVER_COMMAND = "python mcp_tools_mbpp.py --transport http"
 
 
 class HttpClientTransport:
-    def __init__(self, url: str, timeout: int = 60, env: dict[str, str] | None = None) -> None:
+    def __init__(self, url: str, timeout: int = 130, command: str | None = None,
+                 env: dict[str, str] | None = None, start_timeout: float = 10) -> None:
         self.process: subprocess.Popen[bytes] | None = None  # 規定serverを立ち上げた際のプロセスオブジェクト
         self.url: str = url
+        self.command: str | None = command
         self.env: dict[str, str] | None = env
         parts: SplitResult = urlsplit(url)
         if parts.scheme != "http" or parts.hostname is None:
@@ -31,6 +33,7 @@ class HttpClientTransport:
         self.protocol_version: str | None = None
 
         self.timeout: int = timeout
+        self.start_timeout: float = start_timeout
         self.stream: http.client.HTTPResponse | None = None  # SSEでサーバーと接続されているconnオブジェクト
         self.inbox: deque[rpc.JSONRPCMessage] = deque()  # Clientが処理すべきメッセージ
 
@@ -43,16 +46,21 @@ class HttpClientTransport:
             raise mcp.MCPConnectionError(f"サーバーに繋がりません  URL: {self.url}")
 
         print("サーバーが見つからないため提供サーバーを立ち上げます", file=sys.stderr)
-        self.process = subprocess.Popen(
-            args=shlex.split(SERVER_COMMAND),
-            env={**os.environ, **self.env} if self.env else None
-            )
-        deadline = time.monotonic() + 10
+        command = self.command or SERVER_COMMAND
+        try:
+            self.process = subprocess.Popen(
+                args=shlex.split(command),
+                env={**os.environ, **self.env} if self.env else None
+                )
+        except OSError as e:
+            raise mcp.MCPConnectionError(f"提供サーバーを起動できませんでした。 {command} {e}") from e
+        deadline = time.monotonic() + self.start_timeout
         while not self._is_connect():
             if self.process.poll() is not None:
-                raise mcp.MCPConnectionError(f"提供サーバーが起動直後に終了しました: {SERVER_COMMAND}")
+                raise mcp.MCPConnectionError(f"提供サーバーが起動直後に終了しました: {command}")
             if time.monotonic() > deadline:
-                raise mcp.MCPConnectionError(f"提供サーバーが 10 秒以内に待ち受けを始めませんでした: {SERVER_COMMAND}")
+                self.close()
+                raise mcp.MCPConnectionError(f"提供サーバーが {self.start_timeout} 秒以内に待ち受けを始めませんでした: {command}")
             time.sleep(0.1)
 
     def _is_connect(self) -> bool:

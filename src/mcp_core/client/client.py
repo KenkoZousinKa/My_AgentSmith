@@ -192,7 +192,7 @@ if __name__ == "__main__":
     #     c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
     #     pass
 
-    with MCPClient(HttpClientTransport(url="http://127.0.0.1:8000/mcp")) as c:
+    with MCPClient(HttpClientTransport(url="http://127.0.0.1:8000/mcp", start_timeout=610)) as c:
         print('pin')
         print(c.list_tools())
         print()

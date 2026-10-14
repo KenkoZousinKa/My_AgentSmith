@@ -25,7 +25,7 @@ class StdioClientTransport:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,       # 送信時に文字列が壊れないように
-            env={**os.environ, **self.env} if self.env else None
+            env={**os.environ, **self.env} if self.env else None  # DockerImageとPathの環境設定を渡す
         )
         # 起動直後の即死チェック
         time.sleep(0.1)
