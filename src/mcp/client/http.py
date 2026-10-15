@@ -8,27 +8,27 @@ from collections import deque
 from urllib.parse import urlsplit, SplitResult
 from pydantic import ValidationError
 
-from src.mcp_core.models import jsonrpc as rpc
-from src.mcp_core.models import mcpmodel as mcp
-
-DEFAULT_URL = "http://127.0.0.1:8000/mcp"
-SERVER_COMMAND = "python mcp_tools_mbpp.py --transport http"
+from src.mcp.models import jsonrpc as rpc
+from src.mcp.models import mcpmodel as mcp
+from src.mcp.client.client import DEFAULT_URL
 
 
 class HttpClientTransport:
-    def __init__(self, url: str, timeout: int = 130, command: str | None = None,
+    def __init__(self, url: str = DEFAULT_URL, timeout: int = 130, command: str | None = None,
                  env: dict[str, str] | None = None, start_timeout: float = 10) -> None:
         self.process: subprocess.Popen[bytes] | None = None  # 規定serverを立ち上げた際のプロセスオブジェクト
         self.url: str = url
         self.command: str | None = command
         self.env: dict[str, str] | None = env
+
+        # urlから接続パーツを作成
         parts: SplitResult = urlsplit(url)
         if parts.scheme != "http" or parts.hostname is None:
             raise ValueError(f"http://ホスト:ポート/パス の形で指定してください: {url!r}")
-
         self.hostname: str = parts.hostname
         self.path: str = parts.path or "/"
         self.port: int | None = parts.port
+
         self.session_id: str | None = None
         self.protocol_version: str | None = None
 
@@ -42,25 +42,24 @@ class HttpClientTransport:
         if self._is_connect():
             return
 
-        if self.url != DEFAULT_URL:
+        if self.url != DEFAULT_URL or self.command is None:
             raise mcp.MCPConnectionError(f"サーバーに繋がりません  URL: {self.url}")
 
-        print("サーバーが見つからないため提供サーバーを立ち上げます", file=sys.stderr)
-        command = self.command or SERVER_COMMAND
+        print("サーバーが見つからないため指定サーバーを立ち上げます", file=sys.stderr)
         try:
             self.process = subprocess.Popen(
-                args=shlex.split(command),
+                args=shlex.split(self.command),
                 env={**os.environ, **self.env} if self.env else None
                 )
         except OSError as e:
-            raise mcp.MCPConnectionError(f"提供サーバーを起動できませんでした。 {command} {e}") from e
+            raise mcp.MCPConnectionError(f"提供サーバーを起動できませんでした。 {self.command} {e}") from e
         deadline = time.monotonic() + self.start_timeout
         while not self._is_connect():
             if self.process.poll() is not None:
-                raise mcp.MCPConnectionError(f"提供サーバーが起動直後に終了しました: {command}")
+                raise mcp.MCPConnectionError(f"提供サーバーが起動直後に終了しました: {self.command}")
             if time.monotonic() > deadline:
                 self.close()
-                raise mcp.MCPConnectionError(f"提供サーバーが {self.start_timeout} 秒以内に待ち受けを始めませんでした: {command}")
+                raise mcp.MCPConnectionError(f"提供サーバーが {self.start_timeout} 秒以内に待ち受けを始めませんでした: {self.command}")
             time.sleep(0.1)
 
     def _is_connect(self) -> bool:

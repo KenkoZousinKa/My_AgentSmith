@@ -4,15 +4,15 @@ task.json → MCP サーバー起動（stdio, env 付き）→ Sandbox に tools
 
 使い方（リポジトリの直下で）:
     # Docker で（moulinette の dump で作った task.json の docker_image を使う）
-    uv run python -m tests.mock.mock_agent_swebench --task-file task.json --output solution.json
+    uv run python -m test.mcp.mock.mock_agent_swebench --task-file task.json --output solution.json
     # HTTP で（127.0.0.1:8000 が空いていれば、サーバーを --transport http で自動起動する）
-    uv run python -m tests.mock.mock_agent_swebench --http --task-file task.json --output solution.json
+    uv run python -m test.mcp.mock.mock_agent_swebench --http --task-file task.json --output solution.json
     # Docker なしで（ローカルのフォルダを /testbed の代わりにする）
-    uv run python -m tests.mock.mock_agent_swebench --task-file tests/mock/swebench_task_dummy.json \
+    uv run python -m test.mcp.mock.mock_agent_swebench --task-file test/mcp/mock/swebench_task_dummy.json \
         --output /tmp/solution.json --local /path/to/git/repo
     # 本番と同じく、moulinette の run-agent（時間切れでプロセスグループごと kill）から呼ぶ
     uv run --project ../pdf/moulinette moulinette_eval run-agent 900 \
-        "uv run python -m tests.mock.mock_agent_swebench --task-file task.json --output solution.json"
+        "uv run python -m test.mcp.mock.mock_agent_swebench --task-file task.json --output solution.json"
 """
 
 import sys
@@ -24,10 +24,10 @@ from typing import Any, Callable
 
 from src.models.input import SWEBenchTaskInput
 from src.models.output import SolutionOutput, StepMetrics
-from src.mcp_core.client.client import MCPClient
-from src.mcp_core.client.stdio import StdioClientTransport
-from src.mcp_core.client.http import DEFAULT_URL, HttpClientTransport
-from src.mcp_core.client.mcp_tool_function import MCPToolFunction
+from src.mcp.client.client import MCPClient
+from src.mcp.client.stdio import StdioClientTransport
+from src.mcp.client.http import DEFAULT_URL, HttpClientTransport
+from src.mcp.client.mcp_tool_function import MCPToolFunction
 from src.sandbox.sandbox_main import Sandbox
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

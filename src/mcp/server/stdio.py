@@ -1,7 +1,7 @@
 import sys
 from typing import Callable
 
-from src.mcp_core.models import jsonrpc as rpc
+from src.mcp.models import jsonrpc as rpc
 
 
 class StdioServerTransport:

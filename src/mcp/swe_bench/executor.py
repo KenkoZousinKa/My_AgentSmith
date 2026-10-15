@@ -1,5 +1,6 @@
 """SWE-bench の tools が使う、コマンドの実行係（ローカルか Docker か）."""
 
+import sys
 import subprocess
 import time
 import uuid
@@ -28,7 +29,7 @@ class LocalExecutor:
                                text=True, timeout=timeout)
             #  Stdoutを汚さない
         except subprocess.TimeoutExpired as e:
-            out = e.stdout.decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            out: str = e.stdout.decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else ""
             return CommandResult(out, f"Timeout after {timeout}s", 124)
             # GNUのtimeoutコマンド
         return CommandResult(r.stdout, r.stderr, r.returncode)
@@ -47,6 +48,7 @@ class DockerExecutor:
 
     def start(self, timeout: int = 600) -> None:
         """コンテナを起動し、動き始めるまで待つ."""
+        print('🐳Dockerコンテナを起動しています。', file=sys.stderr)
         self.process = subprocess.Popen(
             ["docker", "run", "-i", "--rm", "--name", self.name,
              "--label", "agentsmith=1", self.image, "cat"],
@@ -66,6 +68,7 @@ class DockerExecutor:
                 self.close()
                 raise RuntimeError(f"コンテナが {timeout} 秒以内に起動しませんでした: {self.image}")
             time.sleep(0.5)
+        print('✅Dockerコンテナが正常に起動しました。', file=sys.stderr)
 
     def _is_running(self) -> bool:
         """コンテナが起動しているか確認する。起動していればTrueで返る."""

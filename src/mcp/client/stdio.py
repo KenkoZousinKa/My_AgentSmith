@@ -4,8 +4,8 @@ import shlex
 import subprocess
 from pydantic import ValidationError
 
-from src.mcp_core.models import jsonrpc as rpc
-from src.mcp_core.models import mcpmodel as mcp
+from src.mcp.models import jsonrpc as rpc
+from src.mcp.models import mcpmodel as mcp
 
 
 class StdioClientTransport:

@@ -6,8 +6,8 @@ import subprocess
 import tempfile
 import argparse
 
-from src.mcp_core.server.server import MCPServer
-from src.mcp_core.server.http import HttpServerTransport
+from src.mcp.server.server import MCPServer
+from src.mcp.server.http import HttpServerTransport
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
 TIMEOUT = 30

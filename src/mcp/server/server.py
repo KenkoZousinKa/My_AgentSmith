@@ -7,11 +7,11 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 from pydantic import ValidationError, create_model, BaseModel
 
-from src.mcp_core.models import jsonrpc as rpc
-from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.models.server_transport import ServerTransport
-from src.mcp_core.server.stdio import StdioServerTransport
-from src.mcp_core.server.tool_model import (
+from src.mcp.models import jsonrpc as rpc
+from src.mcp.models import mcpmodel as mcp
+from src.mcp.models.server_transport import ServerTransport
+from src.mcp.server.stdio import StdioServerTransport
+from src.mcp.server.tool_model import (
     RegisteredTool,
     RegisteredPrompt,
     RegisteredResource,

@@ -7,8 +7,8 @@ from email.utils import formatdate
 from typing import Callable
 from dataclasses import dataclass, field
 
-from src.mcp_core.models import jsonrpc as rpc
-from src.mcp_core.models import mcpmodel as mcp
+from src.mcp.models import jsonrpc as rpc
+from src.mcp.models import mcpmodel as mcp
 
 MAX_HEADER_BYTES = 8000
 MAX_BODY_BYTES = 1000000

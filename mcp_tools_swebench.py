@@ -6,10 +6,10 @@ import argparse
 import shlex
 import base64
 
-from src.mcp_core.server.server import MCPServer
-from src.mcp_core.server.http import HttpServerTransport
-from src.mcp_core.swe_bench.executor import DockerExecutor, Executor, LocalExecutor
-from src.mcp_core.swe_bench.edit_script import EDIT_SCRIPT
+from src.mcp.server.server import MCPServer
+from src.mcp.server.http import HttpServerTransport
+from src.mcp.swe_bench.executor import DockerExecutor, Executor, LocalExecutor
+from src.mcp.swe_bench.edit_script import EDIT_SCRIPT
 
 server = MCPServer(name="agent-smith-swebench", version="0.1.0")
 TESTBED_PATH = os.environ.get("TESTBED_PATH", "/testbed")
@@ -74,6 +74,9 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
     return f"exit_code: {r.exit_code}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
 
 
+# ====== Execution Tools ======
+
+
 @server.tool()
 def run_command(command: str, workdir: str = TESTBED_PATH) -> str:
     """Execute a shell command in the given working directory.
@@ -82,6 +85,9 @@ def run_command(command: str, workdir: str = TESTBED_PATH) -> str:
     """
     r = executor.run(command, workdir, COMMAND_TIMEOUT)
     return f"exit_code: {r.exit_code}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
+
+
+# ====== Private ======
 
 
 def _on_sigterm(signum: int, frame: object) -> None:
@@ -114,6 +120,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    print(edit_file("test.py", "Makefile", "test.py"))
+    # print(edit_file("test.py", "Makefile", "test.py"))
     # print(read_file("./Makefile", 20, 40))
-    # main()
+    main()
