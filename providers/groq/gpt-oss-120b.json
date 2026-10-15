@@ -1,0 +1,11 @@
+{
+    "providers": [
+        {
+            "name": "groq",
+            "provider_url": "https://api.groq.com/openai/v1",
+            "models": ["openai/gpt-oss-120b"],
+            "keys_env": "GROQ_API_KEY",
+            "priority": 1
+        }
+    ]
+}

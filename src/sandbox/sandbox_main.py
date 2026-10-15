@@ -55,6 +55,7 @@ class Sandbox:
                 self.client.close()
                 self.client = None
                 raise
+        self.client = MCPClient(StdioClientTransport("python mcp_tools_mbpp.py"))
         self._spawn()
 
     def __enter__(self) -> "Sandbox":
@@ -139,6 +140,8 @@ class Sandbox:
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
+        print(code)
+        print("=======================")
         rejection = check_code(code, self.config, frozenset(self.tools))
         if rejection:
             return ExecuteResult(error=rejection)
