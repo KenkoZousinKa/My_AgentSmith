@@ -80,7 +80,8 @@ class OpenAICompatProvider(LLMProvider):
         # レスポンスにtextが空の場合、reasoningやreasoning_contentを代替として使用する
         if not (isinstance(text, str) and text.strip()):
             for field_name in ("reasoning", "reasoning_content"):
-                reasoning = data.get(field_name)
+                # reasoningはdata直下ではなくmessageの下にある。
+                reasoning = message.get(field_name)
                 if isinstance(reasoning, str) and reasoning.strip():
                     text = reasoning
                     break
