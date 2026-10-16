@@ -178,6 +178,8 @@ def _parse_retry_after(header: dict[str, str]) -> float | None:
 def _error_from_response(response: HttpResponse) -> LLMHTTPError:
     """非200系のHTTPレスポンスから、ステータスに応じて型付き例外に変換して返す.
 
+    LLMHTTPErrorの子孫クラスを返す。
+    429はRateLimitError、401/403はAuthenticationError、500系はServerError、400系はBadRequestError。
     """
     status = response.status
     snippet = response.body[:500]
@@ -255,6 +257,8 @@ class LLMProvider(ABC):
         """
         url, headers, body = self._build_request(messages, stop_sequences, max_tokens)
         start_time = time.perf_counter()
+        # HTTPTransportにPOSTを依頼し、レスポンスを受け取る
+        # TransportErrorが登ってくる可能性がある。
         response = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         if not 200 <= response.status < 300:
