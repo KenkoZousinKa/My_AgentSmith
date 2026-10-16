@@ -10,6 +10,16 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 具体的なプロバイダは、この抽象クラスを継承して実装する。
 プロバイダURL / モデル名 / キー郡などはJSONか.envで設定し、コードの変更なしでモデルを差し替えて
 ベンチマークを実行できるようにする。
+
+- 下記を提供
+ProviderConfig
+LLMResponse
+LLMError -> EmptyResponseError / LLMHTTPError
+LLMHTTPError -> RateLimitError / ServerError / AuthenticationError / BadRequestError
+def _parse_retry_after(header: dict[str, str]) -> float | None
+def _error_from_response(response: HttpResponse) -> LLMHTTPError
+LLMGenerator(Protocol)
+LLMProvider(ABC) def generate() / _build_request() / _parse_response()
 """
 import time
 from typing import Any, Protocol
@@ -70,6 +80,30 @@ class LLMError(RuntimeError):
     解釈できないレスポンス由来の失敗(LLMError)をまとめる。
     上位はこのLLMErrorを捕まえて、全失敗を一括で扱える。
     """
+
+
+class EmptyResponseError(LLMError):
+    """HTTPは成功したが、本文が空(生成されたが使えない)場合を表す例外クラス.
+
+    推論モデルが思考だけでmax_tokensを使い切った場合などに発生する。
+    プロバイダ側ではトークンが消費されているので、その使用量を持たせて送出先で計上できるようにする。
+    (思考トークンも制限に数える。捨てると過小計上になる。)
+    """
+    def __init__(self, message: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        """メッセージと(消費トークン数)使用量を保持する.
+
+        Args:
+            message (str): エラーメッセージ
+            input_tokens (int): 消費した入力トークン数
+            output_tokens (int): 消費した出力トークン数
+        """
+        super().__init__(message, input_tokens, output_tokens)
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+    def __str__(self) -> str:
+        """ログを見やすくするためにメッセージのみを返す。"""
+        return str(self.args[0])
 
 
 class LLMHTTPError(LLMError):

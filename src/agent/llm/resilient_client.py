@@ -1,24 +1,39 @@
 """複数プロバイダ、複数キーを束ね、冗長性と耐障害性を提供するLLMクライアント
 
 provider(1キーで1リクエスト)の上位レイヤ。
-priorityに応じてprovider内で複数のキーを回し、
-型付きエラーに応じて
-バックオフ再送 -> 次キー -> 次プロバイダ
+priorityに応じてprovider内で複数のキーを回し、型付きエラーに応じて
+1. バックオフ(同一キー)再送 -> 2. 次のキー -> 3. 次のプロバイダ
 の順にフォールバックする。
 すべて尽きたらAllProvidersExhausted返す。
 上位Orchestratorはクラッシュさせず、success=Falseで返す。
+(バックオフ: 通信やAPIの呼び出しが失敗した際に少し待機してから再試行する仕組み。リトライの時間調整。)
+(フォールバック: 処理や通信に失敗した際に別の手段や代替案に切り替えること。リトライでだめな時の代替処理。)
 
-- RateLimitError / ServerError / TransportError
+- RateLimitError 
+    レートリミットに達したことを示す。即次のキーへ。
+- ServerError / TransportError
     一過性。バックオフして同一キーで再送。
 - AuthenticationError
-    同一キー再送は無意味。即次のキーへ。
+    認証に失敗したことを示す。同一キー再送は無意味。即次のキーへ。
 - BadRequestError
-    リクエスト不正。他キー / 他プロバイダでも直らないので即送出。
+    リクエスト不正。こちらの責任。即次のキーへ。
+- EmptyResponseError
+    レスポンスが空だった場合。消費したトークンを記録して次のキーへ。
+- AllProvidersExhausted
+    すべてのプロバイダ / すべてのキーを試しても成功しなかった場合に発生する例外。
+    上位のOrchestratorはこの例外を捕まえて、success=Falseで返す。
 
-time_remainingを渡すと、待機がMBPPのハード制限を食いつぶさないように
-残予算にクランプする。
+- time_remainingを渡すと、待機がMBPPのハード制限を食いつぶさないように残予算にクランプする。
 残予算がなければそのキーを諦めて次のキーへ。
 backoff / retry の設定はRetrySettings(config.json)。
+
+- 下記を提供
+AllProvidersExhausted
+ResilientLLMClient def _wait_second def generate()
+
+Todo:
+    - [ ] A-04で待ち時間、タイムアウト、後回しで_sweep / _candidatesに分割、watedは[入力、出力]のリストで受け渡す。
+    - [ ]上記変更でwasted_input/output_tokensを変更する。
 """
 import time
 import logging
@@ -29,6 +44,7 @@ from src.agent.llm.provider.openai_compat import OpenAICompatProvider
 from src.agent.llm.provider.provider import (
     AuthenticationError,
     BadRequestError,
+    EmptyResponseError,
     LLMError,
     LLMProvider,
     LLMResponse,
@@ -49,13 +65,22 @@ ProviderFactory = Callable[[ProviderConfig, HttpTransport, str, str], LLMProvide
 class AllProvidersExhausted(LLMError):
     """全プロバイダ・全キーを試しても成功しなかったことを表す例外クラス.
 
+    上位のOrchestratorはこの例外を捕まえて、total_input/output_tokensに加算する。
     Attributes:
         attempts (int): 試行回数。成功までのリトライを含む。
             上位のOrchestratorはこの例外を捕まえて、total_requestsに加算する。
+        input_tokens (int): 失敗した試行中(空応答)にプロバイダ側で消費した入力トークン数。
+        output_tokens (int): 失敗した試行中(空応答)にプロバイダ側で消費した出力トークン数。
     """
-    def __init__(self, message: str, attempts: int = 0) -> None:
-        super().__init__(message, attempts)
+    def __init__(self, message: str, attempts: int = 0, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        super().__init__(message, attempts, input_tokens, output_tokens)
         self.attempts = attempts
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+    def __str__(self) -> str:
+        """ログを見やすくするためにメッセージのみを返す。"""
+        return str(self.args[0])
 
 
 class ResilientLLMClient:
@@ -133,14 +158,20 @@ class ResilientLLMClient:
 
         Raises:
             AllProvidersExhausted: すべてのプロバイダ / すべてのキーを試しても成功しなかった場合に発生する例外。
-            BadRequestError: リクエスト不正。上位のOrchestratorはこの例外を捕まえて、success=Falseで返す。
         """
         attempts = 0
         last_error: BaseException | None = None
 
+        # 失敗した試行中(空応答)にプロバイダ側で消費したトークン数を集計する。
+        # 成功したら成功レスポンスに、全滅したら例外に足して上位へ戻して過小計上を避ける。
+        wasted_input_tokens = 0
+        wasted_output_tokens = 0
+
+        # 優先度順に並べたすべてのプロバイダを試す
         for config in self._providers:
             # config.keys_envからAPIキーを取得する。もしkeysが空なら、次のプロバイダへ。
             keys = resolve_api_keys(config.keys_env)
+            # もしkeysが空なら、次のプロバイダへ。
             if not keys:
                 self._log.warning(
                     "provider=%s skipped: no API keys in %s",
@@ -151,18 +182,22 @@ class ResilientLLMClient:
 
             # すべてのキーを順番に試す。1キーで1リクエスト。
             for key_number, key in enumerate(keys, start=1):
+
+                # すべてのモデルを順番に試す。1モデルで1リクエスト。
                 for model in config.models:
                     # Providerを生成して、generate()を呼ぶ。
+                    # _provider_factoryは、ProviderConfigからLLMProviderを生成する
                     provider = self._provider_factory(config, self._transport, key, model)
 
                     # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次プロバイダ の順にフォールバックする。
                     for attempt_on_key in range(self._retry.max_retries_per_key + 1):
+                        # リトライを含む総試行回数。上位のOrchestratorがtotal_requestsに加算する。
                         attempts += 1
 
                         try:
                             response = provider.generate(messages, stop_sequences, max_tokens)
 
-                        # 1. RateLimitErrorは次のキーへ。バックオフはしない。
+                        # 1. RateLimitError(429)は次のキーへ。バックオフはしない。
                         except RateLimitError as error:
                             last_error = error
                             self._log.warning(
@@ -222,7 +257,7 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # 5. BadRequestErrorはリクエスト不正。
+                        # 5. BadRequestErrorはリクエスト不正。次のキーへ。
                         except BadRequestError as error:
                             last_error = error
                             self._log.error(
@@ -233,10 +268,45 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # エラーが発生しなければ、成功。LLMResponseを返す。
+                        # 6. EmptyResponseErrorは、レスポンスが空だった場合。消費したトークンを記録して次のキーへ。
+                        except EmptyResponseError as error:
+                            last_error = error
+                            wasted_input_tokens += error.input_tokens
+                            wasted_output_tokens += error.output_tokens
+                            self._log.warning(
+                                "provider=%s key#%d attempts=%d empty response; next key.",
+                                config.name,
+                                key_number,
+                                attempts
+                            )
+                            break
+
+                        # 7. その他のLLMError(レスポンスの解釈失敗など)は、次のキーへ。バックオフはしない。
+                        # 現状LLMHTTPError系のみ?
+                        except LLMError as error:
+                            last_error = error
+                            self._log.error(
+                                "provider=%s key#%d attempts=%d LLMError; next key: %s.",
+                                config.name,
+                                key_number,
+                                attempts,
+                                error
+                            )
+                            break
+
+                        # エラーが発生しなければ成功。LLMResponseを返す。
                         else:
                             if attempts > 1:
                                 response = response.model_copy(update={"retries": attempts - 1})
+
+                            # 失敗した試行中(空応答)にプロバイダ側で消費したトークン数を成功レスポンスに加算する。
+                            if wasted_input_tokens or wasted_output_tokens:
+                                response = response.model_copy(
+                                    update={
+                                        "input_tokens": response.input_tokens + wasted_input_tokens,
+                                        "output_tokens": response.output_tokens + wasted_output_tokens
+                                    }
+                                )
 
                             self._log.info(
                                 "provider=%s key#%d success after %d attempt(s)",
