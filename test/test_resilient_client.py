@@ -9,6 +9,7 @@ from src.agent.llm.provider.provider import (
     AuthenticationError,
     BadRequestError,
     EmptyResponseError,
+    LLMError,
     LLMResponse,
     ProviderConfig,
     RateLimitError,
