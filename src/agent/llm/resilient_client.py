@@ -86,7 +86,7 @@ class AllProvidersExhausted(LLMError):
 class ResilientLLMClient:
     """複数プロバイダ / 複数キーで冗長性と耐障害性を提供するProviderの上位クライアント.
 
-    OrchestratorはProviderと同じgengerate(messages, stop_sequences, max_tokens)を呼び出すだけでよい。
+    OrchestratorはProviderと同じgenerate(messages, stop_sequences, max_tokens)を呼び出すだけでよい。
     """
 
     def __init__(
@@ -249,7 +249,7 @@ class ResilientLLMClient:
                         except AuthenticationError as error:
                             last_error = error
                             self._log.warning(
-                                "provider=%s key#%d attempts=%d auth/quota; next key.",
+                                "provider=%s key#%d attempts=%d auth/quota; next combo.",
                                 config.name,
                                 key_number,
                                 attempts
@@ -260,7 +260,7 @@ class ResilientLLMClient:
                         except BadRequestError as error:
                             last_error = error
                             self._log.error(
-                                "provider=%s key#%d bad request; skip key: %s.",
+                                "provider=%s key#%d bad request; skip combo: %s.",
                                 config.name,
                                 key_number,
                                 error
@@ -273,7 +273,7 @@ class ResilientLLMClient:
                             wasted_input_tokens += error.input_tokens
                             wasted_output_tokens += error.output_tokens
                             self._log.warning(
-                                "provider=%s key#%d attempts=%d empty response; next model.",
+                                "provider=%s key#%d attempts=%d empty response; next combo.",
                                 config.name,
                                 key_number,
                                 attempts
@@ -287,7 +287,7 @@ class ResilientLLMClient:
                         except LLMError as error:
                             last_error = error
                             self._log.error(
-                                "provider=%s key#%d attempts=%d LLMError; next key: %s.",
+                                "provider=%s key#%d attempts=%d LLMError; next combo: %s.",
                                 config.name,
                                 key_number,
                                 attempts,
