@@ -83,6 +83,43 @@ def test_build_request_includes_model_messages_stop() -> None:
     assert payload["max_tokens"] == 256
 
 
+_MODEL_PARAMS_CONFIG = ProviderConfig(
+    name="fake",
+    provider_url="https://example.test/api/v1",
+    models=["fake/model-1", "fake/model-2"],
+    keys_env="FAKE_API_KEY",
+    additional_params={"temperature": 0.0},
+    model_params={"fake/model-2": {"reasoning_effort": "low", "temperature": 0.7}},
+)
+
+
+def _send_with(model: str) -> dict[str, object]:
+    """model_params付きconfigで1回送信し、送信bodyを辞書で返す."""
+    transport = _FakeTransport()
+    provider = OpenAICompatProvider(
+        config=_MODEL_PARAMS_CONFIG, transport=transport, api_key="sk-test", model=model
+    )
+    provider.generate(messages=[{"role": "user", "content": "add"}], stop_sequences=[], max_tokens=64)
+    payload: dict[str, object] = json.loads(transport.calls[0][2])
+    return payload
+
+
+def test_model_params_apply_only_to_the_named_model() -> None:
+    """model_paramsは該当モデルのbodyにだけ入る.
+
+    実測(groq)では gpt-oss系は reasoning_effort が無いと本文がreasoningへ流れてcontentが空になり、
+    逆にqwenは指定するとcontentが空になる。同一プロバイダ内でモデル毎に分ける必要がある。
+    """
+    assert "reasoning_effort" not in _send_with("fake/model-1")
+    assert _send_with("fake/model-2")["reasoning_effort"] == "low"
+
+
+def test_model_params_override_provider_additional_params() -> None:
+    """同じキーがあればmodel_params(モデル単位)がadditional_params(プロバイダ単位)に勝つ."""
+    assert _send_with("fake/model-1")["temperature"] == 0.0
+    assert _send_with("fake/model-2")["temperature"] == 0.7
+
+
 def test_429_raises_rate_limit_error_with_retry_after() -> None:
     """HTTP 429 は RateLimitError を送出し、retry-afterヘッダを秒数に解釈する."""
     transport = _FakeTransport(status=429, body="rate limited", headers={"retry-after": "3"})

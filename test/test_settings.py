@@ -79,6 +79,7 @@ def test_select_provider_cli_overrides_primary(tmp_path: Path) -> None:
     assert primary.provider_url == "https://eval.test/v1"
     assert primary.keys_env == "OPENROUTER_API_KEY"
 
+
 def test_shipped_config_files_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     """リポジトリ直下の実 config.json / providers.json がそのままロードできる(出荷物の回帰)."""
     repo_root = Path(__file__).resolve().parents[1]   # test/ の1つ上 = リポジトリ直下
@@ -89,3 +90,14 @@ def test_shipped_config_files_parse(monkeypatch: pytest.MonkeyPatch) -> None:
 # test_shipped_config_files_parse:
     providers = load_providers(str(repo_root / "providers" / "providers.json"))
     assert providers[0].priority == 1                   # priority昇順で先頭が主
+
+
+def test_load_providers_accepts_model_params(tmp_path: Path) -> None:
+    """providers.json に model_params を書ける(ProviderConfig は extra=forbid なので、欄が無いと読込で落ちる)."""
+    entry = {
+        "name": "groq", "provider_url": "https://api.groq.com/openai/v1",
+        "models": ["openai/gpt-oss-20b", "qwen/qwen3-32b"], "keys_env": "GROQ_API_KEY",
+        "model_params": {"openai/gpt-oss-20b": {"reasoning_effort": "low"}},
+    }
+    providers = load_providers(_write(tmp_path / "providers.json", {"providers": [entry]}))
+    assert providers[0].model_params == {"openai/gpt-oss-20b": {"reasoning_effort": "low"}}
