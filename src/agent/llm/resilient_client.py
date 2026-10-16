@@ -2,7 +2,7 @@
 
 provider(1キーで1リクエスト)の上位レイヤ。
 priorityに応じてprovider内で複数のキーを回し、型付きエラーに応じて
-1. バックオフ(同一キー)再送 -> 2. 次のキー -> 3. 次のプロバイダ
+1. バックオフ(同一キー)再送 -> 2. 次のモデル -> 3. 次のキー -> 4. 次のプロバイダ
 の順にフォールバックする。
 すべて尽きたらAllProvidersExhausted返す。
 上位Orchestratorはクラッシュさせず、success=Falseで返す。
@@ -188,7 +188,7 @@ class ResilientLLMClient:
                     # _provider_factoryは、ProviderConfigからLLMProviderを生成する
                     provider = self._provider_factory(config, self._transport, key, model)
 
-                    # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次モデル -> 次プロバイダ の順にフォールバックする。
+                    # 1キーでのリトライループ。バックオフ再送 -> 次モデル -> 次キー -> 次プロバイダ の順にフォールバックする。
                     for attempt_on_key in range(self._retry.max_retries_per_key + 1):
                         # リトライを含む総試行回数。上位のOrchestratorがtotal_requestsに加算する。
                         attempts += 1
@@ -196,7 +196,7 @@ class ResilientLLMClient:
                         try:
                             response = provider.generate(messages, stop_sequences, max_tokens)
 
-                        # 1. RateLimitError(429)は次のキーへ。バックオフはしない。
+                        # 1. RateLimitError(429)はバックオフせずに次のモデルへ。
                         except RateLimitError as error:
                             last_error = error
                             self._log.warning(
@@ -222,7 +222,7 @@ class ResilientLLMClient:
                                 )
                                 break
 
-                            # バックオフ秒数を計算し、残予算がなければバックオフせずに次のキーへ。
+                            # バックオフ秒数を計算し、残予算がなければバックオフせずに次のモデルへ。
                             wait = self._wait_seconds(error, attempt_on_key)
                             if wait is None:
                                 self._log.warning(
@@ -245,7 +245,7 @@ class ResilientLLMClient:
                             )
                             self._sleep(wait)
 
-                        # 4. 認証エラー(401 / 403)は次のキーへ。バックオフせずに次のキーへ。
+                        # 4. 認証エラー(401 / 403)は次のキーへ。バックオフせずに次のモデルへ。
                         except AuthenticationError as error:
                             last_error = error
                             self._log.warning(
@@ -256,7 +256,7 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # 5. BadRequestErrorはリクエスト不正。バックオフせずに次のキーへ。
+                        # 5. BadRequestErrorはリクエスト不正。バックオフせずに次のモデルへ。
                         except BadRequestError as error:
                             last_error = error
                             self._log.error(
@@ -267,21 +267,23 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # 6. EmptyResponseErrorは、レスポンスが空だった場合。消費したトークンを記録してバックオフせずに次のキーへ。
+                        # 6. EmptyResponseErrorは、レスポンスが空だった場合。消費したトークンを記録してバックオフせずに次のモデルへ。
                         except EmptyResponseError as error:
                             last_error = error
                             wasted_input_tokens += error.input_tokens
                             wasted_output_tokens += error.output_tokens
                             self._log.warning(
-                                "provider=%s key#%d attempts=%d empty response; next key.",
+                                "provider=%s key#%d attempts=%d empty response; next model.",
                                 config.name,
                                 key_number,
                                 attempts
                             )
                             break
 
-                        # 7. その他のLLMError(レスポンスの解釈失敗など)はバックオフせずに次のキーへ。
-                        # 現状LLMHTTPError系のみ?LLMHTTPErrorは送出されないのでここには来ない？
+                        # 7. その他のLLMError(レスポンスの解釈失敗など)はバックオフせずに次のモデルへ。
+                        # privider._parse_response()でLLMからのレスポンスが取得できない時、LLMErrorが発生する
+                        # OpenAI互換のレスポンスがJSONでない、choices[0]が存在しない、contentが空など。
+                        # 今後の拡張でLLMErrorの子孫クラスを追加する場合もここで捕らえる。
                         except LLMError as error:
                             last_error = error
                             self._log.error(
