@@ -7,7 +7,9 @@ NAME		:= Project_Name
 UV			:= uv
 PYTHON		:= python3
 SRC_DIR		:= src
-TEST_DIR	:= tests
+MBPP_FILE	:= agent_mbpp
+SWE_FILE	:= agent_swebench
+TEST_DIR	:= test
 
 # 追加変数(あれば)
 
@@ -30,13 +32,13 @@ install: ## 仮想環境を作成し、依存関係をインストールする
 #  Execution  |
 # -------------
 run: ## メインプログラムを実行
-	@echo "Running $(NAME)..."
+	@echo "Running $(MBPP_FILE)..."
 	@$(UV) run python3 -m $(SRC_DIR)
 
 debug:
 debug: ## pdbデバッガを使って実行
-	@echo "Debugging $(NAME)..."
-	@$(UV) run $(PYTHON) pdb -m $(SRC_DIR)
+	@echo "Debugging $(MBPP_FILE)..."
+	@$(UV) run $(PYTHON) -m pdb $(SRC_DIR)
 
 # -----------
 #  Cleanup  |
@@ -64,10 +66,12 @@ fclean: clean ## cleanに加えて仮想環境も削除
 # -------------------
 lint: ## Flake8 / Mypy / ruffによる静的解析を実行
 	@echo "Running Linter (Standard)..."
-	-@$(UV) run flake8 $(SRC_DIR)
-	-@$(UV) run mypy $(SRC_DIR) 
-	-@$(UV) run ruff check $(SRC_DIR)
-# 	-@$(UV) run ty check $(SRC_DIR)
+	-@$(UV) run flake8 .
+	@echo "flake8 complete."
+	-@$(UV) run mypy .
+	@echo "mypy complete."
+#	-@$(UV) run ruff check $(SRC_DIR)
+#	-@$(UV) run ty check $(SRC_DIR)
 	@echo "Linting complete."
 
 lint-strict: ## より厳しいMypyチェックを実行

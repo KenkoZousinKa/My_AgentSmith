@@ -2,4 +2,4 @@ blank_issues_enabled: true
 contact_links:
   - name: チームの契約仕様
     url: https://github.com/KenkoZousinKa/My_AgentSmith/blob/main/docs/CONTRACTS.md
-    about: 契約(execute/StepMetrics 等)はここを参照
+    about: 契約(run/StepMetrics 等)はここを参照

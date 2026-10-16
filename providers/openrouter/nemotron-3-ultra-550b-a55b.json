@@ -1,0 +1,11 @@
+{
+    "providers": [
+        {
+            "name": "openrouter",
+            "provider_url": "https://openrouter.ai/api/v1",
+            "models": ["nemotron-3-ultra-550b-a55b:free"],
+            "keys_env": "OPENROUTER_API_KEY",
+            "priority": 1
+        }
+    ]
+}

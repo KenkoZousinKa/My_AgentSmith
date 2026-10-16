@@ -1,5 +1,8 @@
 # Project specific (Mandatory rule)
 cache/
+scripts/
+# 評価用出力ツリー、実行時生成
+evaluations/
 
 # -----------
 #     C     |
@@ -37,5 +40,6 @@ __pycache__
 # --------------------
 #  Personal Settings |
 # --------------------
-# .claude
+.claude*
 # CLAUDE.md
+*.pdf
