@@ -1,4 +1,3 @@
-import os
 import http.client
 import subprocess
 import shlex
@@ -14,12 +13,10 @@ from src.mcp.client.client import DEFAULT_URL
 
 
 class HttpClientTransport:
-    def __init__(self, url: str = DEFAULT_URL, timeout: int = 130, command: str | None = None,
-                 env: dict[str, str] | None = None, start_timeout: float = 10) -> None:
+    def __init__(self, url: str = DEFAULT_URL, timeout: int = 130, command: str | None = None, start_timeout: float = 10) -> None:
         self.process: subprocess.Popen[bytes] | None = None  # 規定serverを立ち上げた際のプロセスオブジェクト
         self.url: str = url
         self.command: str | None = command
-        self.env: dict[str, str] | None = env
 
         # urlから接続パーツを作成
         parts: SplitResult = urlsplit(url)
@@ -47,10 +44,7 @@ class HttpClientTransport:
 
         print("サーバーが見つからないため指定サーバーを立ち上げます", file=sys.stderr)
         try:
-            self.process = subprocess.Popen(
-                args=shlex.split(self.command),
-                env={**os.environ, **self.env} if self.env else None
-                )
+            self.process = subprocess.Popen(args=shlex.split(self.command))
         except OSError as e:
             raise mcp.MCPConnectionError(f"提供サーバーを起動できませんでした。 {self.command} {e}") from e
         deadline = time.monotonic() + self.start_timeout

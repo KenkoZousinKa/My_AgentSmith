@@ -38,6 +38,8 @@ class MCPServer:
         self.resources: dict[str, RegisteredResource] = {}
         self.prompts: dict[str, RegisteredPrompt] = {}
 
+        self._on_initialize: Callable[[dict[str, Any] | None], None] | None = None
+
     def run(self, transport: ServerTransport | None = None) -> None:
         """サーバーの受付を担当する."""
         if transport is None:
@@ -95,7 +97,9 @@ class MCPServer:
 
     def _handle_initialize(self, params: dict[str, Any] | None) -> mcp.InitializeResult:
         """MCPサーバーのバージョンと機能と情報をオブジェクトにまとめて返す."""
-        mcp.InitializeRequestParams.model_validate(params)
+        init = mcp.InitializeRequestParams.model_validate(params)   # 戻り値を捨てずに使う
+        if self._on_initialize is not None:
+            self._on_initialize(init.meta)
         # versionが異なる場合も接続を切るかどうかはクライアント側が判断するのでエラーは吐かない
         return mcp.InitializeResult(protocol_version=mcp.MCP_VERSION,
                                     capabilities=self._capabilities(),  # tools/listなどを追加したあとはここに情報を乗せる必要がある、動的取得を設計予定
@@ -222,6 +226,12 @@ class MCPServer:
                     required=param.default is inspect.Parameter.empty))  # 初期値が無い引数は「必須」
             doc = description or inspect.getdoc(func)
             self.prompts[func.__name__] = RegisteredPrompt(func.__name__, doc, func, arguments)
+            return func
+        return register
+
+    def on_initialize(self) -> Callable[[F], F]:
+        def register(func: F) -> F:
+            self._on_initialize = func
             return func
         return register
 

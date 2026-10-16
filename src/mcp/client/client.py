@@ -16,10 +16,11 @@ DEFAULT_URL = "http://127.0.0.1:8000/mcp"
 
 
 class MCPClient:
-    def __init__(self, transport: ClientTransport):
+    def __init__(self, transport: ClientTransport, init_meta: dict[str, Any] | None = None):
         self.transport = transport
         self.server_info: mcp.Implementation
         self.server_capabilities: dict[str, Any]
+        self.init_meta = init_meta
 
     def __enter__(self) -> "MCPClient":
         self.connect()
@@ -42,7 +43,8 @@ class MCPClient:
             # requestを送る
             params = mcp.InitializeRequestParams(protocol_version=mcp.MCP_VERSION,
                                                  capabilities={},
-                                                 client_info=mcp.Implementation(name="SandBox", version="1.0"))
+                                                 client_info=mcp.Implementation(name="SandBox", version="1.0"),
+                                                 meta=self.init_meta)
             result = self._request(mcp.Method.INITIALIZE, params)  # 送受信
 
             # responceを検証する

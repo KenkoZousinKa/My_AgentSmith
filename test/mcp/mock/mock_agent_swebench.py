@@ -1,6 +1,6 @@
 """SWE-bench 用のエージェントのモック（LLM の代わりに、決まったコードを順に流す）.
 
-task.json → MCP サーバー起動（stdio, env 付き）→ Sandbox に tools を渡す → コードを実行 → solution.json
+task.json → MCP サーバー起動（initialize の _meta で設定を渡す）→ Sandbox に tools を渡す → コードを実行 → solution.json
 
 使い方（リポジトリの直下で）:
     # Docker で（moulinette の dump で作った task.json の docker_image を使う）
@@ -29,8 +29,9 @@ from src.mcp.client.stdio import StdioClientTransport
 from src.mcp.client.http import DEFAULT_URL, HttpClientTransport
 from src.mcp.client.mcp_tool_function import MCPToolFunction
 from src.sandbox.sandbox_main import Sandbox
+from mcp_tools_swebench import META_KEY
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]  # test/mcp/mock/ の3つ上がリポジトリ直下
 SERVER = REPO_ROOT / "mcp_tools_swebench.py"
 SEPARATOR = "# ---"  # --steps ファイルで、スニペットを区切る行
 
@@ -51,12 +52,12 @@ def load_steps(path: str | None, tool_names: set[str]) -> list[str]:
     return [s.strip() for s in text.split(SEPARATOR) if s.strip()]
 
 
-def server_env(task: SWEBenchTaskInput, local: str | None) -> dict[str, str]:
-    """MCP サーバーに渡す環境変数を作る."""
+def init_meta(task: SWEBenchTaskInput, local: str | None) -> dict[str, Any]:
+    """initialize の _meta に入れる、サーバーの設定を作る（MCPClient は中身を見ずにそのまま送る）."""
     if local is not None:
-        return {"SWE_DOCKER_IMAGE": "", "TESTBED_PATH": str(Path(local).resolve())}
-        # ↑ 空文字は False 扱い → LocalExecutor（親の環境に SWE_DOCKER_IMAGE があっても上書きする）
-    return {"SWE_DOCKER_IMAGE": task.docker_image, "TESTBED_PATH": "/testbed"}
+        return {META_KEY: {"testbed_path": str(Path(local).resolve()), "eval_script": task.eval_script}}
+        # ↑ docker_image を入れない → LocalExecutor（ただし、サーバーの環境に SWE_DOCKER_IMAGE があればそちらが使われる）
+    return {META_KEY: {"docker_image": task.docker_image, "eval_script": task.eval_script}}
 
 
 def main() -> int:
@@ -75,15 +76,14 @@ def main() -> int:
     command = f"{shlex.quote(sys.executable)} {shlex.quote(str(SERVER))}"
     # ↑ "python" ではなく今の Python（uv の venv）を使う。絶対パスなので、どこから起動しても src を import できる
 
-    env = server_env(task, args.local)
     transport: StdioClientTransport | HttpClientTransport
     if args.http:
-        transport = HttpClientTransport(DEFAULT_URL, command=f"{command} --transport http",
-                                        env=env, start_timeout=610)
-        # ↑ docker.start() が終わるまで待ち受けが始まらないので、その上限（600 秒）より少し長く待つ
+        transport = HttpClientTransport(DEFAULT_URL, command=f"{command} --transport http", timeout=610)
+        # ↑ コンテナは initialize の処理中に起動する（docker.start() の上限 600 秒）。
+        #   その応答を待てるよう、読み取りのタイムアウトを少し長くする
     else:
-        transport = StdioClientTransport(command, env=env)
-    client = MCPClient(transport)
+        transport = StdioClientTransport(command)
+    client = MCPClient(transport, init_meta=init_meta(task, args.local))
     sandbox: Sandbox | None = None
     steps: list[StepMetrics] = []
     answer: str | None = None

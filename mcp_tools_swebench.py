@@ -5,16 +5,22 @@ import signal
 import argparse
 import shlex
 import base64
+from typing import Any
 
 from src.mcp.server.server import MCPServer
 from src.mcp.server.http import HttpServerTransport
 from src.mcp.swe_bench.executor import DockerExecutor, Executor, LocalExecutor
 from src.mcp.swe_bench.edit_script import EDIT_SCRIPT
 
-server = MCPServer(name="agent-smith-swebench", version="0.1.0")
-TESTBED_PATH = os.environ.get("TESTBED_PATH", "/testbed")
 COMMAND_TIMEOUT = 120
+META_KEY = "agentsmith/swebench"
+
+server = MCPServer(name="agent-smith-swebench", version="0.1.0")
 executor: Executor = LocalExecutor()
+
+testbed_path: str = "/testbed"
+eval_script: str | None = None
+# on_initializeで環境変数から動的に代入される
 
 
 # ====== File System Tools ======
@@ -31,7 +37,7 @@ def read_file(filepath: str, start_line: int | None = None, end_line: int | None
     if start_line is not None and end_line is not None and end_line < start_line:
         return f"start_lineがend_lineを超えています。 start_line: {start_line} end_line: {end_line}"
 
-    r = executor.run(f"cat -n {shlex.quote(filepath)}", TESTBED_PATH, COMMAND_TIMEOUT)
+    r = executor.run(f"cat -n {shlex.quote(filepath)}", testbed_path, COMMAND_TIMEOUT)
     if r.exit_code != 0:
         return f"ファイル読み込みに失敗しました。 {r.stderr}"
 
@@ -67,23 +73,27 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
     args = " ".join(shlex.quote(a) for a in [EDIT_SCRIPT, filepath, old_b64, new_b64])
     command = f"python3 -c {args}"
 
-    # r = executor.run(command, TESTBED_PATH, COMMAND_TIMEOUT)
-    r = executor.run(command, ".", COMMAND_TIMEOUT)
+    r = executor.run(command, testbed_path, COMMAND_TIMEOUT)
     if r.exit_code in (0, 1) and r.stdout.strip():
         return r.stdout.strip()
     return f"exit_code: {r.exit_code}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
+
+
+# @server.tool()
+# def list_files(directory, pattern) -> str:
+#     """List files in a directory matching a given pattern."""
 
 
 # ====== Execution Tools ======
 
 
 @server.tool()
-def run_command(command: str, workdir: str = TESTBED_PATH) -> str:
+def run_command(command: str, workdir: str | None = None) -> str:
     """Execute a shell command in the given working directory.
 
     Returns the command's stdout, stderr and exit code.
     """
-    r = executor.run(command, workdir, COMMAND_TIMEOUT)
+    r = executor.run(command, workdir or testbed_path, COMMAND_TIMEOUT)
     return f"exit_code: {r.exit_code}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
 
 
@@ -96,6 +106,22 @@ def _on_sigterm(signum: int, frame: object) -> None:
     #   （何もしないと、Python は SIGTERM で即座に終わり、finally が動かない）
 
 
+@server.on_initialize()
+def setup(meta: dict[str, Any] | None) -> None:
+    global executor, testbed_path, eval_script
+    conf = (meta or {}).get(META_KEY) or {}
+    image = conf.get("docker_image") or os.environ.get("SWE_DOCKER_IMAGE")
+    testbed_path = conf.get("testbed_path") or os.environ.get("TESTBED_PATH", "/testbed")
+    eval_script = conf.get("eval_script") or os.environ.get("SWE_EVAL_SCRIPT")
+
+    executor.close()          # ★ 2回目の initialize（作り直し）に備えて、古いコンテナを先に片付ける
+    executor = LocalExecutor()
+    if image:
+        docker = DockerExecutor(image)
+        docker.start()        # 失敗したら例外 → initialize がエラーで返る
+        executor = docker
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="SWE-bench MCP Server")
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
@@ -103,12 +129,13 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
-    global executor
-    image = os.environ.get("SWE_DOCKER_IMAGE")
-    if image:
-        docker = DockerExecutor(image)
-        docker.start()
-        executor = docker
+    # on_initilaizeにコンテナ立ち上げは以降
+    # global executor
+    # image = os.environ.get("SWE_DOCKER_IMAGE")
+    # if image:
+    #     docker = DockerExecutor(image)
+    #     docker.start()
+    #     executor = docker
     signal.signal(signal.SIGTERM, _on_sigterm)
     try:
         if args.transport == "http":

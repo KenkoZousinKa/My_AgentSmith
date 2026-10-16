@@ -33,6 +33,7 @@ from src.mcp.client.stdio import StdioClientTransport
 from src.mcp.client.client import MCPClient, DEFAULT_URL, SWE_SERVER_COMMAND, MBPP_SERVER_COMMAND
 from src.mcp.client.mcp_tool_function import MCPToolFunction
 from src.models.output import SolutionOutput
+from mcp_tools_swebench import META_KEY
 # ========= add MangoMan ==========
 
 
@@ -205,22 +206,19 @@ def run_swe_agent(
     # ========= refac MangoMan ==========
     # MCPClient構築
     # httpならurlを取得。なければデフォルトで
-    env = {
-        "SWE_DOCKER_IMAGE": task_input.docker_image,
-        "SWE_EVAL_SCRIPT": task_input.eval_script,
-        "TESTBED_PATH": "/testbed"
-    }
+    init_meta = {META_KEY: {"docker_image": task_input.docker_image,
+                            "eval_script": task_input.eval_script,
+                            "testbed_path": "/testbed"}}  # debug等で指定したPATHからToolsを動かしたい場合のみ使用
 
     t: ClientTransport
     if transport == "stdio":
-        t = StdioClientTransport(command=command or SWE_SERVER_COMMAND, env=env)
+        t = StdioClientTransport(command=command or SWE_SERVER_COMMAND)
     elif transport == "http":
-        t = HttpClientTransport(url=url or DEFAULT_URL, command=SWE_SERVER_COMMAND + " --transport http",
-                                env=env)
+        t = HttpClientTransport(url=url or DEFAULT_URL, command=SWE_SERVER_COMMAND + " --transport http")
     else:
         raise
 
-    with MCPClient(t) as c:
+    with MCPClient(t, init_meta=init_meta) as c:
 
         # MCPServerから使えるツールを取得し、呼びだせる形にする
         tools: dict[str, Callable[..., Any]] = {

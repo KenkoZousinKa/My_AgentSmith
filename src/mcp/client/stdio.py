@@ -1,4 +1,3 @@
-import os
 import time
 import shlex
 import subprocess
@@ -9,11 +8,10 @@ from src.mcp.models import mcpmodel as mcp
 
 
 class StdioClientTransport:
-    def __init__(self, command: str, env: dict[str, str] | None = None) -> None:
+    def __init__(self, command: str) -> None:
         self.command: str = command
         self.process: subprocess.Popen[str]
         self.mcp_version: str
-        self.env: dict[str, str] | None = env
 
     def open(self) -> None:
         """MCPサーバーとの接続をStdioで確立する."""
@@ -25,7 +23,6 @@ class StdioClientTransport:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,       # 送信時に文字列が壊れないように
-            env={**os.environ, **self.env} if self.env else None  # DockerImageとPathの環境設定を渡す
         )
         # 起動直後の即死チェック
         time.sleep(0.1)
