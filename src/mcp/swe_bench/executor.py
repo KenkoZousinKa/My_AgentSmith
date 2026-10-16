@@ -16,16 +16,16 @@ class CommandResult:
 
 
 class Executor(Protocol):
-    def run(self, command: str, workdir: str, timeout: int) -> CommandResult: ...
+    def run(self, command: str, workdir: str, timeout: int, input: str = "") -> CommandResult: ...
     def close(self) -> None: ...
 
 
 class LocalExecutor:
     """TESTBED_PATHのフォルダーでコマンドを実行する."""
 
-    def run(self, command: str, workdir: str, timeout: int) -> CommandResult:
+    def run(self, command: str, workdir: str, timeout: int, input: str = "") -> CommandResult:
         try:
-            r = subprocess.run(["bash", "-c", command], cwd=workdir, capture_output=True,
+            r = subprocess.run(["bash", "-c", command], cwd=workdir, input=input, capture_output=True,
                                text=True, timeout=timeout)
             #  Stdoutを汚さない
         except subprocess.TimeoutExpired as e:
@@ -76,11 +76,12 @@ class DockerExecutor:
                            capture_output=True, text=True)
         return r.stdout.strip() == "true"
 
-    def run(self, command: str, workdir: str, timeout: int) -> CommandResult:
+    def run(self, command: str, workdir: str, timeout: int, input: str = "") -> CommandResult:
         r = subprocess.run(
-            ["docker", "exec", "-w", workdir, self.name,
+            ["docker", "exec", "-i", "-w", workdir, self.name,
              "timeout", str(timeout), "bash", "-c", command],
-            capture_output=True, text=True)  # コンテナの中のコマンドを止めるためにtimeoutを設定
+            input=input, capture_output=True, text=True)  # コンテナの中のコマンドを止めるためにtimeoutを設定
+        # -i: inputをコンテナ内のコマンドのstdinに流す
         return CommandResult(r.stdout, r.stderr, r.returncode)
 
     def close(self) -> None:
