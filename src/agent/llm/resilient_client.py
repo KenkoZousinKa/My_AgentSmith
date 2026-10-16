@@ -9,16 +9,16 @@ priorityに応じてprovider内で複数のキーを回し、型付きエラー�
 (バックオフ: 通信やAPIの呼び出しが失敗した際に少し待機してから再試行する仕組み。リトライの時間調整。)
 (フォールバック: 処理や通信に失敗した際に別の手段や代替案に切り替えること。リトライでだめな時の代替処理。)
 
-- RateLimitError 
-    レートリミットに達したことを示す。即次のキーへ。
+- RateLimitError
+    レートリミットに達したことを示す。バックオフせずに即次のキーへ。
 - ServerError / TransportError
     一過性。バックオフして同一キーで再送。
 - AuthenticationError
-    認証に失敗したことを示す。同一キー再送は無意味。即次のキーへ。
+    認証に失敗したことを示す。バックオフせずに即次のキーへ。
 - BadRequestError
-    リクエスト不正。こちらの責任。即次のキーへ。
+    リクエスト不正。こちらの責任。バックオフせずに即次のキーへ。
 - EmptyResponseError
-    レスポンスが空だった場合。消費したトークンを記録して次のキーへ。
+    レスポンスが空だった場合。消費したトークンを記録してバックオフせずに即次のキーへ。
 - AllProvidersExhausted
     すべてのプロバイダ / すべてのキーを試しても成功しなかった場合に発生する例外。
     上位のOrchestratorはこの例外を捕まえて、success=Falseで返す。
@@ -86,8 +86,7 @@ class AllProvidersExhausted(LLMError):
 class ResilientLLMClient:
     """複数プロバイダ / 複数キーで冗長性と耐障害性を提供するProviderの上位クライアント.
 
-    OrchestratorはProviderと同じ
-    gengerate(messages, stop_sequences, max_tokens)を呼び出すだけでよい。
+    OrchestratorはProviderと同じgengerate(messages, stop_sequences, max_tokens)を呼び出すだけでよい。
     """
 
     def __init__(
@@ -189,7 +188,7 @@ class ResilientLLMClient:
                     # _provider_factoryは、ProviderConfigからLLMProviderを生成する
                     provider = self._provider_factory(config, self._transport, key, model)
 
-                    # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次プロバイダ の順にフォールバックする。
+                    # 1キーでのリトライループ。バックオフ再送 -> 次キー -> 次モデル -> 次プロバイダ の順にフォールバックする。
                     for attempt_on_key in range(self._retry.max_retries_per_key + 1):
                         # リトライを含む総試行回数。上位のOrchestratorがtotal_requestsに加算する。
                         attempts += 1
@@ -223,7 +222,7 @@ class ResilientLLMClient:
                                 )
                                 break
 
-                            # バックオフ秒数を計算し、残予算がなければ次のキーへ。
+                            # バックオフ秒数を計算し、残予算がなければバックオフせずに次のキーへ。
                             wait = self._wait_seconds(error, attempt_on_key)
                             if wait is None:
                                 self._log.warning(
@@ -235,7 +234,7 @@ class ResilientLLMClient:
                                 )
                                 break
 
-                            # バックオフ秒数待機し、同一キーで再送する。
+                            # バックオフ秒数待機し、バックオフ、同一キーで再送する。
                             self._log.warning(
                                 "provider=%s key#%d attempts=%d %s; backoff %.1fs.",
                                 config.name,
@@ -246,7 +245,7 @@ class ResilientLLMClient:
                             )
                             self._sleep(wait)
 
-                        # 4. 認証エラー(401 / 403)は次のキーへ。バックオフはしない。
+                        # 4. 認証エラー(401 / 403)は次のキーへ。バックオフせずに次のキーへ。
                         except AuthenticationError as error:
                             last_error = error
                             self._log.warning(
@@ -257,7 +256,7 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # 5. BadRequestErrorはリクエスト不正。次のキーへ。
+                        # 5. BadRequestErrorはリクエスト不正。バックオフせずに次のキーへ。
                         except BadRequestError as error:
                             last_error = error
                             self._log.error(
@@ -268,7 +267,7 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # 6. EmptyResponseErrorは、レスポンスが空だった場合。消費したトークンを記録して次のキーへ。
+                        # 6. EmptyResponseErrorは、レスポンスが空だった場合。消費したトークンを記録してバックオフせずに次のキーへ。
                         except EmptyResponseError as error:
                             last_error = error
                             wasted_input_tokens += error.input_tokens
@@ -281,8 +280,8 @@ class ResilientLLMClient:
                             )
                             break
 
-                        # 7. その他のLLMError(レスポンスの解釈失敗など)は、次のキーへ。バックオフはしない。
-                        # 現状LLMHTTPError系のみ?
+                        # 7. その他のLLMError(レスポンスの解釈失敗など)はバックオフせずに次のキーへ。
+                        # 現状LLMHTTPError系のみ?LLMHTTPErrorは送出されないのでここには来ない？
                         except LLMError as error:
                             last_error = error
                             self._log.error(
@@ -321,5 +320,7 @@ class ResilientLLMClient:
         # attemptsはリトライを含む総試行回数
         raise AllProvidersExhausted(
             f"All providers/keys exhausted after {attempts} attempt(s).",
-            attempts=attempts
+            attempts=attempts,
+            input_tokens=wasted_input_tokens,
+            output_tokens=wasted_output_tokens
         ) from last_error
