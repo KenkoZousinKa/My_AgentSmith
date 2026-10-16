@@ -11,6 +11,7 @@ LimitTrackerの先頭ガード -> LLM生成 -> <end_code>除去 -> コード抽�
 from src.agent.extractor.code_extractor import CodeExtractor
 from src.agent.limits import LimitTracker
 from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
+from src.agent.llm.resilient_client import AllProvidersExhausted
 from src.agent.observation import build_observation, observation_no_code
 from src.agent.llm.transport.transport import TransportError
 from src.agent.prompt.task_profile.task_profile import TaskProfile
@@ -95,9 +96,15 @@ class Orchestrator:
                     stop_sequences=self.stop_sequences,
                     max_tokens=max_tokens
                 )
-            # AllProvidersExhausted / BadRequestErrorをLLMErrorで一括で補足
-            except (LLMError, TransportError) as error:
+            # 全部のプロバイダ / 全部のキーを試しても成功しなかった場合に登ってくる。LLM呼び出しが失敗した場合。
+            except AllProvidersExhausted as error:
+                # 総試行回数を取得する
                 failed_requests = getattr(error, "attempts", 1)
+                # 消費トークン数をLimitTrackerに記録する
+                tracker.record_usage(
+                    getattr(error, "input_tokens", 0),
+                    getattr(error, "output_tokens", 0)
+                )
                 return self._build_solution(
                     task_id=task_id,
                     benchmark=benchmark,
