@@ -186,3 +186,21 @@ def test_total_requests_includes_failed_attempts() -> None:
     assert solution.error == "LLM_UNAVAILABLE"
     assert len(solution.steps) == 1          # 1回目のstepだけ積まれる
     assert solution.total_requests == 1 + 3  # step1の1試行 + 全滅時の3試行
+
+class _EmptyThenExhaustedProvider:
+    """全滅し、空応答で消費したトークンを例外に持たせて送出する."""
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        raise AllProvidersExhausted("exhausted", attempts=2, input_tokens=900, output_tokens=600)
+
+
+def test_exhausted_wasted_tokens_are_counted_in_totals() -> None:
+    """全滅しても、空応答で消費されたトークンは SolutionOutput の合計に入る(制限の判定を甘くしない)."""
+    orchestrator = Orchestrator(
+        provider=_EmptyThenExhaustedProvider(), extractor=PythonCodeExtractor(), sandbox=MockSandbox(),
+        profile=MBPPProfile(), limits=_limits(),
+    )
+    solution = orchestrator.run("82", "mbpp", "task")
+    assert solution.error == "LLM_UNAVAILABLE"
+    assert (solution.total_input_tokens, solution.total_output_tokens) == (900, 600)
+    assert solution.total_requests == 2

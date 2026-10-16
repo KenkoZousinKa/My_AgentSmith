@@ -8,6 +8,7 @@ import pytest
 from src.agent.llm.provider.provider import (
     AuthenticationError,
     BadRequestError,
+    EmptyResponseError,
     LLMResponse,
     ProviderConfig,
     RateLimitError,
@@ -224,3 +225,42 @@ def test_resilient_sends_string_model_and_iterates_models(monkeypatch: pytest.Mo
     assert res.model_name == "m/two"
     assert sent_models == ["m/one", "m/two"]
     assert all(isinstance(m, str) for m in sent_models)
+
+def test_empty_response_tokens_are_added_to_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空応答で消費したトークンは、成功したレスポンスの使用量に足される(過少計上しない)."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    scripts: dict[str, list[object]] = {
+        "k1": [EmptyResponseError("empty", input_tokens=900, output_tokens=600)],
+        "k2": [_ok_response("p2/model")]}
+    client, slept = _client(providers, scripts)
+    res = _gen(client)
+    assert res.model_name == "p2/model"
+    assert (res.input_tokens, res.output_tokens) == (901, 601)
+    assert res.retries == 1
+    assert slept == []  # 空応答は待っても直らないので、待たずに次へ
+
+
+def test_exhausted_carries_wasted_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """全滅した場合も、空応答で消費したトークンを例外に持たせて上位へ渡す."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    providers = [_config("p1", "P1_KEY", 1)]
+    scripts: dict[str, list[object]] = {"k1": [EmptyResponseError("empty", input_tokens=50, output_tokens=7)]}
+    client, _ = _client(providers, scripts)
+    with pytest.raises(AllProvidersExhausted) as info:
+        _gen(client)
+    assert (info.value.input_tokens, info.value.output_tokens) == (50, 7)
+    assert isinstance(info.value.__cause__, EmptyResponseError)
+
+
+def test_unparsable_response_advances_to_next_combo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """解釈できないレスポンス(素のLLMError)でも落ちず、次のプロバイダを試す."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    scripts: dict[str, list[object]] = {
+        "k1": [LLMError("Failed to parse response")],
+        "k2": [_ok_response("p2/model")]}
+    client, _ = _client(providers, scripts)
+    assert _gen(client).model_name == "p2/model"
