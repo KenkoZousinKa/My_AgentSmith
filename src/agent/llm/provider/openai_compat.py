@@ -52,6 +52,9 @@ class OpenAICompatProvider(LLMProvider):
             payload["stop"] = stop_sequences
 
         payload.update(self.config.additional_params)
+        # 同じプロバイダでもモデルによって必要な設定が異なる場合があるため、
+        # モデル単位の設定はプロバイダ単位の設定より後で適用して上書きする。
+        payload.update(self.config.model_params.get(self.model, {}))
 
         return url, headers, json.dumps(payload)
 
@@ -73,7 +76,10 @@ class OpenAICompatProvider(LLMProvider):
             data: dict[str, Any] = json.loads(body)
             message: dict[str, Any] = data["choices"][0]["message"]
             text = message.get("content")
-        # AttributeErrorは、choices[0]が存在しない(null)場合に発生する可能性がある
+        # AttributeErrorは、messageがnullの場合に発生する可能性がある
+        # choicesが空の場合、IndexError
+        # choicesが存在しない場合、KeyError
+        # choices[0]がnullの場合、TypeError
         except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as e:
             raise LLMError(f"Failed to parse response: {e}: {body[:500]}") from e
 
