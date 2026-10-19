@@ -29,11 +29,7 @@ backoff / retry の設定はRetrySettings(config.json)。
 
 - 下記を提供
 AllProvidersExhausted
-ResilientLLMClient def _wait_second def generate()
-
-Todo:
-    - [ ] A-04で待ち時間、タイムアウト、後回しで_sweep / _candidatesに分割、watedは[入力、出力]のリストで受け渡す。
-    - [ ]上記変更でwasted_input/output_tokensを変更する。
+ResilientLLMClient def _wait_seconds def generate()
 """
 import time
 import logging
@@ -63,8 +59,8 @@ ProviderFactory = Callable[[ProviderConfig, HttpTransport, str, str], LLMProvide
 # 全ローテーションの最大回数。
 _MAX_SWEEPS = 2
 # 同じタスク内でリトライしても無駄な組み合せ。
-# (provider_config, api_key, model_name)
-_Combo = tuple[ProviderConfig, int, str]
+# (provider_name, api_key, model_name)
+_Combo = tuple[str, int, str]
 # この周回で試す組み合せ。
 # (provider_config, api_key_index, model_name, attempt_on_key)
 _Candidate = tuple[ProviderConfig, int, str, str]
@@ -77,6 +73,7 @@ class AllProvidersExhausted(LLMError):
     Attributes:
         attempts (int): 試行回数。成功までのリトライを含む。
             上位のOrchestratorはこの例外を捕まえて、total_requestsに加算する。
+        retry_after (float | None): 周回中に観測した最短の待機秒数。Noneなら429なし。
         input_tokens (int): 失敗した試行中(空応答)にプロバイダ側で消費した入力トークン数。
         output_tokens (int): 失敗した試行中(空応答)にプロバイダ側で消費した出力トークン数。
     """
@@ -88,7 +85,7 @@ class AllProvidersExhausted(LLMError):
         input_tokens: int = 0,
         output_tokens: int = 0
     ) -> None:
-        super().__init__(message, attempts, input_tokens, output_tokens)
+        super().__init__(message, attempts, retry_after, input_tokens, output_tokens)
         self.attempts = attempts
         self.retry_after = retry_after
         self.input_tokens = input_tokens
@@ -145,14 +142,13 @@ class ResilientLLMClient:
             return None
         return self._time_remaining() - self._retry.safety_margin_seconds
 
-    def _wait_seconds(self, error: BaseException, attempt_on_key: int) -> float | None:
+    def _wait_seconds(self, attempt_on_key: int) -> float | None:
         """一過性のエラー(500系 / ネットワークエラー)でバックオフする秒数を返す。残予算がなければNone.
 
         指数バックオフ(base * 2^n)をmaxまでクランプする。
         generate() -> _sweep() -> _wait_seconds() の順に呼ばれる。
 
         Args:
-            error (BaseException): 一過性のエラー。ServerError / TransportError のいずれか。
             attempt_on_key (int): 同一キーでのリトライ回数。0から始まる。
 
         Returns:
@@ -161,12 +157,12 @@ class ResilientLLMClient:
         wait: float = min(self._retry.backoff_base_seconds * (2 ** attempt_on_key), self._retry.backoff_max_seconds)
 
         # 残り時間から安全マージンを引いた秒数を取得
-        badget = self._budget()
-        if badget is None:
+        budget = self._budget()
+        if budget is None:
             return wait
 
         # 予算が0以下なら、残予算がないのでNoneを返す。
-        if badget <= 0:
+        if budget <= 0:
             return None
 
         return wait
@@ -317,18 +313,17 @@ class ResilientLLMClient:
                 )
                 continue
 
-        # すべてのキーとモデルを順番に並べる。1組み合わせ1リクエスト。
-        for key_number, key in enumerate(keys, start=1):
-            for model in config.models:
-                candidate = (config, key_number, key, model)
-                # 一過性でない失敗を起こした組み合わせは後回しにする。
-                if (config.name, key_number, model) in self._demoted:
-                    demoted.append(candidate)
-                else:
-                    preferred.append(candidate)
+            # すべてのキーとモデルを順番に並べる。1組み合わせ1リクエスト。
+            for key_number, key in enumerate(keys, start=1):
+                for model in config.models:
+                    candidate = (config, key_number, key, model)
+                    # 一過性でない失敗を起こした組み合わせは後回しにする。
+                    if (config.name, key_number, model) in self._demoted:
+                        demoted.append(candidate)
+                    else:
+                        preferred.append(candidate)
 
         return preferred + demoted
-
 
     def _sweep(
         self,
@@ -375,7 +370,7 @@ class ResilientLLMClient:
                 # timeoutを差し替えてProviderを生成して、generate()を呼ぶ。
                 # _provider_factoryは、ProviderConfigからLLMProviderを生成する
                 provider = self._provider_factory(
-                    config.model_copy(update={"request_timeout": timeout}),
+                    config.model_copy(update={"request_timeout_sec": timeout}),
                     self._transport,
                     key,
                     model
@@ -387,10 +382,14 @@ class ResilientLLMClient:
                 # 1. RateLimitError(429)はバックオフせずに次のモデルへ。
                 except RateLimitError as error:
                     last_error = error
+                    rate_limit_waits.append(
+                        error.retry_after if error.retry_after is not None else self._retry.backoff_max_seconds
+                    )
                     self._log.warning(
-                        "provider=%s key#%d attempts=%d rate limited (retry_after=%s); advance, no backoff.",
+                        "provider=%s key#%d model=%s attempts=%d rate limited (retry_after=%s); advance, no backoff.",
                         config.name,
                         key_number,
+                        model,
                         attempts,
                         error.retry_after
                     )
@@ -402,9 +401,10 @@ class ResilientLLMClient:
                     # 1つのキーでのリトライ回数が上限に達したら、次のキーへ。
                     if attempt_on_key >= self._retry.max_retries_per_key:
                         self._log.warning(
-                            "provider=%s key#%d attempts=%d %s; give up key",
+                            "provider=%s key#%d model=%s attempts=%d %s; give up key",
                             config.name,
                             key_number,
+                            model,
                             attempts,
                             type(error).__name__
                         )
@@ -414,9 +414,10 @@ class ResilientLLMClient:
                     wait = self._wait_seconds(error, attempt_on_key)
                     if wait is None:
                         self._log.warning(
-                            "provider=%s key#%d attempts=%d %s; no time budget, give up key.",
+                            "provider=%s key#%d model=%s attempts=%d %s; no time budget, give up key.",
                             config.name,
                             key_number,
+                            model,
                             attempts,
                             type(error).__name__
                         )
@@ -424,9 +425,10 @@ class ResilientLLMClient:
 
                     # バックオフ秒数待機し、バックオフ、同一キーで再送する。
                     self._log.warning(
-                        "provider=%s key#%d attempts=%d %s; backoff %.1fs.",
+                        "provider=%s key#%d model=%s attempts=%d %s; backoff %.1fs.",
                         config.name,
                         key_number,
+                        model,
                         attempts,
                         type(error).__name__,
                         wait
@@ -436,10 +438,12 @@ class ResilientLLMClient:
                 # 4. 認証エラー(401 / 403)は次のキーへ。バックオフせずに次のモデルへ。
                 except AuthenticationError as error:
                     last_error = error
+                    self._demoted.add(combo)
                     self._log.warning(
-                        "provider=%s key#%d attempts=%d auth/quota; next combo.",
+                        "provider=%s key#%d model=%s attempts=%d auth/quota; next combo.",
                         config.name,
                         key_number,
+                        model,
                         attempts
                     )
                     break
@@ -447,10 +451,12 @@ class ResilientLLMClient:
                 # 5. BadRequestErrorはリクエスト不正。バックオフせずに次のモデルへ。
                 except BadRequestError as error:
                     last_error = error
+                    self._demoted.add(combo)
                     self._log.error(
-                        "provider=%s key#%d bad request; skip combo: %s.",
+                        "provider=%s key#%d model=%s bad request; skip combo: %s.",
                         config.name,
                         key_number,
+                        model,
                         error
                     )
                     break
@@ -458,13 +464,17 @@ class ResilientLLMClient:
                 # 6. EmptyResponseErrorは、レスポンスが空だった場合。消費したトークンを記録してバックオフせずに次のモデルへ。
                 except EmptyResponseError as error:
                     last_error = error
+                    self._demoted.add(combo)
                     wasted[0] += error.input_tokens
                     wasted[1] += error.output_tokens
                     self._log.warning(
-                        "provider=%s key#%d attempts=%d empty response; next combo.",
+                        "provider=%s key#%d model=%s attempts=%d empty response(wasted in=%d, out=%d); next combo.",
                         config.name,
                         key_number,
-                        attempts
+                        model,
+                        attempts,
+                        error.input_tokens,
+                        error.output_tokens
                     )
                     break
 
@@ -474,10 +484,12 @@ class ResilientLLMClient:
                 # 今後の拡張でLLMErrorの子孫クラスを追加する場合もここで捕らえる。
                 except LLMError as error:
                     last_error = error
+                    self._demoted.add(combo)
                     self._log.error(
-                        "provider=%s key#%d attempts=%d LLMError; next combo: %s.",
+                        "provider=%s key#%d model=%s attempts=%d LLMError; next combo: %s.",
                         config.name,
                         key_number,
+                        model,
                         attempts,
                         error
                     )
@@ -491,9 +503,10 @@ class ResilientLLMClient:
                     # 成功した組み合わせは、次のタスクで後回しにしないようにする。
                     self._demoted.discard(combo)
                     self._log.info(
-                        "provider=%s key#%d success after %d attempt(s)",
+                        "provider=%s key#%d model=%s success after %d attempt(s)",
                         config.name,
                         key_number,
+                        model,
                         attempts
                     )
                     return response
