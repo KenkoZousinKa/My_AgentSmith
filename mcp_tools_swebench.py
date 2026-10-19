@@ -19,7 +19,8 @@ META_KEY = "agentsmith/swebench"
 server = MCPServer(name="agent-smith-swebench", version="0.1.0")
 executor: Executor = LocalExecutor()
 
-testbed_path: str = "/testbed"
+# testbed_path: str = "/testbed"
+testbed_path: str = "."
 eval_script: str | None = None
 # on_initializeで環境変数から動的に代入される
 

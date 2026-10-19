@@ -112,18 +112,7 @@ class HttpServerTransport:
 
     def _route(self, request: HttpRequest,
                handle: Callable[[str], rpc.JSONRPCResponse | rpc.JSONRPCError | None]) -> HttpResponse:
-        """リクエストオブジェクトの解析後、レスポンスオブジェクトを作成して返す
-       順	確かめること	当てはまったら
-        1	パスが /mcp 以外	404
-        2	Origin が localhost 以外	403
-        3	POST 以外	405（Allow: POST）
-        4	Content-Length が無い（transfer-encoding がある場合も）	411
-        5	本文が initialize	handle に渡し、成功ならセッション ID を付けて 200
-        6	Mcp-Session-Id が無い	400
-        7	知らないセッション ID	404
-        8	MCP-Protocol-Version が未対応	400
-        9	handle の結果	返事があれば 200、None なら 202
-        """
+        """リクエストオブジェクトの解析後、レスポンスオブジェクトを作成して返す"""
         # ====== HTTP ======
         # Pathが/mcp以外を弾く
         if request.path != "/mcp":
@@ -178,7 +167,7 @@ class HttpServerTransport:
         code = 400 if isinstance(data, rpc.JSONRPCError) and data.error.code in json_error else 200
 
         headers = {"Content-Type": "application/json"}
-        if is_initialize and isinstance(data, rpc.JSONRPCResponse):
+        if is_initialize and isinstance(data, rpc.JSONRPCResponse):  # InitializeかつerrorじゃなければセッションIDを設定
             session_id = uuid.uuid4().hex
             self.sessions.add(session_id)
             headers["Mcp-Session-Id"] = session_id
