@@ -6,9 +6,10 @@
 思考トークンも出力トークンとして数えるため、
 プロバイダのusage情報が実際より小さい場合は過小計上を防ぐため大きい方を採用する。
 """
+import math
 from typing import Any
 
-_CHARS_PER_TOKEN = 4  # 1トークンあたりの文字数の概算値
+_CHARS_PER_TOKEN = 3  # 1トークンあたりの文字数の概算値
 
 
 def estimate_tokens_from_text(text: str) -> int:
@@ -35,8 +36,12 @@ def _as_int(value: Any) -> int | None:
         int | None: 整数に変換できる場合はその値、できない場合はNone。
     """
     # boolはintのサブクラスなので、isinstance(value, int)はTrueになるため、boolを先に除外する
-    # strの場合は？
+    # strの場合は壊れたusage情報として扱い、Noneを返す
     if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+
+    # NaN / 無限大はint()で例外になり、負の値はトークン数として不正なのでNoneを返す
+    if not math.isfinite(value) or value < 0:
         return None
     return int(value)
 
