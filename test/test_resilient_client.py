@@ -45,20 +45,21 @@ class _ScriptedProvider:
     """generate 呼び出しごとに、与えた「結果 or 例外」を順に返す/送出するフェイクProvider.
 
     ファクトリ経由で (config, transport, key) から生成されるが、挙動は key 列ごとに
-    外側の辞書 scripts[key] のイテレータで決める。
+    外側の辞書 scripts[key] の先頭から消費して決める。クライアントは試行ごとに
+    (残り時間に合わせたタイムアウトで)Providerを作り直すため、進み具合は
+    インスタンスではなく共有リストで持つ。
     """
 
     def __init__(self, config: ProviderConfig, transport: HttpTransport, key: str,
                  scripts: dict[str, list[object]]) -> None:
         self._key = key
-        self._script = scripts.get(key, [])
-        self._index = 0
+        self._script = scripts.setdefault(key, [])
+        self.config = config
 
     def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
-        if self._index >= len(self._script):
+        if not self._script:
             raise AssertionError(f"no scripted action left for key={self._key}")
-        action = self._script[self._index]
-        self._index += 1
+        action = self._script.pop(0)
         if isinstance(action, BaseException):
             raise action
         assert isinstance(action, LLMResponse)
@@ -103,7 +104,7 @@ def test_retry_same_key_then_success_counts_retries(monkeypatch: pytest.MonkeyPa
     """ServerError(5xx)で1回バックオフ再送し2回目で成功。retries=1、sleepが1回。"""
     monkeypatch.setenv("P1_KEY", "k1")
     providers = [_config("p1", "P1_KEY", 1)]
-    scripts = {"k1": [ServerError("500", status=500), _ok_response()]}
+    scripts: dict[str, list[object]] = {"k1": [ServerError("500", status=500), _ok_response()]}
     client, slept = _client(providers, scripts)
     res = _gen(client)
     assert res.retries == 1
@@ -114,7 +115,7 @@ def test_rate_limit_advances_without_backoff(monkeypatch: pytest.MonkeyPatch) ->
     """429は待たず次のキーへ(retry_afterがあっても待たない)。"""
     monkeypatch.setenv("P1_KEY", "k1"); monkeypatch.setenv("P1_KEY_2", "k2")
     providers = [_config("p1", "P1_KEY", 1)]
-    scripts = {"k1": [RateLimitError("429", status=429, retry_after=3.0)], "k2": [_ok_response()]}
+    scripts: dict[str, list[object]] = {"k1": [RateLimitError("429", status=429, retry_after=3.0)], "k2": [_ok_response()]}
     client, slept = _client(providers, scripts)
     res = _gen(client)
     assert res.retries == 1
@@ -173,31 +174,111 @@ def test_all_exhausted_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc_info.value.attempts == 1  # key1つ×max_retries_per_key=0 => 1試行で全滅
 
 
-
 def test_bad_request_skips_combo_and_continues(monkeypatch: pytest.MonkeyPatch) -> None:  # 旧 test_bad_request_aborts_immediately を置換
     """BadRequest(不明モデルID等)はこの組合せを飛ばし、次キー/次モデルを試す。"""
     monkeypatch.setenv("P1_KEY", "k1"); monkeypatch.setenv("P1_KEY_2", "k2")
     providers = [_config("p1", "P1_KEY", 1)]
-    scripts = {"k1": [BadRequestError("400", status=400)], "k2": [_ok_response()]}
+    scripts: dict[str, list[object]] = {"k1": [BadRequestError("400", status=400)], "k2": [_ok_response()]}
     client, slept = _client(providers, scripts)
     res = _gen(client)
     assert res.retries == 1
     assert slept == []
 
 
-def test_no_time_budget_gives_up_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """残予算が尽きていれば待たずにキーを諦める(p2へフォールバック)."""
+def test_no_time_budget_stops_without_sending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """残り時間が安全マージン以下なら、送信せずに打ち切る(送ると制限時間を越えて強制終了される)."""
     monkeypatch.setenv("P1_KEY", "k1")
     monkeypatch.setenv("P2_KEY", "k2")
     providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
     retry = RetrySettings(max_retries_per_key=2, safety_margin_seconds=2.0)
-    # time_remaining=1.0 < safety_margin=2.0 -> budget<=0 -> 待てない -> キー諦め -> p2へ
-    scripts: dict[str, list[object]] = {
-        "k1": [RateLimitError("429", status=429, retry_after=None)], "k2": [_ok_response("p2/model")]}
+    scripts: dict[str, list[object]] = {"k1": [_ok_response()], "k2": [_ok_response("p2/model")]}
     client, slept = _client(providers, scripts, retry=retry, time_remaining=lambda: 1.0)
+    with pytest.raises(AllProvidersExhausted) as info:
+        _gen(client)
+    assert info.value.attempts == 0
+    assert slept == []
+    assert scripts["k1"] and scripts["k2"]   # どちらにも送っていない
+
+
+def test_request_timeout_is_clamped_to_remaining_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """リクエストのタイムアウトは min(設定の60秒, 残り時間 - 安全マージン) に切り詰める."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    providers = [_config("p1", "P1_KEY", 1)]
+    retry = RetrySettings(safety_margin_seconds=2.0)
+    timeouts: list[float] = []
+    scripts: dict[str, list[object]] = {"k1": [_ok_response(), _ok_response()]}
+
+    def factory(config: ProviderConfig, transport: HttpTransport, key: str, model: str) -> _ScriptedProvider:
+        timeouts.append(config.request_timeout_sec)
+        return _ScriptedProvider(config, transport, key, scripts)
+
+    remaining = [30.0]
+    client = ResilientLLMClient(
+        providers=providers, transport=_NullTransport(), retry=retry,
+        provider_factory=factory,  # type: ignore[arg-type]
+        sleep=lambda seconds: None, time_remaining=lambda: remaining[0],
+    )
+    _gen(client)
+    remaining[0] = 100.0
+    _gen(client)
+    assert timeouts == [28.0, 60.0]   # 30 - 2 / 設定値の60のまま
+    assert providers[0].request_timeout_sec == 60.0   # 元の設定は書き換えない
+
+
+def test_server_error_backoff_is_clamped_then_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    """5xxのバックオフは残り時間-マージンにクランプされ、再送も失敗すれば次プロバイダへ."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    retry = RetrySettings(max_retries_per_key=1, backoff_base_seconds=4.0, safety_margin_seconds=2.0)
+    scripts: dict[str, list[object]] = {
+        "k1": [ServerError("503", status=503), ServerError("503", status=503)],
+        "k2": [_ok_response("p2/model")]}
+    client, slept = _client(providers, scripts, retry=retry, time_remaining=lambda: 5.0)
     res = _gen(client)
     assert res.model_name == "p2/model"
-    assert slept == []   # 待機せずに諦めた
+    assert slept == [3.0]   # min(4.0, 5.0 - 2.0)
+
+
+def test_rate_limited_sweep_waits_once_then_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """全組合せが429で全滅し、retry_afterが残り時間に収まるなら、1回だけ待ってもう1周する."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    scripts: dict[str, list[object]] = {
+        "k1": [RateLimitError("429", status=429, retry_after=5.0), _ok_response("p1/model")],
+        "k2": [RateLimitError("429", status=429, retry_after=2.0)]}
+    client, slept = _client(providers, scripts, time_remaining=lambda: 100.0)
+    res = _gen(client)
+    assert slept == [2.0]            # 観測した最短の retry_after だけ待つ
+    assert res.model_name == "p1/model"
+    assert res.retries == 2          # 1周目の2回を通算で計上
+
+
+def test_rate_limit_longer_than_remaining_time_is_not_waited(monkeypatch: pytest.MonkeyPatch) -> None:
+    """retry_afterが残り時間に収まらない(日次枠切れ等)なら、待たずに全滅を返す."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    providers = [_config("p1", "P1_KEY", 1)]
+    scripts: dict[str, list[object]] = {"k1": [RateLimitError("429", status=429, retry_after=500.0)]}
+    client, slept = _client(providers, scripts, time_remaining=lambda: 30.0)
+    with pytest.raises(AllProvidersExhausted) as info:
+        _gen(client)
+    assert slept == []
+    assert info.value.attempts == 1
+    assert isinstance(info.value.__cause__, RateLimitError)
+
+
+def test_second_sweep_is_not_tried_without_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """429以外(認証エラー等)で全滅したら、待っても直らないので2周目はしない."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    providers = [_config("p1", "P1_KEY", 1)]
+    scripts: dict[str, list[object]] = {"k1": [AuthenticationError("401", status=401), _ok_response()]}
+    client, slept = _client(providers, scripts, time_remaining=lambda: 100.0)
+    with pytest.raises(AllProvidersExhausted) as info:
+        _gen(client)
+    assert slept == []
+    assert info.value.attempts == 1
+    assert scripts["k1"]   # 2回目は送っていない
 
 
 def test_resilient_sends_string_model_and_iterates_models(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -226,6 +307,7 @@ def test_resilient_sends_string_model_and_iterates_models(monkeypatch: pytest.Mo
     assert res.model_name == "m/two"
     assert sent_models == ["m/one", "m/two"]
     assert all(isinstance(m, str) for m in sent_models)
+
 
 def test_empty_response_tokens_are_added_to_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """空応答で消費したトークンは、成功したレスポンスの使用量に足される(過少計上しない)."""
@@ -265,3 +347,35 @@ def test_unparsable_response_advances_to_next_combo(monkeypatch: pytest.MonkeyPa
         "k2": [_ok_response("p2/model")]}
     client, _ = _client(providers, scripts)
     assert _gen(client).model_name == "p2/model"
+
+
+def test_failed_combo_is_demoted_on_next_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """空応答を返したモデルは、同じタスクの次の呼び出しでは後回しにされる."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    scripts: dict[str, list[object]] = {
+        "k1": [EmptyResponseError("empty")],
+        "k2": [_ok_response("p2/model"), _ok_response("p2/model")]}
+    client, _ = _client(providers, scripts)
+    _gen(client)
+    second = _gen(client)
+    assert second.model_name == "p2/model"
+    assert second.retries == 0   # p1を飛ばしてp2が1回目で成功
+
+
+def test_demoted_combo_is_still_tried_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    """後回しにした組合せも捨てはしない。ほかが全部だめなら最後に試し、成功すれば後回しを解除する."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    scripts: dict[str, list[object]] = {
+        "k1": [BadRequestError("400", status=400), _ok_response("p1/model"), _ok_response("p1/model")],
+        "k2": [_ok_response("p2/model"), ServerError("503", status=503)]}
+    retry = RetrySettings(max_retries_per_key=0)
+    client, _ = _client(providers, scripts, retry=retry)
+    assert _gen(client).model_name == "p2/model"   # p1は400で後回しに
+    assert _gen(client).model_name == "p1/model"   # p2が503 -> 後回しのp1を最後に試して成功
+    third = _gen(client)
+    assert third.model_name == "p1/model"          # 成功したので後回しが解除され、先頭に戻った
+    assert third.retries == 0
