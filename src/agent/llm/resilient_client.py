@@ -59,10 +59,10 @@ ProviderFactory = Callable[[ProviderConfig, HttpTransport, str, str], LLMProvide
 # 全ローテーションの最大回数。
 _MAX_SWEEPS = 2
 # 同じタスク内でリトライしても無駄な組み合せ。
-# (provider_name, api_key, model_name)
+# (provider_name, key_number, model_name)
 _Combo = tuple[str, int, str]
 # この周回で試す組み合せ。
-# (provider_config, api_key_index, model_name, attempt_on_key)
+# (provider_config, key_number, api_key, model_name)
 _Candidate = tuple[ProviderConfig, int, str, str]
 
 
@@ -165,7 +165,7 @@ class ResilientLLMClient:
         if budget <= 0:
             return None
 
-        return wait
+        return min(wait, budget)
 
     def _request_timeout(self, config: ProviderConfig) -> float | None:
         """このリクエストに使えるHTTPタイムアウト秒数を返す。残予算がなければNone.
@@ -175,7 +175,7 @@ class ResilientLLMClient:
         generate() -> _sweep() -> _request_timeout() の順に呼ばれる。
 
         Args:
-            config (ProviderConfig): 送信先のプロバイダ設定。request_timeoutを参照する
+            config (ProviderConfig): 送信先のプロバイダ設定。request_timeout_secを参照する
 
         Returns:
             float | None: このリクエストに使えるHTTPタイムアウト秒数。残り時間がない場合はNone。
@@ -189,7 +189,7 @@ class ResilientLLMClient:
         if budget <= 1.0:
             return None
 
-        return config.request_timeout_sec
+        return min(config.request_timeout_sec, budget)
 
     def _sweep_wait(self, retry_after: float | None) -> float | None:
         """全組み合わせ全滅のあと、もう一周するために待つ秒数を返す。残予算がなければNone.
@@ -295,7 +295,7 @@ class ResilientLLMClient:
 
         一過性でない失敗を起こした時は、捨てずに最後に回す。
         Returns:
-            list[_Candidate]: (provider_config, api_key_index, model_name, attempt_on_key) のリスト。
+            list[_Candidate]: (provider_config, key_number, api_key, model_name) のリスト。
         """
         preferred: list[_Candidate] = []
         demoted: list[_Candidate] = []
@@ -411,7 +411,7 @@ class ResilientLLMClient:
                         break
 
                     # バックオフ秒数を計算し、残予算がなければバックオフせずに次のモデルへ。
-                    wait = self._wait_seconds(error, attempt_on_key)
+                    wait = self._wait_seconds(attempt_on_key)
                     if wait is None:
                         self._log.warning(
                             "provider=%s key#%d model=%s attempts=%d %s; no time budget, give up key.",
