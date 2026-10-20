@@ -19,7 +19,7 @@ from src.agent.llm.resilient_client import ResilientLLMClient
 from src.agent.llm.transport.requests_transport import RequestsTransport
 from src.agent.orchestrator import Orchestrator
 from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile
-from src.config.settings import load_providers, load_settings, select_provider
+from src.config.settings import load_providers, load_settings, order_providers
 from src.models.input import MBPPTaskInput
 from src.sandbox.sandbox_main import Sandbox
 from src.models.sandbox_config import SandboxConfig
@@ -71,8 +71,9 @@ def run_mbpp_agent(
     load_dotenv()
 
     providers = load_providers(providers_file_path)
-    # select_providerはpriority[0](最小)を基点に上書きコピーを返す
-    primary_provider = select_provider(providers, model_name, provider_url)
+    # CLIで指定されたmodel_name / provider_urlを先頭にし、残りはproviders.jsonのpriority順に並べる
+    # providers.jsonにないモデル / URLは、ValueErrorで止める。
+    primary_provider = order_providers(providers, model_name, provider_url)[0]
     # primary_providerを先頭にして優先度順に並べる
     providers = [primary_provider, *providers[1:]]
 
