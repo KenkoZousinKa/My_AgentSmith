@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from dotenv import load_dotenv
 
-from src.agent.extractor.python_extractor import PythonCodeExtractor
+from src.agent.extractor.composite_extractor import CompositeCodeExtractor
 from src.agent.llm.resilient_client import ResilientLLMClient
 # from src.agent.llm.key_manager import resolve_api_key
 # from src.agent.llm.provider.openai_compat import OpenAICompatProvider
@@ -99,7 +99,7 @@ def run_mbpp_agent(
         # Provider(ResilientLLMClient) / Sandbox / Orchestrator 構築
         orchestrator = Orchestrator(
             provider=client,
-            extractor=PythonCodeExtractor(),
+            extractor=CompositeCodeExtractor(),
             sandbox=sandbox,
             profile=MBPPProfile(),
             limits=settings.limits

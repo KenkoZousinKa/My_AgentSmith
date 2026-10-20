@@ -1,5 +1,6 @@
 """Orchestrator(orchestrator.py)のループ制御テスト。LLMはStubProviderで決定的に差替."""
 from src.agent.llm.resilient_client import AllProvidersExhausted
+from src.agent.extractor.composite_extractor import CompositeCodeExtractor
 from src.agent.extractor.python_extractor import PythonCodeExtractor
 from src.agent.llm.provider.provider import LLMProvider, LLMResponse
 from src.agent.orchestrator import Orchestrator
@@ -234,3 +235,32 @@ def test_draft_final_answer_in_an_earlier_block_is_not_submitted() -> None:
     solution = _orchestrator([two_blocks]).run("82", "mbpp", "task")
     assert solution.success is True
     assert solution.solution == "def f():\n    return 1"
+
+
+def _composite_orchestrator(responses: list[str]) -> Orchestrator:
+    """CLIと同じCompositeCodeExtractorを使うOrchestrator(A-07)."""
+    return Orchestrator(
+        provider=StubProvider(responses),
+        extractor=CompositeCodeExtractor(),
+        sandbox=MockSandbox(),
+        profile=MBPPProfile(),
+        limits=_limits(),
+    )
+
+
+def test_react_final_answer_is_submitted_through_the_loop() -> None:
+    """ReAct形式の final_answer が変換・実行され、引数名(answer)が違っても提出される."""
+    react = 'Thought: done.\nAction: final_answer\nAction Input: {"answer": "def f():\\n    return 1"}'
+    solution = _composite_orchestrator([react]).run("82", "mbpp", "task")
+    assert solution.success is True
+    assert solution.solution == "def f():\n    return 1"
+    assert solution.steps[0].sandbox_input == "print(final_answer('def f():\\n    return 1'))"
+
+
+def test_hermes_tool_call_then_python_final_answer() -> None:
+    """Hermes形式の呼び出しを実行してObservationを返し、次の反復のPythonブロックで提出する."""
+    hermes = '<tool_call>{"name": "print", "arguments": {"sep": "-"}}</tool_call>'
+    solution = _composite_orchestrator([hermes, _RESP_FINAL]).run("82", "mbpp", "task")
+    assert solution.success is True
+    assert solution.iterations == 2
+    assert solution.steps[0].sandbox_input == "print(print(sep='-'))"

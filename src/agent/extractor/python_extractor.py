@@ -213,10 +213,10 @@ def _unwrap_json_code(code: str) -> str | None:
 
     # ast.literal_evalでdictに変換できない場合はNoneを返す。
     # ValueError: 変数、関数呼び出しなどリテラル以外を含む({"code": x})
-    # TypeError: dictのキーが文字列でない({[1]: 2})。
+    # TypeError: dictのキーがハッシュできないリストなど文字列でない({[1]: 2})。
     try:
         payload = ast.literal_eval(node)
-    except (ValueError, TypeError, SyntaxError, KeyError):
+    except (ValueError, TypeError, SyntaxError):
         return None
 
     # 取り出したpayloadのキーがargumentsのときはargumentsの中身をpayloadにする。
