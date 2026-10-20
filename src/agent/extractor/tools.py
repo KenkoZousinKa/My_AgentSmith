@@ -5,6 +5,14 @@ Pythonの呼び出し文を組み立てる部分は共通の責務であるた�
 非Python形式は等価なPython関数呼び出しに変換してからサンドボックスに渡す。
 
 下記を提供
+- literal_for()
+    素の値をPythonリテラルに変換する。
+- is_tool_name()
+    Pythonの関数名として呼び出せる名前かを判定する。
+- render_tool_call()
+    ツール名と引数(値はリテラル表現済み)からPythonの呼び出し文を1行組み立てる。
+- python_literals()
+    JSONなどで型付の値になっている引数を、Pythonリテラルの表現の辞書にする。
 """
 import json
 import keyword
@@ -81,7 +89,7 @@ def render_tool_call(tool_name: str, arguments: dict[str, str]) -> str:
         (only_value, ) = arguments.values()
         return f"print({tool_name}({only_value}))"
 
-    # 引数が1つでツール名がfinal_answer以外なら、print(tool_name(value))の形にする。
+    # final_answerで引数が1つ以外のすべては名前付き引数で呼び出す。
     rendered = [
         f"{name}={value}" for name, value in arguments.items() if is_tool_name(name)
     ]

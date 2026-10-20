@@ -11,7 +11,7 @@ import re
 from src.agent.extractor.code_extractor import CodeExtractor
 from src.agent.extractor.tools import is_tool_name, render_tool_call, literal_for
 
-# <invoke_name="tool">...</invoke>を1件づつ取り出す。
+# <invoke name="tool">...</invoke>を1件づつ取り出す。
 _INVOKE_PATTERN = re.compile(
     r"<invoke\s+name\s*=\s*[\"']([^\"']+)[\"']\s*>(.*?)</invoke>",
     re.DOTALL | re.IGNORECASE
