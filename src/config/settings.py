@@ -218,7 +218,7 @@ def order_providers(
             raise ValueError(
                 f"--provider-url {provider_url} is not found in providers.json "
                 "Add an entry with its keys_env to use it."
-             )
+            )
     # provider_urlが指定されていなければ、model_nameを持つプロバイダを先頭にする
     else:
         matched = next(
@@ -230,7 +230,7 @@ def order_providers(
             raise ValueError(
                 f"--model-name {model_name!r} is not found in providers.json "
                 "Add it to a provider`s models, or pass --provider-url as well."
-             )
+            )
 
     # matchedで見つかったプロバイダを先頭にして、残りは元の順番のまま返す
     base = providers[matched]
