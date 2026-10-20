@@ -242,3 +242,10 @@ def test_strip_stop_sequences_keeps_normal_text() -> None:
     from src.agent.extractor.python_extractor import strip_stop_sequences
     assert strip_stop_sequences("a\n```\n<end_code>", ["<end_code>"]) == "a\n```\n"
     assert strip_stop_sequences("x = a < b", ["<end_code>"]) == "x = a < b"
+
+
+def test_dict_with_unhashable_key_does_not_crash(extractor: PythonCodeExtractor) -> None:
+    """キーにリストを持つdictリテラルでも、JSONの包みの判定で例外を出さずにそのまま返す."""
+    text = "```python\n{[1]: 2}\n```"
+    assert extractor.extract(text) == "{[1]: 2}"
+    assert salvage_kind(text) is None

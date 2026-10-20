@@ -193,7 +193,10 @@ def order_providers(
         provider_url (str | None): CLIで指定されたプロバイダURL。
 
     Returns:
-        list[ProviderConfig]: ホスト名でソートされたプロバイダ設定リスト。
+        list[ProviderConfig]: 先頭が主、残りがフォールバックのプロバイダ列。
+
+    Raises:
+        ValueError: 指定されたmodel_name / provider_urlがproviders.jsonに存在しない場合。
     """
     # providersが空ならValueErrorを投げる
     if not providers:
@@ -214,7 +217,7 @@ def order_providers(
         if matched is None:
             raise ValueError(
                 f"--provider-url {provider_url} is not found in providers.json "
-                 "Add an entry with its keys_env to use it."
+                "Add an entry with its keys_env to use it."
              )
     # provider_urlが指定されていなければ、model_nameを持つプロバイダを先頭にする
     else:
@@ -226,7 +229,7 @@ def order_providers(
         if matched is None:
             raise ValueError(
                 f"--model-name {model_name!r} is not found in providers.json "
-                 "Add it to a provider`s models, or pass --provider-url as well."
+                "Add it to a provider`s models, or pass --provider-url as well."
              )
 
     # matchedで見つかったプロバイダを先頭にして、残りは元の順番のまま返す

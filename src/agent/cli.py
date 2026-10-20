@@ -70,12 +70,11 @@ def run_mbpp_agent(
     # .envから環境変数を読み込む
     load_dotenv()
 
-    providers = load_providers(providers_file_path)
+    original_providers = load_providers(providers_file_path)
     # CLIで指定されたmodel_name / provider_urlを先頭にし、残りはproviders.jsonのpriority順に並べる
     # providers.jsonにないモデル / URLは、ValueErrorで止める。
-    primary_provider = order_providers(providers, model_name, provider_url)[0]
-    # primary_providerを先頭にして優先度順に並べる
-    providers = [primary_provider, *providers[1:]]
+    providers = order_providers(original_providers, model_name, provider_url)
+    # ===raise ValueErrorが登ってくるのをどっかで拾う(solution.json書き込みなしVer)===
 
     # 時間制限を使い果たさないようにデッドラインを計算
     # バックオフ待機はこの残予算にクランプされる

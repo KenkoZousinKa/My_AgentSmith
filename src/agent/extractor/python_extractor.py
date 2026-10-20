@@ -51,7 +51,7 @@ _CODE_LIKE_NODES = (
     ast.Call, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom
 )
 
-SALVAGE_UNCLOSED_FENCE = "uncosed_fence"
+SALVAGE_UNCLOSED_FENCE = "unclosed_fence"
 SALVAGE_UNFENCED = "unfenced"
 SALVAGE_ESCAPED_QUOTES = "escaped_quotes"
 SALVAGE_JSON_WRAPPED = "json_wrapped"
@@ -63,7 +63,7 @@ SALVAGE_UNMATCHED_CLOSERS = "unmatched_closers"
 _MIN_LEAKED_STOP_PREFIX = 2
 
 
-def strip_stop_sequence(text: str, stop_sequences: list[str]) -> str:
+def strip_stop_sequences(text: str, stop_sequences: list[str]) -> str:
     """LLM出力から停止シーケンスと残骸を取り除く.
 
     停止シーケンスはコードの一部ではないので、コード抽出の前に取り除く。
@@ -115,23 +115,24 @@ def _repair_unmatched_closers(code: str) -> str | None:
     """
     # はじめに\nで分割して、行ごとに構文解析する。
     # ここsplitしてからast.parseして通すなら_pases()を使ってから分割すれば良くない？
+    # -> SyntaxErrorの行番号を使うので、行ごとに分割しておく必要がありました。
     lines = code.split("\n")
     for attempt in range(_MAX_CLOSER_REMOVALS + 1):
         try:
-            # ast.parseで構文解析できるかを確認する。
+            # もともとのコードでast.parseで構文解析できるかを確認する。
             ast.parse("\n".join(lines))
             return "\n".join(lines) if attempt else None
         except SyntaxError as error:
             match = _UNMATCHED_CLOSERS.match(error.msg or "")
-            index, colum = (error.lineno or 0) - 1, (error.offset or 0) - 1
+            index, column = (error.lineno or 0) - 1, (error.offset or 0) - 1
             if (
                 match is None
                 or not 0 <= index < len(lines)
-                or not 0 <= colum < len(lines[index])
-                or lines[index][colum] != match.group(1)
+                or not 0 <= column < len(lines[index])
+                or lines[index][column] != match.group(1)
             ):
                 return None
-            lines[index] = lines[index][:colum] + lines[index][colum + 1 :]
+            lines[index] = lines[index][:column] + lines[index][column + 1:]
 
     return None
 
@@ -201,19 +202,21 @@ def _unwrap_json_code(code: str) -> str | None:
     except SyntaxError:
         return None
 
-    # ast.parseで構文解析できても、実行するとSyntaxErrorになるようなコードはNoneを返す。
+    # 全体が1つの式でなければ包みではないのでNoneを返す。
     if len(tree.body) != 1 or not isinstance(tree.body[0], ast.Expr):
         return None
 
-    # ast.parseで
+    # その式がdictリテラルでなければNoneを返す。
     node = tree.body[0].value
     if not isinstance(node, ast.Dict):
         return None
 
     # ast.literal_evalでdictに変換できない場合はNoneを返す。
+    # ValueError: 変数、関数呼び出しなどリテラル以外を含む({"code": x})
+    # TypeError: dictのキーが文字列でない({[1]: 2})。
     try:
         payload = ast.literal_eval(node)
-    except ValueError:
+    except (ValueError, TypeError, SyntaxError, KeyError):
         return None
 
     # 取り出したpayloadのキーがargumentsのときはargumentsの中身をpayloadにする。
@@ -248,6 +251,7 @@ def _extract_bare_code(llm_output: str) -> str | None:
             tree = ast.parse(candidate_code)
         except SyntaxError:
             continue
+
         # ast.walkでASTを巡回し、関数定義やクラス定義などのコードらしいノードがあるかを判定する。
         if any(isinstance(node, _CODE_LIKE_NODES) for node in ast.walk(tree)):
             return candidate_code
@@ -298,13 +302,13 @@ def _extract_with_kind(llm_output: str) -> tuple[str | None, str | None]:
 
     Args:
         llm_output (str): LLMが生成した出力テキスト全体。
-    
-Returns:
+
+    Returns:
         tuple[str | None, str | None]: (抽出されたコード, 崩れ(救済)の種類)
         コードが抽出できなかった場合は(None, None)を返す。正規のブロックをそのまま抽出した場合は(コード, None)を返す。
     """
     # まず正規の```python```ブロックを抽出する。
-    blocks = [str(block.rstrip() for block in _PYTHON_CODE_BLOCK_PATTERN.findall(llm_output))]
+    blocks = [str(block).rstrip() for block in _PYTHON_CODE_BLOCK_PATTERN.findall(llm_output)]
 
     kind: str | None = None
     code: str | None = None
@@ -324,29 +328,34 @@ Returns:
     elif blocks:
         code = blocks[0]
 
-    # 1つもブロックがない場合は、閉じフェンスなし、フェンスなしの素のPythonコード、JSONラップなどを救済する。
+    # 1つもブロックがない場合は閉じフェンスなし、フェンスなしの素のPythonコードをまず救済。
     else:
         match = _UNCLOSED_CODE_BLOCK_PATTERN.search(llm_output)
         if match and match.group(1).strip():
             body = _TRAILING_FENCE_PATTERN.sub("", str(match.group(1)))
             code = body.rstrip()
             kind = SALVAGE_UNCLOSED_FENCE
+        # フェンスなしの素のPythonコードを抽出する。
         else:
             code = _extract_bare_code(llm_output)
             if code is not None:
                 kind = SALVAGE_UNFENCED
 
+    # ここまででコードが抽出できなかった場合はNoneを返す。
     if code is None:
         return None, None
 
+    # JSONラップの救済
     unwrapped = _unwrap_json_code(code)
     if unwrapped is not None:
         return unwrapped, SALVAGE_JSON_WRAPPED
 
+    # 過剰なエスケープを戻す
     repaired = _repair_escaped_quotes(code)
     if repaired is not None:
         return repaired, SALVAGE_ESCAPED_QUOTES
 
+    # 末尾の閉じ括弧を削除して構文が通る形を探す
     repaired = _repair_unmatched_closers(code)
     if repaired is not None:
         return repaired, SALVAGE_UNMATCHED_CLOSERS
@@ -359,7 +368,7 @@ def salvage_kind(llm_output: str) -> str | None:
 
     Args:
         llm_output (str): LLMが生成した出力テキスト全体。
-    
+
     Returns:
         str | None: 崩れ(救済)の種類、正規のブロックをそのまま抽出した場合はNoneを返す。
     """

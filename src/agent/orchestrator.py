@@ -9,7 +9,7 @@ LimitTrackerの先頭ガード -> LLM生成 -> <end_code>除去 -> コード抽�
  final_answer()で成功終了、ハード制限で打ち切り。
 """
 from src.agent.extractor.code_extractor import CodeExtractor
-from src.agent.extractor.python_extractor import salvage_kind, strip_stop_sequence
+from src.agent.extractor.python_extractor import salvage_kind, strip_stop_sequences
 from src.agent.limits import LimitTracker
 from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
 from src.agent.observation import build_observation, observation_no_code, malformed_code_note
@@ -128,7 +128,7 @@ class Orchestrator:
             )
 
             # レスポンスからコードを抽出する
-            cleaned_code = strip_stop_sequence(response.text, self.stop_sequences)
+            cleaned_code = strip_stop_sequences(response.text, self.stop_sequences)
             code = self.extractor.extract(cleaned_code)
 
             # コードが抽出できなかった場合は、Observationを生成して次のループに進む
