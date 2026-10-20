@@ -43,8 +43,8 @@ def _call_saurce(payload: dict[str, Any]) -> str | None:
         except json.JSONDecodeError:
             return None
 
-        if not isinstance(arguments, dict):
-            return None
+    if not isinstance(arguments, dict):
+        return None
 
     return render_tool_call(str(tool_name), python_literals(arguments))
 
