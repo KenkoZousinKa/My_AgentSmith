@@ -187,6 +187,7 @@ def test_total_requests_includes_failed_attempts() -> None:
     assert len(solution.steps) == 1          # 1回目のstepだけ積まれる
     assert solution.total_requests == 1 + 3  # step1の1試行 + 全滅時の3試行
 
+
 class _EmptyThenExhaustedProvider:
     """全滅し、空応答で消費したトークンを例外に持たせて送出する."""
 
@@ -204,3 +205,32 @@ def test_exhausted_wasted_tokens_are_counted_in_totals() -> None:
     assert solution.error == "LLM_UNAVAILABLE"
     assert (solution.total_input_tokens, solution.total_output_tokens) == (900, 600)
     assert solution.total_requests == 2
+
+
+def test_unclosed_fence_is_executed_and_reported() -> None:
+    """出力上限で閉じフェンスが欠けても実行し、救済したことを Observation の先頭で伝える(課題 V.1)."""
+    truncated = "Thought: run it.\n```python\nprint('salvaged')\n"
+    solution = _orchestrator([truncated, _RESP_FINAL]).run("82", "mbpp", "task")
+    assert solution.steps[0].sandbox_input == "print('salvaged')"
+    assert solution.steps[0].sandbox_output.startswith("[MALFORMED_CODE]")
+    assert "salvaged" in solution.steps[0].sandbox_output
+    assert solution.success is True
+
+
+def test_leaked_stop_prefix_does_not_break_the_block() -> None:
+    """停止シーケンスの前半(```<end_code)が漏れても、正規のブロックとして実行し救済扱いにしない."""
+    leaked = "Thought: run it.\n```python\nprint('clean')\n```<end_code"
+    solution = _orchestrator([leaked, _RESP_FINAL]).run("82", "mbpp", "task")
+    assert solution.steps[0].sandbox_input == "print('clean')"
+    assert solution.steps[0].sandbox_output.startswith("[OK]")
+
+
+def test_draft_final_answer_in_an_earlier_block_is_not_submitted() -> None:
+    """下書きの final_answer と直した版の2ブロックがあれば、直した版(最後)を提出する."""
+    two_blocks = (
+        "Draft:\n```python\nfinal_answer('def f():\\n    return 0')\n```\n"
+        "Fixed:\n```python\nfinal_answer('def f():\\n    return 1')\n```\n<end_code>"
+    )
+    solution = _orchestrator([two_blocks]).run("82", "mbpp", "task")
+    assert solution.success is True
+    assert solution.solution == "def f():\n    return 1"

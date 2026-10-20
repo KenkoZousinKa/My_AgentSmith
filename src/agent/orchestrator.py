@@ -9,9 +9,10 @@ LimitTrackerの先頭ガード -> LLM生成 -> <end_code>除去 -> コード抽�
  final_answer()で成功終了、ハード制限で打ち切り。
 """
 from src.agent.extractor.code_extractor import CodeExtractor
+from src.agent.extractor.python_extractor import salvage_kind, strip_stop_sequence
 from src.agent.limits import LimitTracker
 from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
-from src.agent.observation import build_observation, observation_no_code
+from src.agent.observation import build_observation, observation_no_code, malformed_code_note
 from src.agent.llm.transport.transport import TransportError
 from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.agent.prompt.template import build_system_prompt
@@ -127,7 +128,7 @@ class Orchestrator:
             )
 
             # レスポンスからコードを抽出する
-            cleaned_code = response.text.replace("<end_code>", "")
+            cleaned_code = strip_stop_sequence(response.text, self.stop_sequences)
             code = self.extractor.extract(cleaned_code)
 
             # コードが抽出できなかった場合は、Observationを生成して次のループに進む
@@ -141,9 +142,15 @@ class Orchestrator:
                 )
                 continue
 
-            # コードが抽出できた場合は、サンドボックスで実行し、Observationを生成する
+            # コードが抽出できた場合はサンドボックスで実行しObservationを生成する
             result: ExecuteResult = self.sandbox.run(code)
             observation = build_observation(result)
+
+            # 崩れたコードを救済実行した場合は、[MALFORMED_CODE]の種類をLLMに伝えるために前置
+            salvaged = salvage_kind(cleaned_code)
+            if salvaged is not None:
+                observation = f"{malformed_code_note(salvaged)}\n{observation}"
+
             messages.append(
                 {"role": "user", "content": observation}
             )
