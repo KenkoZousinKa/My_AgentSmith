@@ -213,7 +213,7 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
 | | サーバー | クライアント |
 |---|---|---|
 | stdio | 標準入出力を1行ずつ読み書きする | サーバーを子プロセスとして起動する |
-| Streamable HTTP | `socket` 上でのHTTP通信。1件ずつJSON で返答します。`Mcp-Session-Id`を割り当てる。  | `http.client` を使用。JSON と SSE の両方の返答を読める。既定の URL ではサーバーを自動で起動する |
+| Streamable HTTP | `socket` 上でのHTTP通信。1件ずつJSON で返答します。`Mcp-Session-Id`を割り当てる。  | `http.client` を使用してJSON と SSE を読み込む。既定の URL ではサーバーを自動で起動する。 |
 
 #### MBPP 用サーバー（`mcp_tools_mbpp.py`）
 - ツール `run_tests(code, test_list)`：コードとテストを実行し、結果を返す
@@ -223,10 +223,9 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
 #### SWE-bench 用サーバー（`mcp_tools_swebench.py`）
 - 課題で必須の9個のツールを提供：`read_file`、`edit_file`、`list_files`、`search_code`、`search_function_or_class_definition_in_code`、`find_references`、`run_tests`、`get_patch`、`run_command`
 - **Docker管理**：initialize のときにコンテナを起動し、ツールは `docker exec` でコンテナの中で実行する
-- **設定は initialize の `_meta["agentsmith/swebench"]` で受け取る**（Docker イメージ、eval_script）。環境変数ではなくこの方式にしたのは、別のマシンの HTTP サーバーにも設定を渡せるようにするためと、長い eval_script が環境変数のサイズの上限を超えないようにするため
+- **設定は initialize の `_meta["agentsmith/swebench"]` で受け取る**（Docker イメージ、eval_script）。
 - `_meta` がない場合は、環境変数 `TESTBED_PATH` を使い、Docker なしでローカルのディレクトリに対して動く（moulinette のツール単体テスト用）
-- **コンテナ廃棄**：SIGTERM を受けたとき、または標準入力が閉じたときにコンテナを止めて削除する。コンテナにはラベル `agentsmith=1` を付ける
-- `get_patch` は課題の指定どおり `git -c core.fileMode=false diff` を実行する
+- **コンテナ廃棄**：SIGTERM を受けたとき、または標準入力が閉じたときにコンテナを止めて削除する。
 
 
 ## 📃5. 入出力例
@@ -249,6 +248,6 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
 
 ### 7-2. AIの使用について
 <!-- 各自が「どの作業で、どの部分に」使ったかを書く -->
-- **ayhirose（MCP）**：MCP と HTTP・SSE の仕様の解説、設計の相談、確認用スクリプト（`test/mcp/`）の作成、コードのレビューに Claude を使用。SWE-bench のツールの一部は、Claude がチャットで示したコードを、内容を理解・修正したうえで取り込んだ
+- **ayhirose（MCP）**：MCP と HTTP・SSE の仕様の解説、設計の壁打ち、テストスクリプト（`test/mcp/`）の作成、コードのレビューに Claude を使用。SWE-bench のツールの一部は、生成させたコードを元に修正して取り込んだ。
 - **nsato**：<!-- TODO -->
 - **joseo**：<!-- TODO -->
