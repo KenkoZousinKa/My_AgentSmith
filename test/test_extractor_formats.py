@@ -130,6 +130,20 @@ def test_json_object_without_tool_shape_is_ignored() -> None:
     assert JSONHermesCodeExtractor().extract('The result is {"a": 1, "b": 2}.') is None
 
 
+@pytest.mark.parametrize(
+    "llm_output",
+    [
+        '<tool_call>{"name": "final_answer"}</tool_call>',
+        'I will call {"name": "read_file", "arguments": ["/a"]} next.',
+        '<tool_call>{"name": "read_file", "arguments": "[\\"/a\\"]"}</tool_call>',
+    ],
+)
+def test_json_tool_call_without_argument_mapping_is_ignored(llm_output: str) -> None:
+    """argumentsが無い / 辞書でないJSONは、例外にせずツール呼び出しとみなさない."""
+    assert JSONHermesCodeExtractor().extract(llm_output) is None
+    assert CompositeCodeExtractor().extract(llm_output) is None
+
+
 def test_react_json_input() -> None:
     """ReActのAction / Action Input(JSON)がPython呼び出しになる."""
     output = 'Thought: inspect\nAction: list_files\nAction Input: {"directory": "/testbed", "pattern": "*.py"}'
