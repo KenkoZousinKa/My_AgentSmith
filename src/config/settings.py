@@ -9,12 +9,26 @@ pydantic-settingsを使うと、環境変数やJSON/YAMLファイルから設定
 - [ ] Limits.time_margin_secのデフォルト値は実際の計測時間に合わせて調整。
 
 下記を提供
-Limits
-SandboxSettings
-LoggingSettings
-ManualSettings
-RetrySettings
-Settings
+- Limits
+    ハード制限値(反復 / トークン / 時間)
+- SWEBenchLimits
+    SWE-Benchのハード制限値を定義する。
+- SandboxSettings
+    サンドボックス実行の設定
+- LoggingSettings
+    ログ設定(レベル / 出力パス / トレース有無)
+- ManualSettings
+    ツールマニュアルの詳細度
+- RetrySettings
+    ResilientLLMClientのリトライ / バックオフ設定
+- Settings
+    config.json + env + CLIの階層設定
+- load_providers()
+    providers.jsonを読み込んでProviderConfigのリストに変換する。
+- order_providers()
+    CLI引数(--model_name / --provider-url)を反映した、試す順番のプロバイダ設定リストを返す。
+- load_settings()
+    Settingsを構築して返す。config.json + env + CLI overridesを階�層的に読み込む。
 """
 import json
 from urllib.parse import urlsplit
@@ -41,6 +55,20 @@ class Limits(BaseModel):
     max_output_tokens_per_iteration: int = 500
     total_time_sec: float = 120.0
     time_margin_sec: float = 10.0
+
+
+class SWEBenchLimits(Limits):
+    """SWE-Benchのハード制限値.
+
+    既定値だけをSWE-Bench用に変更したLimits。
+    config.jsonでswebench_limitsの一部を指定するとMBPP用の設定になってしまうのを防ぐ。
+    """
+    max_iterations: int = 30
+    max_input_tokens: int = 300_000
+    max_output_tokens: int = 10_000
+    max_output_tokens_per_iteration: int = 1_200
+    total_time_sec: float = 900.0
+    time_margin_sec: float = 60.0
 
 
 class SandboxSettings(BaseModel):
@@ -99,6 +127,7 @@ class Settings(BaseSettings):
     )
 
     limits: Limits = Limits()
+    swebench_limits: SWEBenchLimits = SWEBenchLimits()
     sandbox: SandboxSettings = SandboxSettings()
     logging: LoggingSettings = LoggingSettings()
     manual: ManualSettings = ManualSettings()

@@ -15,7 +15,7 @@ def agent_swebench(
     output: str,
     model_name: str | None = None,
     provider_url: str | None = None,
-    providers_file_path: str = "providers/providers.json",
+    providers_file_path: str = "providers/providers_swebench.json",
     transport: str = "stdio",
     url: str | None = None,
     command: str | None = None,
