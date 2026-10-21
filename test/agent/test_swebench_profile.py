@@ -164,3 +164,16 @@ def test_prompt_only_uses_tools_the_swebench_server_provides() -> None:
     assert {"read_file", "edit_file", "run_tests", "get_patch", "run_command"} <= called_names
     python_builtins = {"print", "final_answer", "func", "foo", "divide"}
     assert called_names - python_builtins <= known_tool_names
+
+
+def test_sanitize_keeps_a_trailing_blank_context_line_inside_fences() -> None:
+    """フェンスで囲まれていても、末尾の「空白1つだけの文脈行」を落とさない."""
+    patch_ending_with_blank_context = _PATCH + " \n"
+    assert SWEBenchProfile().sanitize_submission(f"```diff\n{patch_ending_with_blank_context}```") \
+        == patch_ending_with_blank_context
+
+
+def test_sanitize_keeps_added_lines_that_end_with_backticks() -> None:
+    """フェンスで囲まれていても、Markdown のフェンスを追加する行(+```)は落とさない."""
+    patch_adding_a_fence = _PATCH + "+```python\n+print(1)\n+```\n"
+    assert SWEBenchProfile().sanitize_submission(f"```diff\n{patch_adding_a_fence}```") == patch_adding_a_fence

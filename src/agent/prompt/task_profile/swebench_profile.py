@@ -90,22 +90,22 @@ class SWEBenchProfile(TaskProfile):
         Returns:
             str: 整形済みのパッチ。中身がなければ空文字列。
         """
-        # 前後の改行を落とす
+        # 前後の改行を落とす。
         text = raw.strip("\n")
 
-        # markdownのコードフェンスを取り除く
+        # markdownのコードフェンスを取り除く。
         # フェンスで囲まれている時だけフェンスの行ごと落とす。フェンスがない時はtextの行頭の空白は落とさない。
         if text.lstrip().startswith("```"):
-            # 先頭のコードフェンス行を取り除く
+            # ```diffなどの先頭の開きフェンスの行を取り除く。
             lines = text.splitlines()[1:]
-            # 末尾のコードフェンス行を取り除く
-            while lines and lines[-1].strip().endswith("```"):
+            # ```などの閉じフェンスの行を取り除く。
+            while lines and lines[-1].strip().startswith("```"):
                 lines.pop()
 
-            # コードフェンスを取り除いた後の文字列を再構築する
-            text = "\n".join(lines).strip()
+            # コードフェンスを取り除いた後の文字列を再構築する。
+            text = "\n".join(lines)
 
-        # これmbpp_profile.pyのsanitize_submissionにいれるか？ここで入れてるのなんでだ
+        # このあと末尾の改行を保証するため、空文字列の時はこの時点で返す。
         if not text.strip():
             return ""
 
