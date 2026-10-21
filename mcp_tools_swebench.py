@@ -275,5 +275,5 @@ if __name__ == "__main__":
     # print(search_function_or_class_definition_in_code("_grep"))
     # print(find_references("_grep"))
     # print(run_tests())
-    print(get_patch())
-    # main()
+    # print(get_patch())
+    main()
