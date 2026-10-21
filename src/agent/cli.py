@@ -76,7 +76,6 @@ def format_swebench_task(task_input: SWEBenchTaskInput) -> str:
     # repoは任意(既定で空)なのでなければinstance_idを使う。
     lines = [
         f"Repository: {task_input.repo or task_input.instance_id} (checked out at /testbed)\n",
-        "",
         "Issue:",
         task_input.problem_statement.strip()
     ]
