@@ -47,7 +47,7 @@ def strip_code_fences(raw: str) -> str:
         while lines and lines[-1].strip().startswith("```"):
             lines.pop()
 
-        # 先頭のコードフェンスを取り除いた後の文字列を再構築する
+        # コードフェンスを取り除いた後の文字列を再構築する
         text = "\n".join(lines).strip()
 
     return text
