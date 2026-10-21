@@ -167,7 +167,8 @@ def test_cli_provider_url_sends_that_providers_key(tmp_path: Path, monkeypatch: 
 
 def test_shipped_config_files_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     """リポジトリ直下の実 config.json / providers.json がそのままロードできる(出荷物の回帰)."""
-    repo_root = Path(__file__).resolve().parents[1]   # test/ の1つ上 = リポジトリ直下
+    repo_root = Path(__file__).resolve().parents[2]   # test/agent/ の2つ上 = リポジトリ直下
+    assert (repo_root / "config.json").is_file()        # 直下を指せていないと、既定値で黙って通ってしまう
     monkeypatch.chdir(repo_root)                        # Settings は CWD の config.json を読む
     settings = load_settings()
     assert settings.limits.max_input_tokens == 6000
