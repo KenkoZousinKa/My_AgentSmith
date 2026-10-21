@@ -140,8 +140,10 @@ class Sandbox:
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
+        # ===== debug =====
         print(code)
         print("=======================")
+        # ===== debug =====
         rejection = check_code(code, self.config, frozenset(self.tools))
         if rejection:
             return ExecuteResult(error=rejection)
@@ -246,13 +248,16 @@ class Sandbox:
             reply["error"] = f"unknown tool {name!r}"
         else:
             try:
-                raw = handler(**(message.get("arguments") or {}))
-                if isinstance(raw, str):
-                    raw, was_cut = _truncate(
-                        raw, self.config.max_output_chars
-                    )
-                    self._tool_truncated = self._tool_truncated or was_cut
-                reply["result"] = raw
+                # sympy-18189: config.max_output_charsを超える出力は切り詰められてるので、
+                # get_patch()の戻り値をそのまま提出させるために切り詰められた場合はfinal_answer()で値ごと受け取るようにした。
+                reply["result"] = handler(**(message.get("arguments") or {}))
+                # raw = handler(**(message.get("arguments") or {}))
+                # if isinstance(raw, str):
+                #     raw, was_cut = _truncate(
+                #         raw, self.config.max_output_chars
+                #     )
+                #     self._tool_truncated = self._tool_truncated or was_cut
+                # reply["result"] = raw
             except Exception as exc:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
         _send(self._cmd_w, reply)
