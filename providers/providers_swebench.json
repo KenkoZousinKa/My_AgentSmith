@@ -20,17 +20,12 @@
             "provider_url": "https://integrate.api.nvidia.com/v1",
             "models": [
                 "nvidia/nemotron-3-super-120b-a12b",
-                "nvidia/nemotron-3.5-lightning-30b-a3b"
+                "nvidia/nemotron-3-ultra-550b-a55b"
             ],
             "keys_env": "NVIDIA_API_KEY",
             "priority": 2,
             "model_params": {
                 "nvidia/nemotron-3-super-120b-a12b": {
-                    "chat_template_kwargs": {
-                        "enable_thinking": false
-                    }
-                },
-                "nvidia/nemotron-3.5-lightning-30b-a3b": {
                     "chat_template_kwargs": {
                         "enable_thinking": false
                     }
@@ -41,16 +36,12 @@
             "name": "ollama",
             "provider_url": "https://ollama.com/v1",
             "models": [
-                "gemma4:31b",
                 "nemotron-3-super",
-                "gpt-oss:120b"
+                "gemma4:31b"
             ],
             "keys_env": "OLLAMA_API_KEY",
             "priority": 3,
             "model_params": {
-                "gpt-oss:120b": {
-                    "reasoning_effort": "low"
-                },
                 "nemotron-3-super": {
                     "reasoning_effort": "none"
                 }
@@ -61,8 +52,7 @@
             "provider_url": "https://api.mistral.ai/v1",
             "models": [
                 "codestral-latest",
-                "mistral-code-latest",
-                "ministral-14b-latest"
+                "mistral-code-latest"
             ],
             "keys_env": "MISTRAL_API_KEY",
             "priority": 4
@@ -71,8 +61,7 @@
             "name": "gemini",
             "provider_url": "https://generativelanguage.googleapis.com/v1beta/openai",
             "models": [
-                "gemini-3.5-flash-lite",
-                "gemma-4-31b-it"
+                "gemini-3.5-flash-lite"
             ],
             "keys_env": "GEMINI_API_KEY",
             "priority": 5,
@@ -86,9 +75,8 @@
             "name": "openrouter",
             "provider_url": "https://openrouter.ai/api/v1",
             "models": [
-                "cohere/north-mini-code:free",
                 "nvidia/nemotron-3-super-120b-a12b:free",
-                "google/gemma-4-31b-it:free"
+                "cohere/north-mini-code:free"
             ],
             "keys_env": "OPENROUTER_API_KEY",
             "priority": 6
