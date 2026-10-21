@@ -3,8 +3,8 @@ import shlex
 import subprocess
 from pydantic import ValidationError
 
-from src.mcp_core.models import jsonrpc as rpc
-from src.mcp_core.models import mcpmodel as mcp
+from src.mcp.models import jsonrpc as rpc
+from src.mcp.models import mcpmodel as mcp
 
 
 class StdioClientTransport:
@@ -22,7 +22,7 @@ class StdioClientTransport:
             args=shlex.split(self.command),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            text=True       # 送信時に文字列が壊れないように
+            text=True,       # 送信時に文字列が壊れないように
         )
         # 起動直後の即死チェック
         time.sleep(0.1)

@@ -6,10 +6,10 @@ from src.sandbox.code_lint import check_code, _BLOCKED
 from src.sandbox.sandbox_helper import _send, _recv, _truncate
 from src.sandbox.sandbox_child import _child_main
 from src.models.output import ExecuteResult
-from src.mcp_core.client.mcp_tool_function import MCPToolFunction
-from src.mcp_core.client.client import MCPClient
-from src.mcp_core.client.stdio import StdioClientTransport
-from src.mcp_core.client.http import HttpClientTransport
+from src.mcp.client.mcp_tool_function import MCPToolFunction
+from src.mcp.client.client import MCPClient
+from src.mcp.client.stdio import StdioClientTransport
+from src.mcp.client.http import HttpClientTransport
 from typing import Any, Callable
 from pathlib import Path
 import os

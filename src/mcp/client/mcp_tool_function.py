@@ -1,7 +1,7 @@
 from typing import Any
 
-from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.client.client import MCPClient
+from src.mcp.models import mcpmodel as mcp
+from src.mcp.client.client import MCPClient
 
 
 class MCPToolFunction:
@@ -17,5 +17,5 @@ class MCPToolFunction:
         result = self.client.call_tool(self.name, arguments)
         text = "\n".join(c.text for c in result.content)
         if result.is_error:
-            raise RuntimeError(text)                 # ツールの失敗は例外にして、_dispatch に伝える
+            raise RuntimeError(f"func: {self.name} ({text})")                 # ツールの失敗は例外にして、_dispatch に伝える
         return text

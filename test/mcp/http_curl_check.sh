@@ -3,10 +3,10 @@
 #
 # 使い方:
 #   uv run python mcp_tools_mbpp.py --transport http      # 別の端末でサーバーを起動しておく
-#   ./tests/http_curl_check.sh [ポート] [--slow]             # --slow でタイムアウトの確認も行う（数秒かかる）
-#   ./tests/http_curl_check.sh              # ポート 8000 で確認
-#   ./tests/http_curl_check.sh 9000         # ポートを指定
-#   ./tests/http_curl_check.sh --slow       # タイムアウトの確認も行う（数秒かかる）
+#   ./test/mcp/http_curl_check.sh [ポート] [--slow]             # --slow でタイムアウトの確認も行う（数秒かかる）
+#   ./test/mcp/http_curl_check.sh              # ポート 8000 で確認
+#   ./test/mcp/http_curl_check.sh 9000         # ポートを指定
+#   ./test/mcp/http_curl_check.sh --slow       # タイムアウトの確認も行う（数秒かかる）
 set -u
 
 PORT=8000

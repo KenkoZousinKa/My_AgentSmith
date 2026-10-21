@@ -6,16 +6,21 @@ import sys
 from typing import Any
 from pydantic import ValidationError
 
-from src.mcp_core.models import jsonrpc as rpc
-from src.mcp_core.models import mcpmodel as mcp
-from src.mcp_core.models.client_transport import ClientTransport
+from src.mcp.models import jsonrpc as rpc
+from src.mcp.models import mcpmodel as mcp
+from src.mcp.models.client_transport import ClientTransport
+
+MBPP_SERVER_COMMAND = "python mcp_tools_mbpp.py"
+SWE_SERVER_COMMAND = "python mcp_tools_swebench.py"
+DEFAULT_URL = "http://127.0.0.1:8000/mcp"
 
 
 class MCPClient:
-    def __init__(self, transport: ClientTransport):
+    def __init__(self, transport: ClientTransport, init_meta: dict[str, Any] | None = None):
         self.transport = transport
         self.server_info: mcp.Implementation
         self.server_capabilities: dict[str, Any]
+        self.init_meta = init_meta
 
     def __enter__(self) -> "MCPClient":
         self.connect()
@@ -38,7 +43,8 @@ class MCPClient:
             # requestを送る
             params = mcp.InitializeRequestParams(protocol_version=mcp.MCP_VERSION,
                                                  capabilities={},
-                                                 client_info=mcp.Implementation(name="SandBox", version="1.0"))
+                                                 client_info=mcp.Implementation(name="SandBox", version="1.0"),
+                                                 meta=self.init_meta)
             result = self._request(mcp.Method.INITIALIZE, params)  # 送受信
 
             # responceを検証する
@@ -186,13 +192,13 @@ class MCPClient:
 if __name__ == "__main__":
     print("[Client] MCPクライアントを起動します...")
     # try:
-    # from src.mcp_core.client.stdio import StdioClientTransport
-    from src.mcp_core.client.http import HttpClientTransport
+    # from src.mcp.client.stdio import StdioClientTransport
+    from src.mcp.client.http import HttpClientTransport
     # with MCPClient(StdioClientTransport("python mcp_tools_mbpp.py")) as c:
     #     c.call_tool('run_tests', {'code': 'x=1', 'test_list': ['assert x==1']})
     #     pass
 
-    with MCPClient(HttpClientTransport(url="http://127.0.0.1:8000/mcp")) as c:
+    with MCPClient(HttpClientTransport(start_timeout=610)) as c:  # swe_benchの場合Docker立ち上げに最大600秒待つため
         print('pin')
         print(c.list_tools())
         print()
