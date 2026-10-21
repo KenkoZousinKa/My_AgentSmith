@@ -3,7 +3,7 @@
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
 from src.sandbox.code_lint import check_code, _BLOCKED
-from src.sandbox.sandbox_helper import _send, _recv, _truncate
+from src.sandbox.sandbox_helper import _send, _recv
 from src.sandbox.sandbox_child import _child_main
 from src.models.output import ExecuteResult
 from src.mcp.client.mcp_tool_function import MCPToolFunction
@@ -249,7 +249,7 @@ class Sandbox:
         else:
             try:
                 # sympy-18189: config.max_output_charsを超える出力は切り詰められてるので、
-                # get_patch()の戻り値をそのまま提出させるために切り詰められた場合はfinal_answer()で値ごと受け取るようにした。
+                # get_patch()の戻り値をそのまま提出させるためにツールの戻り値をそのまま返すようにする。
                 reply["result"] = handler(**(message.get("arguments") or {}))
                 # raw = handler(**(message.get("arguments") or {}))
                 # if isinstance(raw, str):

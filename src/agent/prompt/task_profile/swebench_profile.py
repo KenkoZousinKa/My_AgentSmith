@@ -24,9 +24,9 @@ _TRUNCATED_MARKER = "[output truncated:"
 _COLLECT_PATCH_CODE = "final_answer(get_patch())"
 
 _SWEBENCH_FORMAT_RULES = """- Start with a short Thought (at most 3 lines: what you learned, what you do next), then exactly
-ONE block fenced as ```python ... ```, then <end_code>.
+  ONE block fenced as ```python ... ```, then <end_code>.
 - Tools are plain Python functions that RETURN strings: print() what you need to see, e.g.
-print(search_code(pattern="def foo", file_pattern="*.py")). Only printed output comes back.
+  print(search_code(pattern="def foo", file_pattern="*.py")). Only printed output comes back.
 - The tools and final_answer are already defined globals: call them directly, never import them.
 - Print only the relevant part of large results (slice long strings, read files by line ranges).
 - The namespace persists between turns: keep results in variables instead of re-running tools.
@@ -136,7 +136,7 @@ class SWEBenchProfile(TaskProfile):
 
         # パッチらしさの目印文字列が含まれていない場合はrejectする。
         # どれか1つでも含まれていればgit applyできる可能性があるので受理する。
-        if not any(maker in candidate for maker in _PATCH_MARKERS):
+        if not any(marker in candidate for marker in _PATCH_MARKERS):
             return (
                 "The submission is not a git diff: pass the value returned by get_patch()."
             )
