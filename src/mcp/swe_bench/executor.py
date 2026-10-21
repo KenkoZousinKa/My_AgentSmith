@@ -79,9 +79,11 @@ class DockerExecutor:
     def run(self, command: str, workdir: str, timeout: int, input: str = "") -> CommandResult:
         r = subprocess.run(
             ["docker", "exec", "-i", "-w", workdir, self.name,
-             "timeout", str(timeout), "bash", "-c", command],
+             "timeout", str(timeout), "bash", "-lc", command],
             input=input, capture_output=True, text=True)  # コンテナの中のコマンドを止めるためにtimeoutを設定
         # -i: inputをコンテナ内のコマンドのstdinに流す
+        # bash -l: ログインシェルとして起動し、イメージが用意したtestbedのconda環境を有効にする。
+        # bash -c: minicondaのbaseのPythonになり、リポジトリの依存がなくimportできない。
         return CommandResult(r.stdout, r.stderr, r.returncode)
 
     def close(self) -> None:
