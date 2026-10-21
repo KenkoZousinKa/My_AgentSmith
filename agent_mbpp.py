@@ -18,7 +18,7 @@ def agent_mbpp(
     providers_file_path: str = "providers/providers.json",
     transport: str = "stdio",
     url: str | None = None,
-    commndd: str | None = None,
+    command: str | None = None,
     **extra_args: object
 ) -> None:
     """MBPP用のエントリーポイント関数.
@@ -40,7 +40,7 @@ def agent_mbpp(
         providers_file_path=providers_file_path,
         transport=transport,
         url=url,
-        command=commndd
+        command=command
     )
 
 
