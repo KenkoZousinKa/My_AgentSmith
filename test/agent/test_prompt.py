@@ -100,11 +100,17 @@ def _output_format_section(prompt: str) -> str:
 
 
 def test_default_format_rules_fill_the_output_format_section(sandbox: _FakeSandbox) -> None:
-    """既定の形式ルールが ## Output Format 節にそのまま入る(A-08では文面を変えない)."""
-    for profile in (MBPPProfile(), SWEBenchProfile()):
-        prompt = build_system_prompt(profile, sandbox)
-        assert _output_format_section(prompt) == DEFAULT_FORMAT_RULES
-        assert prompt.count(DEFAULT_FORMAT_RULES) == 1
+    """既定の形式ルールが ## Output Format 節にそのまま入る(MBPPは既定のまま。SWE-benchはA-22で上書き)."""
+    prompt = build_system_prompt(MBPPProfile(), sandbox)
+    assert _output_format_section(prompt) == DEFAULT_FORMAT_RULES
+    assert prompt.count(DEFAULT_FORMAT_RULES) == 1
+
+
+def test_swebench_format_rules_replace_the_default(sandbox: _FakeSandbox) -> None:
+    """SWE-benchは独自の形式ルール(ツールは文字列を返すのでprintする、など)が入り、既定のルールは入らない."""
+    prompt = build_system_prompt(SWEBenchProfile(), sandbox)
+    assert _output_format_section(prompt) == SWEBenchProfile().format_rules()
+    assert DEFAULT_FORMAT_RULES not in prompt
 
 
 class _TerseFormatProfile(MBPPProfile):
