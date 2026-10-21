@@ -7,8 +7,17 @@ providers.jsonにはキーの値ではなく、keys_env(env変数名)だけ書�
 providers.jsonは構造化データなので、pydanticでProviderConfigモデルに変換して扱う。
 pydantic-settingsを使うと、環境変数やJSON/YAMLファイルから設定を読み込むことができる。
 - [ ] Limits.time_margin_secのデフォルト値は実際の計測時間に合わせて調整。
+
+下記を提供
+Limits
+SandboxSettings
+LoggingSettings
+ManualSettings
+RetrySettings
+Settings
 """
 import json
+from urllib.parse import urlsplit
 from pathlib import Path
 from typing import Any
 from pydantic import BaseModel, ConfigDict
@@ -150,28 +159,95 @@ def load_providers(providers_path: str) -> list[ProviderConfig]:
     return sorted(providers, key=lambda provider: provider.priority)  # priorityが小さい順にソートして返す
 
 
-def select_provider(
+def _host_name(provider_url: str) -> str:
+    """URLからホスト名を小文字で抽出し返す.
+
+    Args:
+        provider_url (str): プロバイダのURL。
+
+    Returns:
+        str: URLから抽出したホスト名（小文字）。
+    """
+    return (urlsplit(provider_url.strip()).hostname or "").lower()
+
+
+def order_providers(
     providers: list[ProviderConfig],
     model_name: str | None = None,
     provider_url: str | None = None
-) -> ProviderConfig:
-    """primaryプロバイダを1つ選ぶ。CLI引数で指定された場合はそれを優先する。
+) -> list[ProviderConfig]:
+    """CLI引数(--model_name / --provider-url)を反映した、試す順番のプロバイダ設定リストを返す.
 
-    priorityが最小を最優先し、--model_name / --provider_urlで指定された場合は上書きする。
-    keys_envは主エントリのまま。
-    残りのプロバイダはフォールバック用に保持する。
+    使っていい「URLとキーの組」はproviders.jsonに書いているものだけで推測、キーの流用はしない。
+    - 指定がなければproviders.jsonのpriorityの順番で返す。
+    - provider_urlが指定されていれば、ホスト名が同じプロバイダを先頭にし、そのプロバイダのキー(keys_env)と、
+    モデル別のパラメーターをそのまま使う。
+    - --model-nameは設定ファイルにないモデルでも、そのプロバイダの先頭で試す。
+    - URLの指定がされているときは、モデル名でプロパイダを探さない。
+    - --model-nameが指定されていれば、指定されたモデル名を持つプロバイダを先頭にする。
+    - 指定モデルはそのプロバイダの先頭に置き、同じプロバイダの他のモデルと他のプロバイダはフォールバックに残す。
+
+    Args:
+        providers (list[ProviderConfig]): 先頭が優先度の高い順に並んだプロバイダ設定リスト。
+        model_name (str | None): CLIで指定されたモデル名。
+        provider_url (str | None): CLIで指定されたプロバイダURL。
+
+    Returns:
+        list[ProviderConfig]: 先頭が主、残りがフォールバックのプロバイダ列。
+
+    Raises:
+        ValueError: 指定されたmodel_name / provider_urlがproviders.jsonに存在しない場合。
     """
+    # providersが空ならValueErrorを投げる
     if not providers:
         raise ValueError("No providers available to select from.")
 
-    primary = providers[0]  # priorityが最小のものをprimaryとする
+    # model_nameもprovider_urlも指定されていなければ、providers.jsonのpriority順のまま返す
+    if not model_name and not provider_url:
+        return providers
+
+    # provider_urlが指定されていれば、ホスト名が同じプロバイダを先頭にする
+    if provider_url:
+        host = _host_name(provider_url)
+        matched = next(
+            (index for index, provider in enumerate(providers) if host and _host_name(provider.provider_url) == host),
+            None
+        )
+        # provider_urlが指定されているのに、providers.jsonにそのURLのホスト名が無ければValueErrorを投げる
+        if matched is None:
+            raise ValueError(
+                f"--provider-url {provider_url} is not found in providers.json "
+                "Add an entry with its keys_env to use it."
+            )
+    # provider_urlが指定されていなければ、model_nameを持つプロバイダを先頭にする
+    else:
+        matched = next(
+            (index for index, provider in enumerate(providers) if model_name in provider.models),
+            None
+        )
+        # model_nameが指定されているのに、providers.jsonにそのモデル名を持つプロバイダが無ければValueErrorを投げる
+        if matched is None:
+            raise ValueError(
+                f"--model-name {model_name!r} is not found in providers.json "
+                "Add it to a provider`s models, or pass --provider-url as well."
+            )
+
+    # matchedで見つかったプロバイダを先頭にして、残りは元の順番のまま返す
+    base = providers[matched]
     updates: dict[str, Any] = {}
+    # provider_urlが指定されていれば、先頭のプロバイダのURLを上書きする
     if provider_url:
         updates["provider_url"] = provider_url
+    # model_nameが指定されていれば、先頭のプロバイダのmodelsを上書きする
     if model_name:
-        updates["models"] = [model_name]
+        updates["models"] = [model_name, *[model for model in base.models if model != model_name]]
 
-    return primary.model_copy(update=updates) if updates else primary
+    # matchedで見つかったプロバイダを上書きコピーして先頭に置く
+    first = base.model_copy(update=updates)
+    # matchedで見つかったプロバイダを除いた残りのプロバイダを元の順番のまま返す
+    rest = [provider for index, provider in enumerate(providers) if index != matched]
+
+    return [first, *rest]
 
 
 def load_settings(**cli_overrides: Any) -> Settings:

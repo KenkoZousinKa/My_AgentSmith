@@ -1,7 +1,12 @@
 """LLMに送るシステムプロンプトのテンプレートと組み立てを管理するモジュール.
 
-共通テンプレートにTaskProfileの4要素を差し込み、
+共通テンプレートにTaskProfileの5要素(形式ルール、マニュアル、提出の仕様、few-shot例、タスクの指示)を差し込み、
 タスク種別ごとのシステムプロンプトをbuild_system_prompt()で生成する。
+
+下記を提供
+- COMMON_TEMPLATE: 全タスク共通のシステムプロンプトの骨格
+- build_system_prompt()
+    TaskProfileとSandboxから、タスク種別ごとのシステムプロンプトを組み立てる
 """
 from src.agent.prompt.task_profile.task_profile import TaskProfile
 from src.models.sandbox_base import SandboxBase
@@ -14,9 +19,7 @@ Solve the task by repeating this loop until it is done.
 Thought (one short line) -> ONE Python code block -> read the Observation returned to you.
 
 ## Output Format (follow exactly)
-- Each turn: write a brief Thought line, then exactly ONE code block fenced as ```python ... ```.
-- Put the closing ``` on its own line, then write <end_code> to end your turn.
-- Only what you print() (and any error or traceback) is returned in the Observation.
+{format_rules}
 
 ## Working rules
 - Iterate in small steps: run code, read the Observation, then decide the next step.
@@ -51,6 +54,7 @@ def build_system_prompt(profile: TaskProfile, sandbox: SandboxBase) -> str:
         str: 組み立てられたシステムプロンプト
     """
     return COMMON_TEMPLATE.format(
+        format_rules=profile.format_rules(),
         tools_manual=profile.manual(sandbox),
         final_answer_specification=profile.final_answer_specification(),
         few_shot_example=profile.few_shot_example(),
