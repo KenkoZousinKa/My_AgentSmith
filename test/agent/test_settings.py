@@ -34,6 +34,28 @@ def test_load_settings_reads_config_json(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert settings.limits.max_input_tokens == 6000   # 未指定は既定
 
 
+def test_swebench_limits_default_to_the_swebench_hard_limits(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """config.jsonが無くても、SWE-benchの制限はMBPPとは別の既定値(30反復 / 入力30万 / 出力1万 / 900秒)になる."""
+    monkeypatch.chdir(tmp_path)
+    settings = load_settings()
+    limits = settings.swebench_limits
+    assert (limits.max_iterations, limits.max_input_tokens, limits.max_output_tokens) == (30, 300_000, 10_000)
+    assert limits.total_time_sec == 900.0
+    assert settings.limits.max_iterations == 10        # MBPPの制限は変わらない
+
+
+def test_swebench_limits_are_read_from_config_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """config.jsonのswebench_limitsで上書きでき、MBPPのlimitsには影響しない."""
+    (tmp_path / "config.json").write_text(
+        json.dumps({"swebench_limits": {"max_iterations": 5}}), encoding="utf-8"
+    )
+    monkeypatch.chdir(tmp_path)
+    settings = load_settings()
+    assert settings.swebench_limits.max_iterations == 5
+    assert settings.swebench_limits.max_input_tokens == 300_000   # 未指定はSWE-benchの既定
+    assert settings.limits.max_iterations == 10
+
+
 def test_cli_override_is_highest(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """CLI(init) が config.json より優先される(D29最優先)."""
     (tmp_path / "config.json").write_text(
@@ -167,14 +189,26 @@ def test_cli_provider_url_sends_that_providers_key(tmp_path: Path, monkeypatch: 
 
 def test_shipped_config_files_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     """リポジトリ直下の実 config.json / providers.json がそのままロードできる(出荷物の回帰)."""
-    repo_root = Path(__file__).resolve().parents[1]   # test/ の1つ上 = リポジトリ直下
+    repo_root = Path(__file__).resolve().parents[2]   # test/agent/ の2つ上 = リポジトリ直下
+    assert (repo_root / "config.json").is_file()        # 直下を指せていないと、既定値で黙って通ってしまう
     monkeypatch.chdir(repo_root)                        # Settings は CWD の config.json を読む
     settings = load_settings()
     assert settings.limits.max_input_tokens == 6000
     assert settings.logging.level == "INFO"
+    assert settings.swebench_limits.max_iterations == 30
+    assert settings.swebench_limits.total_time_sec == 900.0
 # test_shipped_config_files_parse:
     providers = load_providers(str(repo_root / "providers" / "providers.json"))
     assert providers[0].priority == 1                   # priority昇順で先頭が主
+
+
+def test_shipped_swebench_providers_parse() -> None:
+    """SWE-bench用の providers_swebench.json も読み込め、1分あたりの枠が小さい groq を含まない."""
+    repo_root = Path(__file__).resolve().parents[2]
+    providers = load_providers(str(repo_root / "providers" / "providers_swebench.json"))
+    names = [provider.name for provider in providers]
+    assert names[0] == "cohere"
+    assert "groq" not in names
 
 
 def test_load_providers_accepts_model_params(tmp_path: Path) -> None:

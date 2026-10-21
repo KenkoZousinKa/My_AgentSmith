@@ -1,6 +1,6 @@
 """自作クライアント（HttpClientTransport）を、JSON と SSE の両方のサーバーで確かめる.
 
-実行: uv run --with "mcp==1.26.0" python -m tests.own_http_client_check
+実行: uv run --with "mcp==1.26.0" python -m test.mcp.own_http_client_check
     （-m で起動すると、リポジトリの一番上が探索先になり、src を import できる）
   1. SSE の読み取り（サーバーなし）
   2. 自作サーバー（JSON で返す）… 8000 番が空いていれば、自動起動から確かめる
@@ -15,9 +15,9 @@ import sys
 import time
 from typing import Any
 
-from src.mcp_core.client.client import MCPClient
-from src.mcp_core.client.http import HttpClientTransport
-from src.mcp_core.models import mcpmodel as mcp
+from src.mcp.client.client import MCPClient
+from src.mcp.client.http import HttpClientTransport
+from src.mcp.models import mcpmodel as mcp
 
 OWN_URL = "http://127.0.0.1:8000/mcp"
 FAST_PORT = 8001
@@ -86,7 +86,7 @@ def test_own_server() -> None:
 
 def test_fastmcp() -> None:
     print("== 3. FastMCP（SSE で返す）")
-    server = subprocess.Popen([sys.executable, "tests/sdk_fastmcp_server.py", "--http", str(FAST_PORT)],
+    server = subprocess.Popen([sys.executable, "test/mcp/sdk_fastmcp_server.py", "--http", str(FAST_PORT)],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         deadline = time.monotonic() + 15

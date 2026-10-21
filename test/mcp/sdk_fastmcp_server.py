@@ -1,7 +1,7 @@
 """公式 SDK（FastMCP）で作った、確認用の MCP サーバー.
 
-stdio:  uv run --with "mcp==1.26.0" python tests/sdk_fastmcp_server.py
-HTTP:   uv run --with "mcp==1.26.0" python tests/sdk_fastmcp_server.py --http [ポート]
+stdio:  uv run --with "mcp==1.26.0" python test/mcp/sdk_fastmcp_server.py
+HTTP:   uv run --with "mcp==1.26.0" python test/mcp/sdk_fastmcp_server.py --http [ポート]
 """
 
 import sys

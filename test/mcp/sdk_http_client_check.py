@@ -1,7 +1,7 @@
 """公式 SDK のクライアントから、自作の MCP サーバーを Streamable HTTP で呼ぶ確認用スクリプト.
 
 サーバーはこのスクリプトが起動し、終わったら止める。
-実行: uv run --with "mcp==1.26.0" python tests/sdk_http_client_check.py [ポート]
+実行: uv run --with "mcp==1.26.0" python test/mcp/sdk_http_client_check.py [ポート]
 """
 
 import asyncio

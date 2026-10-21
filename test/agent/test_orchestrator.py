@@ -427,12 +427,12 @@ def test_rejected_handwritten_diff_does_not_block_the_collection() -> None:
 
 
 def test_collection_is_skipped_on_success() -> None:
-    """検査を通った提出があれば、回収は呼ばない."""
+    """検査を通った提出があれば、回収は呼ばない(SWEBenchProfileの整形で末尾の改行は残る・A-22)."""
     profile = _PatchCollectingProfile()
     responses = [_block("final_answer('diff --git a/y.py b/y.py\\n')")]
     solution = _swebench_orchestrator(responses, profile).run("x", "swebench", "task")
     assert solution.success is True
-    assert solution.solution == "diff --git a/y.py b/y.py"
+    assert solution.solution == "diff --git a/y.py b/y.py\n"
     assert profile.fallback_calls == 0
 
 

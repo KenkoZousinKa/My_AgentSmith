@@ -4,10 +4,10 @@ MBPPの提出は関数のソースコード。
 採点側は提出物に隠しテストを連結して実行するため、その形で例外を投げないコードだけ受理する。
 
 下記を提供
-- strip_code_fence()
+- strip_code_fences()
     提出物の前後の空白とmarkdownのコードフェンスを取り除く。
 - mbpp_rejection()
-    提出物を受理できるか検査し、ダメなら理由を返す。ｃ
+    提出物を受理できるか検査し、ダメなら理由を返す。
 - MBPPProfile()
     MBPP用のTaskProfile
 """
@@ -47,7 +47,7 @@ def strip_code_fences(raw: str) -> str:
         while lines and lines[-1].strip().startswith("```"):
             lines.pop()
 
-        # 先頭のコードフェンスを取り除いた後の文字列を再構築する
+        # コードフェンスを取り除いた後の文字列を再構築する
         text = "\n".join(lines).strip()
 
     return text
@@ -62,7 +62,7 @@ def mbpp_rejection(solution: str) -> str | None:
     - トップレベルに例外を投げる文がないこと。
 
     Args:
-        candidate (str): 提出物の文字列。
+        solution (str): 提出物の文字列。
 
     Returns:
         str | None: 受理できない場合は理由の文字列。受理できる場合はNone。
@@ -75,6 +75,8 @@ def mbpp_rejection(solution: str) -> str | None:
     except SyntaxError as error:
         return f"The submission code is not valid Python ({error.msg} on line {error.lineno})."
 
+    # サンドボックス専用の名前を先に調べる。
+    # 検証用コードをそのまま提出すると関数定義が無いが先に検出されるので、先にチェックしLLMに伝えるため。
     referenced_names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
     blocked_names = sorted(referenced_names & _SANDBOX_ONLY_NAMES)
     if blocked_names:
@@ -126,16 +128,16 @@ class MBPPProfile(TaskProfile):
     """MBPP(単一の関数の実装課題)用のTaskProfileを定義するクラス."""
     name = "mbpp"
 
-    def sanitize_submission(self, raw_submission: str) -> str:
+    def sanitize_submission(self, raw: str) -> str:
         """提出物の前後の空白とmarkdownのコードフェンスを取り除く.
 
         Args:
-            raw_submission (str): LLMが出力した提出物。
+            raw (str): LLMが出力した提出物。
 
         Returns:
             str: 前後の空白とコードフェンスを取り除いた提出物。
         """
-        return strip_code_fences(raw_submission)
+        return strip_code_fences(raw)
 
     def submission_rejection(self, candidate: str) -> str | None:
         """採点側の実行方式で例外を投げない関数のソースか検査する。

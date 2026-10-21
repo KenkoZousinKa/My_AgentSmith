@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from src.mcp_core.models import jsonrpc as rpc
+from src.mcp.models import jsonrpc as rpc
 
 
 class ClientTransport(Protocol):

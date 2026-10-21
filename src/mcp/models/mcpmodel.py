@@ -57,6 +57,11 @@ class InitializeRequestParams(MCPModel):
     capabilities: dict[str, Any]
     """クライアントが提供できる機能。"""
     client_info: Implementation
+    """クライアントの情報。"""
+    meta: dict[str, Any] | None = Field(default=None, validation_alias="_meta", serialization_alias="_meta")
+#   validation_alias：JSON から読むとき（model_validate）に "_meta" を受け付ける
+#   serialization_alias：by_alias=True で出すときに "_meta" という名前にする
+    """クライアントが渡すメタデータ。今回は環境変数を渡す。"""
 
 
 class InitializeResult(MCPModel):
