@@ -18,7 +18,7 @@ def agent_swebench(
     providers_file_path: str = "providers/providers.json",
     transport: str = "stdio",
     url: str | None = None,
-    commndd: str | None = None,
+    command: str | None = None,
     **extra_args: object
 ) -> None:
     """SWE-bench用のエントリーポイント関数.
@@ -38,7 +38,7 @@ def agent_swebench(
         providers_file_path=providers_file_path,
         transport=transport,
         url=url,
-        command=commndd
+        command=command
     )
 
 
