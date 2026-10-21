@@ -62,7 +62,7 @@ def mbpp_rejection(solution: str) -> str | None:
     - トップレベルに例外を投げる文がないこと。
 
     Args:
-        candidate (str): 提出物の文字列。
+        solution (str): 提出物の文字列。
 
     Returns:
         str | None: 受理できない場合は理由の文字列。受理できる場合はNone。
@@ -75,6 +75,8 @@ def mbpp_rejection(solution: str) -> str | None:
     except SyntaxError as error:
         return f"The submission code is not valid Python ({error.msg} on line {error.lineno})."
 
+    #サンドボックス専用の名前を先に調べる。
+    # 検証用コードをそのまま提出すると関数定義がないが先に当たりNameError避けができないため。
     referenced_names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
     blocked_names = sorted(referenced_names & _SANDBOX_ONLY_NAMES)
     if blocked_names:
@@ -126,7 +128,7 @@ class MBPPProfile(TaskProfile):
     """MBPP(単一の関数の実装課題)用のTaskProfileを定義するクラス."""
     name = "mbpp"
 
-    def sanitize_submission(self, raw_submission: str) -> str:
+    def sanitize_submission(self, raw: str) -> str:
         """提出物の前後の空白とmarkdownのコードフェンスを取り除く.
 
         Args:
@@ -135,7 +137,7 @@ class MBPPProfile(TaskProfile):
         Returns:
             str: 前後の空白とコードフェンスを取り除いた提出物。
         """
-        return strip_code_fences(raw_submission)
+        return strip_code_fences(raw)
 
     def submission_rejection(self, candidate: str) -> str | None:
         """採点側の実行方式で例外を投げない関数のソースか検査する。

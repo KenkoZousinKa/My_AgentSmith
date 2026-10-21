@@ -286,7 +286,9 @@ class Orchestrator:
         if not success and not solution:
             try:
                 solution = self.profile.fallback_solution(self.sandbox)
-            # 回収はサンドボックス、ツールに左右される？失敗したら握りつぶす。中断は止めない。
+            # 回収はサンドボックス、ツールに左右される。SIGTERMの直前サーバーのみ先に終了しているなど。
+            # (MCPでget_patch()呼び出し時、ツールサーバー落ち、コンテナが消えている、パイプが閉じている等)
+            # 失敗したら握りつぶす。中断は止めない。
             except Exception:
                 solution = ""
 
@@ -324,8 +326,8 @@ class Orchestrator:
         rejection = self.profile.submission_rejection(candidate)
         if rejection is None and self.solution_verifier is not None:
             # 検査に通らなかった場合は、拒否理由を返す。
-            virified, datail = self.solution_verifier(candidate)
-            if not virified:
-                rejection = f"The submission did not pass the task`s checks: {datail}"
+            verified, detail = self.solution_verifier(candidate)
+            if not verified:
+                rejection = f"The submission did not pass the task's checks: {detail}"
 
         return candidate, rejection
