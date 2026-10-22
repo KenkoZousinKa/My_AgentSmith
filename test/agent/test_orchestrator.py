@@ -456,3 +456,26 @@ def test_failed_collection_does_not_crash() -> None:
     assert solution.error == "MAX_ITERATIONS"
     assert solution.solution == ""
     assert profile.fallback_calls == 1
+
+
+
+def test_start_time_counts_time_spent_before_run() -> None:
+    """start_timeを渡すと、run()の前に使った時間(サーバーの起動など)も制限時間に入れる.
+
+    起動から制限時間ぶん過ぎていれば、LLMを1回も呼ばずに TIME_LIMIT で返す。
+    """
+    import time
+    provider = StubProvider([])  # 呼ばれたら IndexError で落ちる
+    orchestrator = Orchestrator(
+        provider=provider,
+        extractor=PythonCodeExtractor(),
+        sandbox=MockSandbox(),
+        profile=MBPPProfile(),
+        limits=_limits(total_time_sec=120.0, time_margin_sec=10.0),
+        start_time=time.monotonic() - 115.0,  # 起動から115秒たってからrun()に入った
+    )
+    solution = orchestrator.run("1", "mbpp", "task")
+    assert solution.success is False
+    assert solution.error == "TIME_LIMIT"
+    assert solution.iterations == 0
+    assert solution.total_time_seconds >= 115.0

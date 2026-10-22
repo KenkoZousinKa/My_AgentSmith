@@ -84,3 +84,22 @@ def test_record_usage_accumulates() -> None:
     tracker.record_usage(input_tokens=20, output_tokens=7)
     assert tracker.total_input_tokens == 30
     assert tracker.total_output_tokens == 12
+
+
+def test_start_time_counts_from_the_given_origin() -> None:
+    """start_timeを渡すと、その時刻から数える(採点側と同じくプロセスの起動を起点にするため)."""
+    clock = _Clock()
+    clock.t = 50.0  # プロセスの起動(0秒)から50秒たってからトラッカーを作った
+    tracker = LimitTracker(_limits(total_time_sec=120.0, time_margin_sec=10.0), now=clock, start_time=0.0)
+    assert tracker.elapsed_seconds() == 50.0
+    assert tracker.start_iteration() is None
+    clock.t = 111.0  # 起動から111秒: 111+10=121 >= 120 -> 停止(作ってからは61秒しかたっていない)
+    assert tracker.start_iteration() is StopReason.TIME_LIMIT
+
+
+def test_start_time_defaults_to_now() -> None:
+    """start_timeを渡さなければ、これまでどおり作った時刻から数える."""
+    clock = _Clock()
+    clock.t = 50.0
+    tracker = LimitTracker(_limits(), now=clock)
+    assert tracker.elapsed_seconds() == 0.0
