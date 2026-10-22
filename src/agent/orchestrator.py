@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 from src.agent.extractor.code_extractor import CodeExtractor
 from src.agent.extractor.python_extractor import salvage_kind, strip_stop_sequences
-from src.agent.limits import LimitTracker
+from src.agent.limits import LimitTracker, StopReason
 from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
 from src.agent.observation import (
     build_observation,
@@ -71,6 +71,8 @@ class Orchestrator:
         self.stop_sequences = stop_sequence if stop_sequence is not None else list(_DEFAULT_STOP_SEQUENCE)
         self.solution_verifier = solution_verifier
         self.start_time = start_time
+        # 入力トークンの見積もりの係数(1トークンあたりの文字数)。実測に合わせ安全側には補正OK。
+        self._chars_per_token = self._CHARS_PER_TOKEN
 
     def run(self, task_id: str, benchmark: str, task_message: str) -> SolutionOutput:
         """1タスク分のループを回しSolutionOutputを生成する.
@@ -115,6 +117,20 @@ class Orchestrator:
                     error=stop_reason.value
                 )
 
+            # 送信する履歴を制限に収まるように切り詰める。収まらなければSolutionOutputを返す
+            windowed = self._fit_window(messages, tracker)
+            if windowed is None:
+                return self._build_solution(
+                    task_id=task_id,
+                    benchmark=benchmark,
+                    success=False,
+                    solution=best_solution,
+                    tracker=tracker,
+                    steps=steps,
+                    system_prompt=system_prompt,
+                    error=StopReason.MAX_INPUT_TOKENS.value
+                )
+
             # LLMにリクエストを送信し、レスポンスを取得する
             max_tokens = min(
                 self.limits.max_output_tokens_per_iteration,
@@ -122,7 +138,7 @@ class Orchestrator:
             )
             try:
                 response: LLMResponse = self.provider.generate(
-                    messages=messages,
+                    messages=windowed,
                     stop_sequences=self.stop_sequences,
                     max_tokens=max_tokens
                 )
@@ -154,6 +170,8 @@ class Orchestrator:
                 response.input_tokens,
                 response.output_tokens,
             )
+            # 送った文字数と報告された入力トークン数から見積もりの係数を安全側に補正する。
+            self._learn_chars_per_token(sent=messages, response=response)
             # LLMのレスポンスを履歴に追加する
             messages.append(
                 {"role": "assistant", "content": response.text}
@@ -224,6 +242,109 @@ class Orchestrator:
                     system_prompt=system_prompt,
                     error=None
                 )
+
+    # 入力トークンの見積もりの係数の初期値。超えないために小さめに取る。
+    _CHARS_PER_TOKEN = 3.0
+    # 実測した1トークンあたりの文字数の安全側補正値。実測値より小さくなるようにする。
+    _CHARS_PER_TOKEN_SAFETY = 0.95
+    # メッセージ1件ごとに足すrole / contentのトークン数。
+    _TOKENS_PER_MESSAGE = 4
+
+    def _fit_window(self, messages: list[dict[str, str]], tracker: LimitTracker) -> list[dict[str, str]] | None:
+        """累積入力トークンの上限に収まる送信用の履歴を返す。どう縮めても収まらなければNone.
+
+        直近の profile.history_window 往復 -> ... -> 1往復 -> systemとタスク文だけの順に縮める。
+        履歴はいきなり全部捨てると直前の失敗と原因(Observation)がLLMに伝わらず同じ失敗を繰り返すので、
+        1往復ずつ減らす。
+
+        Args:
+            messages (list[dict[str, str]]): これまでの全履歴
+            tracker (LimitTracker): 今の消費状況。
+
+        Returns:
+            list[dict[str, str]] | None: 送信用のメッセージ列。収まらなければNone。
+        """
+        # 送信可能なトークン数の予算を計算する
+        budget = self.limits.max_input_tokens - tracker.total_input_tokens
+        # 2, 1, 0の順に履歴を切り詰めて、収まるものを返す。収まらなければNone。
+        for window_size in range(self.profile.history_window_size, -1, -1):
+            candidate = self._window_messages(messages, window_size)
+            if self._estimate_tokens(candidate) <= budget:
+                return candidate
+
+        return None
+
+    def _window_messages(self, messages: list[dict[str, str]], window_size: int) -> list[dict[str, str]]:
+        """LLMに送る履歴を直近のwindow_size往復に切りつめて返す.
+
+        Chat Completionは状態を持たず、毎回すべての履歴を送る。
+        全履歴を送り続けると累積トークンは反復の回数の2乗で増えるので、
+        system + task_message + 直近のwindow_size往復(assistant + Observation)だけを送る。
+        長いObservationとassistantの発話はプロファイルごとの上限文字数まで中央を省いて縮める。
+
+        Args:
+            messages (list[dict[str, str]]): これまで[system, user, (assistant, user)...]の全履歴
+            window_size (int): 残す往復の数。0ならsystemとタスク文だけ。
+
+        Returns:
+            list[dict[str, str]]: 切り詰めた送信用のメッセージ列。
+        """
+        # systemとタスク文は必ず残す。
+        head = messages[:2]
+        # 1往復はassistantの発話 + Observationの2件なので、直近window_size往復は末尾の * 2件
+        # window_size == 0だど[-0:]だと全て残ってしまうので0の時は空リストにする。
+        tail = messages[2:][-window_size * 2:] if window_size > 0 else []
+
+        max_chars_by_role = {
+            "user": self.profile.observation_max_chars,
+            "assistant": self.profile.assistant_max_chars
+        }
+        trimmed: list[dict[str, str]] = []
+        for index, message in enumerate(tail):
+            max_chars = max_chars_by_role[message["role"]]
+            if index == len(tail) - 1 and message["role"] == "user":
+                max_chars = self.profile.latest_observation_max_chars
+
+            trimmed.append({"role": message["role"], "content": _truncate_middle(message["content"], max_chars)})
+
+        return head + trimmed
+
+    def _estimate_tokens(self, messages: list[dict[str, str]]) -> int:
+        """これから送るメッセージ列のトークン数を見積もる.
+
+        累積input_tokensの上限を超えないようにするための事前ガード。
+        越えると不合格になるので少し小さく見積もる。
+
+        Args:
+            messages (list[dict[str, str]]): これから送るメッセージ列
+
+        Returns:
+            int: 見積もった入力トークン数
+        """
+        characters = sum(len(message["content"]) for message in messages)
+        return int(characters / self._chars_per_token) + 1 + self._TOKENS_PER_MESSAGE * len(messages)
+
+    def _learn_chars_per_token(self, sent: list[dict[str, str]], response: LLMResponse) -> None:
+        """実際に送った文字数と報告された入力トークン数から、1トークンあたりの文字数の係数を安全側に補正する.
+
+        トークナイザーを使うと正確に計算できるが、トークナイザーの実装はプロバイダごとに異なるため、
+        実測値を使って安全側に補正する。
+        実測の比が今の係数より小さければ係数を下げる。
+        リトライがあったレスポンス(retries > 0)は失敗した試行のトークンが足されているので補正に使わない。
+        3000文字送って1200トークン使ったと返ってきたら 2.5文字/トークン で今の3.0より小さいので係数を2.5に下げる。
+
+        Args:
+            sent (list[dict[str, str]]): このリクエストで送ったメッセージ列
+        """
+        if response.retries or response.input_tokens <= 0:
+            return
+
+        characters = sum(len(message["content"]) for message in sent)
+        observed = characters / response.input_tokens * self._CHARS_PER_TOKEN_SAFETY
+
+        # 1トークンあたりの文字数の係数を補正する。実測値より小さくなるようにする。
+        if 0 < observed < self._chars_per_token:
+            self._chars_per_token = observed
 
     def _build_step(
         self,
@@ -335,3 +456,29 @@ class Orchestrator:
                 rejection = f"The submission did not pass the task's checks: {detail}"
 
         return candidate, rejection
+
+
+_TRUNCATED_MIDDLE_MARKER = "\n... [truncated] ...\n"
+
+
+def _truncate_middle(content: str, max_chars: int) -> str:
+    """文字列の中央を省略してmax_charsに収める.
+
+    Observationは先頭に実行結果(status / stdout / stderr)があり、
+    末尾に'--- note ---'の助言を置いている。
+    先頭だけ残す切り詰めだと行動を促す助言(切り詰めの警告、提出の却下理由)が消えるので中央を省略する。
+
+    Args:
+        text (str): 省略する文字列
+        max_chars (int): 省略後の最大文字数
+
+    Returns:
+        str: max_charsに収めた文字列。超えていれば中央を目印に置き換える。
+    """
+    if len(content) <= max_chars:
+        return content
+
+    # 上限の2/3を先頭(systemとタスク文とそれ以降)、下限の1/3を末尾に残す。中央は目印に置き換える。
+    head_size = max_chars * 2 // 3
+    tail_size = max_chars - head_size
+    return f"{content[:head_size]}{_TRUNCATED_MIDDLE_MARKER}{content[-tail_size:]}"

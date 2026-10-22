@@ -76,6 +76,10 @@ final_answer(patch)
 class SWEBenchProfile(TaskProfile):
     """SWEBench(実在のgitリポジトリのバグ(issue)修正)用のTaskProfileを定義するクラス."""
     name = "swebench"
+    history_window_size: int = 6
+    observation_max_chars: int = 3000
+    latest_observation_max_chars: int = 8000
+    assistant_max_chars: int = 2000
 
     def sanitize_submission(self, raw: str) -> str:
         """提出物のパッチをgit applyできる形に整形する.

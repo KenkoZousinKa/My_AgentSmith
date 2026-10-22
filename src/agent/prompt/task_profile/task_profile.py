@@ -20,13 +20,6 @@ Orchestratorはタスク種別を知らずにフックを呼び出し、MBPPとS
     エラーなく実行できたコードを打ち切り時に提出する候補として残すかを返す。
 - def fallback_solution()
     提出がないまま打ち切られた時、環境から回収できる最善の提出物を返す。
-
-- [x] models/以下に移動可能性あり。
-- [x] MBPPProfile, SWEBenchProfileが継承、他にタスクを増やしたい時用。
-- [ ] few-shotを1例、各プロファイルごとに定義する。
-- [ ] manualはname(args) -> ret: + 1行説明。非自明のものは小例をつける。
-    - [ ] sandbox.manual()から動的差し込みし、実際のツール数に合わせる。
-- [ ] 追加した5メソッドの具象の実装。
 """
 from abc import ABC, abstractmethod
 
@@ -50,7 +43,20 @@ class TaskProfile(ABC):
     具象クラスが下記4メソッドを実装する。
     出力形式のルール、提出物の整形と検査、打ち切り時の回収は既定の実装があり、
     必要なプロファイルが上書きする。
+
+    Attributes:
+        history_window_size (int): LLMへ再送する直近の往復(assistant + observation)の数。デフォルトは2。
+        observation_max_chars (int): 再送するObservationの1件の最大文字数。デフォルトは800。
+        latest_observation_max_chars (int): 直前のObservation(これからLLMが読む)の最大文字数。
+            テスト失敗の内容、読んだファイルの中身を途中で切らないために過去の分より長く残す。デフォルトは1500。
+        assistant_max_chars (int): 再送するAssistantの発話1件の最大文字数。デフォルトは1200。
     """
+
+    # 既定はMBPP向けの値。累積input_tokensの上限が6000のため短く絞る。
+    history_window_size: int = 2
+    observation_max_chars: int = 800
+    latest_observation_max_chars: int = 1500
+    assistant_max_chars: int = 1200
 
     def format_rules(self) -> str:
         """システムプロンプトの出力形式のルールを返す.
