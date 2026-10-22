@@ -458,7 +458,6 @@ def test_failed_collection_does_not_crash() -> None:
     assert profile.fallback_calls == 1
 
 
-
 def test_start_time_counts_time_spent_before_run() -> None:
     """start_timeを渡すと、run()の前に使った時間(サーバーの起動など)も制限時間に入れる.
 

@@ -42,9 +42,6 @@ def test_short_hints_are_kept_as_is() -> None:
     message = format_swebench_task(_task(hints_text="Look at ops.py"))
     assert message.endswith("Hints from the issue discussion:\nLook at ops.py")
 
-
-
-
 # ===================== A-20: 異常時も solution.json を必ず書く =====================
 # 実際の入口(run_mbpp_agent / run_swe_agent / python -m agent_mbpp)を、LLMを呼ばずに失敗させる。
 
@@ -184,3 +181,49 @@ def test_sigterm_from_the_grader_writes_solution_and_exits_143(tmp_path: Path) -
     assert solution["task_id"] == "11"
     assert solution["success"] is False
     assert solution["error"] == "INTERRUPTED: _Terminated"
+# ============ 既定のMCPServer: ベンチマークごとに正しいサーバーを起動する ============
+
+from typing import Any  # noqa: E402
+
+import pytest  # noqa: E402
+
+from src.agent import cli  # noqa: E402
+from src.mcp.client.client import MBPP_SERVER_COMMAND, SWE_SERVER_COMMAND  # noqa: E402
+from src.mcp.client.stdio import StdioClientTransport  # noqa: E402
+from src.models.output import SolutionOutput  # noqa: E402
+
+
+@pytest.mark.parametrize("server_command", [MBPP_SERVER_COMMAND, SWE_SERVER_COMMAND])
+def test_default_stdio_command_is_the_benchmark_server(server_command: str) -> None:
+    """--commandが無ければ、そのベンチマークのサーバーを起動する。あれば--commandを優先する."""
+    default_transport = cli._build_transport("stdio", None, None, server_command)
+    assert isinstance(default_transport, StdioClientTransport)
+    assert default_transport.command == server_command
+    given_transport = cli._build_transport("stdio", None, "python other_server.py", server_command)
+    assert isinstance(given_transport, StdioClientTransport)
+    assert given_transport.command == "python other_server.py"
+
+
+class _ToolRecordingOrchestrator:
+    """Orchestratorの代わりに、Sandboxに渡ったツール名を記録して成功を返す(LLMは呼ばない)."""
+
+    tool_names: list[str] = []
+
+    def __init__(self, **kwargs: Any) -> None:
+        _ToolRecordingOrchestrator.tool_names = sorted(kwargs["sandbox"].tools)
+
+    def run(self, task_id: str, benchmark: str, task_message: str) -> SolutionOutput:
+        return SolutionOutput(
+            task_id=task_id, benchmark=benchmark, success=True, solution="def add(a, b):\n    return a + b",
+            iterations=1, total_requests=1, total_input_tokens=1, total_output_tokens=1, total_time_seconds=0.1,
+        )
+
+
+def test_mbpp_starts_the_real_mbpp_server_by_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """既定の経路で本物の mcp_tools_mbpp.py を起動し、MBPPのツール(run_testsだけ)をSandboxに渡す."""
+    monkeypatch.chdir(_REPO_ROOT)  # 既定のコマンドはリポジトリ直下からの相対パス(採点と同じ)
+    monkeypatch.setattr(cli, "Orchestrator", _ToolRecordingOrchestrator)
+    output = tmp_path / "solution.json"
+    run_mbpp_agent(str(_mbpp_task_file(tmp_path)), str(output))
+    assert _read_solution(output)["success"] is True
+    assert _ToolRecordingOrchestrator.tool_names == ["run_tests"]

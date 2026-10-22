@@ -94,8 +94,8 @@ def test_mbpp_few_shot_code_is_not_indented() -> None:
 
 
 def _output_format_section(prompt: str) -> str:
-    """system promptから ## Output Format 節の本文(見出しの次の行から、次の見出しの手前まで)を取り出す."""
-    after_heading = prompt.split("## Output Format (follow exactly)\n", 1)[1]
+    """system promptから ## Format 節の本文(見出しの次の行から、次の見出しの手前まで)を取り出す."""
+    after_heading = prompt.split("## Format\n", 1)[1]
     return after_heading.split("\n\n## ", 1)[0]
 
 
@@ -166,3 +166,83 @@ def test_default_submission_hooks(sandbox: _FakeSandbox) -> None:
 
     assert profile.is_fallback_candidate("def f():\n    return 1") is False
     assert profile.fallback_solution(sandbox) == ""
+
+
+
+# ===================== A-09 / A-17: MBPP のプロンプト =====================
+
+from collections.abc import Callable  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
+
+from src.agent.cli import format_mbpp_task  # noqa: E402
+from src.agent.prompt.task_profile.mbpp_profile import mbpp_rejection  # noqa: E402
+from src.config.settings import load_settings  # noqa: E402
+from src.mcp.client.client import MBPP_SERVER_COMMAND, MCPClient  # noqa: E402
+from src.mcp.client.mcp_tool_function import MCPToolFunction  # noqa: E402
+from src.mcp.client.stdio import StdioClientTransport  # noqa: E402
+from src.models.input import MBPPTaskInput  # noqa: E402
+from src.models.sandbox_config import SandboxConfig  # noqa: E402
+from src.sandbox.sandbox_main import Sandbox  # noqa: E402
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_mbpp_few_shot_runs_on_the_real_server_as_shown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """手本の1手目を、本物のSandboxと本物のMBPPのMCPServerで実行すると、手本どおりになる.
+
+    - 手本の Observation の行(run_testsの戻り値をprintしたもの)と、本物の出力が1文字も違わない
+    - 同じブロックで final_answer まで進み、提出が受理される(関数のソースだけ)
+    手本と本物の run_tests の戻り値がずれると、モデルは手本を信じて読み違える。
+    """
+    monkeypatch.chdir(_REPO_ROOT)  # 既定のサーバーのコマンドはリポジトリ直下からの相対パス
+    example = MBPPProfile().few_shot_example()
+    first_turn, observation = example.split("Observation:\n", 1)
+    code = PythonCodeExtractor().extract(first_turn)
+    assert code is not None
+    shown_stdout = observation.split("--- stdout ---\n", 1)[1].splitlines()[0]
+
+    settings = load_settings()
+    config = SandboxConfig(
+        max_execution_time_seconds=int(settings.sandbox.exec_timeout_sec),
+        max_memory_mb=settings.sandbox.memory_limit_mb,
+    )
+    with MCPClient(StdioClientTransport(MBPP_SERVER_COMMAND)) as client:
+        tools: dict[str, Callable[..., Any]] = {tool.name: MCPToolFunction(client, tool) for tool in client.list_tools()}
+        with Sandbox(config=config, tools=tools) as real_sandbox:
+            result = real_sandbox.run(code)
+
+    assert result.error is None
+    assert result.stdout.splitlines()[0] == shown_stdout
+    assert result.final_answer_bool is True
+    submission = MBPPProfile().sanitize_submission(str(result.final_answer))
+    assert mbpp_rejection(submission) is None
+
+
+def test_mbpp_prompt_warns_about_hidden_tests_and_tool_imports(sandbox: _FakeSandbox) -> None:
+    """隠しテストがあること・ツールをimportしないこと・散文で式を導かないことを伝える."""
+    prompt = build_system_prompt(MBPPProfile(), sandbox)
+    assert "HIDDEN TESTS" in prompt
+    assert "never hardcode the shown values" in prompt
+    assert "never import them" in prompt
+    assert "NEVER derive formulas or trace arithmetic in prose" in prompt
+    assert "{" not in prompt.replace("{'success'", "")  # 差し込み忘れの {name} が残っていない
+
+
+def test_mbpp_task_message_lists_test_imports() -> None:
+    """test_imports があれば、テストの前に実行される import としてタスク文に含める."""
+    task = MBPPTaskInput(
+        task_id=1, task_definition="Return the square root.", function_definition="def root(x):",
+        test_imports=["import math"], test_list=["assert math.isclose(root(4), 2.0)"],
+    )
+    message = format_mbpp_task(task)
+    assert "The tests run after these imports:\n\nimport math" in message
+    assert message.index("import math") < message.index("assert math.isclose")
+
+
+def test_mbpp_task_message_without_test_imports_has_no_import_section() -> None:
+    """test_imports が無ければ、その節を作らない(これまでと同じタスク文)."""
+    task = MBPPTaskInput(
+        task_id=1, task_definition="Add.", function_definition="def add(a, b):", test_list=["assert add(1, 2) == 3"],
+    )
+    assert "imports" not in format_mbpp_task(task)
