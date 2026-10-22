@@ -104,24 +104,24 @@ def mbpp_rejection(solution: str) -> str | None:
     return None
 
 
-_MBPP_FEW_SHOT_EXAMPLE = """Thought: I'll write the function, then quickly check it with print.
+_MBPP_FEW_SHOT_EXAMPLE = '''
+Thought: Implement the function, verify it with the given tests, submit if they pass.
 ```python
-def add(a, b):
+solution = """def add(a, b):
     return a + b
-
-print(add(2, 3))
+"""
+import json
+report = json.loads(run_tests(code=solution, test_list=['assert add(2, 3) == 5']))
+print(report)
+if report['success']:
+    final_answer(solution)
 ```
 <end_code>
 Observation:
 [OK] Executed successfully.
 --- stdout ---
-5
-Thought: The output is correct, so I'll submit the function source.
-```python
-final_answer("def add(a, b):\\n    return a + b")
-```
-<end_code>
-"""
+{'success': True, 'message': 'passed', 'output': ''}
+'''
 
 
 class MBPPProfile(TaskProfile):
@@ -168,10 +168,23 @@ class MBPPProfile(TaskProfile):
             str: タスクの指示
         """
         return (
-            "This is an MBPP task: implement a single Python function that satisfies the "
-            "behavior described in the next user message. Write the function, test it by "
-            "calling it inside print(...), and iterate until it is correct. "
-            "Then submit the function's source code with final_answer."
+            "MBPP: implement ONE function with the exact name and signature given by the task.\n"
+            "- Build its source as a triple-quoted string, verify it with "
+            "run_tests(code=..., test_list=[...]) using the task's asserts, and when it passes call "
+            "final_answer(<that string>) in the SAME block.\n"
+            "- The submitted string must contain ONLY imports and the function(s). No prints, "
+            "asserts or demo calls: the grader appends its own tests to your code and runs it, so "
+            "any extra statement that raises fails the submission.\n"
+            "- HIDDEN TESTS: you see only part of the suite. Write a general, correct "
+            "implementation; never hardcode the shown values. Infer the intended rule from ALL the "
+            "given examples (they often encode a convention the wording leaves out).\n"
+            "- Gate final_answer on the task's own asserts only. Do not add asserts you invented: "
+            "if they are wrong they block a correct submission. To explore edge cases, print values.\n"
+            "- If run_tests fails, print what your function returns for the failing assert's input, "
+            "compare it with the expected value, fix the rule, retry.\n"
+            "- When the expected outputs follow a numeric or bit pattern you cannot see at once, "
+            "compute it in code from the given examples (differences, ratios, binary forms) and "
+            "print it, instead of guessing a formula."
         )
 
     def final_answer_specification(self) -> str:
@@ -181,8 +194,9 @@ class MBPPProfile(TaskProfile):
             str: 最終的な回答の仕様
         """
         return (
-            "Pass the full source code of your solution function to final_answer as a string, "
-            'e.g. final_answer("def solve(n):\\n    return n * 2").'
+            "Pass the function's full source code as a string, e.g. final_answer(solution) where "
+            'solution = """def solve(n):\n    return n * 2\n""". '
+            "Never pass a computed value, a function object, or markdown fences."
         )
 
     def few_shot_example(self) -> str:

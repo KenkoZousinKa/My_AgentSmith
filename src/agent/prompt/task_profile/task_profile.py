@@ -32,9 +32,16 @@ from abc import ABC, abstractmethod
 
 from src.models.sandbox_base import SandboxBase
 
-DEFAULT_FORMAT_RULES = """- Each turn: write a brief Thought line, then exactly ONE code block fenced as ```python ... ```.
-- Put the closing ``` on its own line, then write <end_code> to end your turn.
-- Only what you print() (and any error or traceback) is returned in the Observation."""
+DEFAULT_FORMAT_RULES = """- One brief Thought line (20 words max), then exactly ONE block fenced as ```python ... ```,
+  then <end_code>.
+- NEVER derive formulas or trace arithmetic in prose. Your turn is cut off at a hard output
+  limit, and a reply that never closes a ```python block runs nothing and burns the budget.
+  Write the candidate in code and let the Observation correct you.
+- Only what you print() (plus errors and tracebacks) comes back in the Observation.
+- The tools and final_answer are already defined globals: call them directly, never import them.
+- The namespace persists between turns, but your FINAL answer must be SELF-CONTAINED.
+- Limits on iterations, tokens and time are strict: keep turns short, never print large output.
+"""
 
 
 class TaskProfile(ABC):
