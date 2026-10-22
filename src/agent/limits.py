@@ -33,16 +33,21 @@ class LimitTracker:
         total_output_tokens (int): 現在の累積出力トークン数
     """
 
-    def __init__(self, limits: Limits, now: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self, limits: Limits,
+        now: Callable[[], float] = time.monotonic,
+        start_time: float | None = None
+    ) -> None:
         """トラッカーを初期化し、開始時刻を記録する.
 
         Args:
             limits (Limits): 注入するハード制限値.
             now (Callable[[], float], optional): 現在時刻を返す関数. デフォルトはtime.monotonic.
+            start_time (float | None, optional): 開始時刻. デフォルトはNoneで、now()を呼び出して取得する.
         """
         self._limits = limits
         self._now = now
-        self._start_time = now()
+        self._start_time = now() if start_time is None else start_time
         self.iterations = 0
         self.total_input_tokens = 0
         self.total_output_tokens = 0

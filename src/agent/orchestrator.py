@@ -45,7 +45,8 @@ class Orchestrator:
         profile: TaskProfile,
         limits: Limits,
         stop_sequence: list[str] | None = None,
-        solution_verifier: SolutionVerifier | None = None
+        solution_verifier: SolutionVerifier | None = None,
+        start_time: float | None = None
     ) -> None:
         """依存部品を注入してOrchestratorを初期化する.
 
@@ -59,6 +60,8 @@ class Orchestrator:
                 LLMの出力を打ち切るためのシーケンスのリスト。Noneの場合["<end_code>"]
             solution_verifier (SolutionVerifier | None, optional):
                 提出物を検証する関数。Noneの場合は検証を行わない。
+            start_time (float | None, optional):
+                CLI起動時からのタスク開始時刻。
         """
         self.provider = provider
         self.extractor = extractor
@@ -67,6 +70,7 @@ class Orchestrator:
         self.limits = limits
         self.stop_sequences = stop_sequence if stop_sequence is not None else list(_DEFAULT_STOP_SEQUENCE)
         self.solution_verifier = solution_verifier
+        self.start_time = start_time
 
     def run(self, task_id: str, benchmark: str, task_message: str) -> SolutionOutput:
         """1タスク分のループを回しSolutionOutputを生成する.
@@ -89,7 +93,7 @@ class Orchestrator:
         ]
 
         # ループ前の下準備
-        tracker = LimitTracker(self.limits)
+        tracker = LimitTracker(self.limits, start_time=self.start_time)
         steps: list[StepMetrics] = []
         # 打ち切り時に提出するコードの候補を保持する変数。Observationが生成されるたびに更新される。
         # TaskProfileがそのまま提出できると判断したものを入れる。
