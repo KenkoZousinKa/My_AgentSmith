@@ -478,3 +478,112 @@ def test_start_time_counts_time_spent_before_run() -> None:
     assert solution.error == "TIME_LIMIT"
     assert solution.iterations == 0
     assert solution.total_time_seconds >= 115.0
+
+
+
+# ===================== A-10 / A-11: 履歴の窓と、累積入力の事前ガード =====================
+
+from src.agent.orchestrator import _TRUNCATED_MIDDLE_MARKER  # noqa: E402
+
+
+class _TokenizingProvider(StubProvider):
+    """送られた文字数から入力トークン数を計算して報告し、送られたメッセージ列を記録するスタブ."""
+
+    def __init__(self, responses: list[str], chars_per_token: float) -> None:
+        super().__init__(responses)
+        self.chars_per_token = chars_per_token
+        self.sent: list[list[dict[str, str]]] = []
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        self.sent.append([dict(message) for message in messages])
+        response = super().generate(messages, stop_sequences, max_tokens)
+        tokens = int(sum(len(message["content"]) for message in messages) / self.chars_per_token)
+        return response.model_copy(update={"input_tokens": tokens})
+
+
+def _long_print(width: int) -> str:
+    """長い出力を返すコードを書くLLMの応答(実行すると width 文字を print する)."""
+    return f"Thought: look.\n```python\nprint('{'x' * width}')\n```"
+
+
+def test_window_truncation_keeps_the_trailing_note() -> None:
+    """長いObservationは中央を省いて両端を残す(末尾の --- note --- の助言を落とさない)."""
+    observation = "[OK] head marker\n" + ("x" * 5000) + "\n--- note ---\nTAIL MARKER"
+    windowed = _orchestrator([])._window_messages(
+        [{"role": "system", "content": "s"}, {"role": "user", "content": "task"},
+         {"role": "assistant", "content": "a"}, {"role": "user", "content": observation}],
+        window_size=2,
+    )
+    sent = windowed[-1]["content"]
+    assert len(sent) == MBPPProfile.latest_observation_max_chars + len(_TRUNCATED_MIDDLE_MARKER)
+    assert sent.startswith("[OK] head marker")
+    assert sent.endswith("TAIL MARKER")
+
+
+def test_older_observations_are_trimmed_harder_than_the_latest() -> None:
+    """直前のObservationは長めに残し、それより前のものと、assistantの発話は短く切り詰める."""
+    marker = len(_TRUNCATED_MIDDLE_MARKER)
+    windowed = _orchestrator([])._window_messages(
+        [{"role": "system", "content": "s" * 9000}, {"role": "user", "content": "t" * 9000},
+         {"role": "assistant", "content": "a" * 5000}, {"role": "user", "content": "OLD " + "y" * 5000},
+         {"role": "assistant", "content": "b" * 5000}, {"role": "user", "content": "NEW " + "z" * 5000}],
+        window_size=2,
+    )
+    assert [len(message["content"]) for message in windowed] == [
+        9000, 9000,  # systemとタスク文は切り詰めない
+        MBPPProfile.assistant_max_chars + marker, MBPPProfile.observation_max_chars + marker,
+        MBPPProfile.assistant_max_chars + marker, MBPPProfile.latest_observation_max_chars + marker,
+    ]
+
+
+def test_only_the_latest_rounds_are_resent() -> None:
+    """毎回送るのは system + タスク文 + 直近 history_window 往復だけ(全履歴を送らない)."""
+    provider = _TokenizingProvider([_RESP_PRINT] * 5, chars_per_token=4.0)
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(), profile=MBPPProfile(),
+        limits=_limits(max_iterations=5),
+    )
+    orchestrator.run("1", "mbpp", "task")
+    assert [len(messages) for messages in provider.sent] == [2, 4, 6, 6, 6]  # MBPPは直近2往復
+    assert [message["content"] for message in provider.sent[-1][:2]] == [provider.sent[0][0]["content"], "task"]
+
+
+def test_input_guard_shrinks_window_before_giving_up() -> None:
+    """累積入力の残りが少なくなったら窓を縮めて送り、それでも収まらなければ送らずに止める."""
+    provider = _TokenizingProvider([_long_print(3000)] * 10, chars_per_token=4.0)
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(), profile=MBPPProfile(),
+        limits=_limits(max_input_tokens=6000, max_iterations=10),
+    )
+    solution = orchestrator.run("1", "mbpp", "task")
+    assert solution.total_input_tokens <= 6000
+    assert solution.error == "MAX_INPUT_TOKENS"
+    sizes = [len(messages) for messages in provider.sent]
+    assert max(sizes) == 6 and min(sizes[sizes.index(6):]) < 6  # 一度広げた窓を、途中で縮めて送った
+
+
+def test_input_guard_learns_a_finer_tokenizer_and_still_never_overshoots() -> None:
+    """トークナイザが見積もりより細かくても(1トークン=2文字)、係数を学習して上限を踏み越えない.
+
+    初期の係数(3.0文字/トークン)のままだと、見積もりが実際の2/3になり、上限を踏み越える。
+    """
+    provider = _TokenizingProvider([_long_print(3000)] * 10, chars_per_token=2.0)
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(), profile=MBPPProfile(),
+        limits=_limits(max_input_tokens=6000, max_iterations=10),
+    )
+    solution = orchestrator.run("1", "mbpp", "task")
+    assert solution.total_input_tokens <= 6000
+    assert solution.error == "MAX_INPUT_TOKENS"
+    assert orchestrator._chars_per_token < 2.0  # 実測の 2.0 よりさらに安全側(×0.95)
+
+
+def test_swebench_keeps_a_wider_window() -> None:
+    """SWE-benchは直近6往復を残す(ファイルを読んだ結果を、続く反復でも参照するため)."""
+    provider = _TokenizingProvider([_RESP_PRINT] * 8, chars_per_token=4.0)
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(), profile=SWEBenchProfile(),
+        limits=_limits(max_iterations=8),
+    )
+    orchestrator.run("demo-1", "swebench", "task")
+    assert [len(messages) for messages in provider.sent] == [2, 4, 6, 8, 10, 12, 14, 14]
