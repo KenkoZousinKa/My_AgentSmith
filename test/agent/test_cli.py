@@ -227,3 +227,45 @@ def test_mbpp_starts_the_real_mbpp_server_by_default(tmp_path: Path, monkeypatch
     run_mbpp_agent(str(_mbpp_task_file(tmp_path)), str(output))
     assert _read_solution(output)["success"] is True
     assert _ToolRecordingOrchestrator.tool_names == ["run_tests"]
+
+# ============ MBPPの可視テストをSandboxの名前空間に置く(TASK_TESTS) ============
+
+class _NamespaceProbeOrchestrator:
+    """Orchestratorの代わりに、本物のSandboxでTASK_TESTSを読み、本物のrun_testsに渡してみる(LLMは呼ばない)."""
+
+    printed: str = ""
+    passed: str = ""
+    task_message: str = ""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.sandbox = kwargs["sandbox"]
+
+    def run(self, task_id: str, benchmark: str, task_message: str) -> SolutionOutput:
+        _NamespaceProbeOrchestrator.task_message = task_message
+        _NamespaceProbeOrchestrator.printed = self.sandbox.run("print(TASK_TESTS)").stdout
+        _NamespaceProbeOrchestrator.passed = self.sandbox.run(
+            "import json\n"
+            "print(json.loads(run_tests(code='def add(a, b):\\n    return a + b\\n', test_list=TASK_TESTS))['success'])"
+        ).stdout
+        return SolutionOutput(
+            task_id=task_id, benchmark=benchmark, success=False, solution="", iterations=0,
+            total_requests=0, total_input_tokens=0, total_output_tokens=0, total_time_seconds=0.0,
+        )
+
+
+def test_mbpp_visible_tests_are_predefined_in_the_sandbox(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """可視テスト(test_imports + test_list)が、本物のSandboxに TASK_TESTS として置かれ、本物の run_tests にそのまま渡せる.
+
+    LLMが長いassertを打ち直すと、1反復の出力上限で切れる(実測: MBPP 462 の1件目は1,874字)。
+    """
+    monkeypatch.chdir(_REPO_ROOT)
+    monkeypatch.setattr(cli, "Orchestrator", _NamespaceProbeOrchestrator)
+    task_file = tmp_path / "task.json"
+    task_file.write_text(json.dumps({
+        "task_id": 7, "task_definition": "Add two numbers.", "function_definition": "def add(a, b):",
+        "test_imports": ["import math"], "test_list": ["assert math.isclose(add(1, 2), 3)"],
+    }), encoding="utf-8")
+    run_mbpp_agent(str(task_file), str(tmp_path / "solution.json"))
+    assert _NamespaceProbeOrchestrator.printed.strip() == repr(["import math", "assert math.isclose(add(1, 2), 3)"])
+    assert _NamespaceProbeOrchestrator.passed.strip() == "True"
+    assert "test_list=TASK_TESTS" in _NamespaceProbeOrchestrator.task_message
