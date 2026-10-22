@@ -22,6 +22,8 @@ def agent_swebench(
     **extra_args: object
 ) -> None:
     """SWE-bench用のエントリーポイント関数.
+
+    Args:
         task_file (str): SWEタスクファイルのパス
         output (str): SolutionOutputを書き出すJSONファイルのパス
         model_name (str): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用
