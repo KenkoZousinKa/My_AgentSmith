@@ -86,9 +86,15 @@ def format_mbpp_task(task_input: MBPPTaskInput) -> str:
         f"Problem:\n{task_input.task_definition}\n",
         f"Function signature:\n{task_input.function_definition}\n",
     ]
+    # テストは解答 + test_imports + test_list の順に連結して行われるため形式を揃える。
+    if task_input.test_imports:
+        lines.append("\nThe tests run after these imports:\n")
+        lines.extend(task_input.test_imports)
+
     if task_input.test_list:
         lines.append("\nYour solution must pass these tests:\n")
         lines.extend(task_input.test_list)
+
     return "\n".join(lines)
 
 
@@ -115,6 +121,7 @@ def format_swebench_task(task_input: SWEBenchTaskInput) -> str:
         task_input.problem_statement.strip()
     ]
     hints = task_input.hints_text.strip()
+
     if hints:
         if len(hints) > _HINTS_MAX_CHARS:
             hints = hints[:_HINTS_MAX_CHARS] + "\n...[hints truncated]"
@@ -583,7 +590,7 @@ def _build_transport(
     """
     # httpならurlを取得。なければデフォルトで。サーバーがいなければ既定のサーバーを起動する。
     if transport == "stdio":
-        return StdioClientTransport(command=command or SWE_SERVER_COMMAND)
+        return StdioClientTransport(command=command or server_command)
     if transport == "http":
         return HttpClientTransport(url=url or DEFAULT_URL, command=server_command + " --transport http")
 
