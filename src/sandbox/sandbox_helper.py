@@ -7,6 +7,7 @@ import signal
 import resource
 import json
 import struct
+import re
 
 
 def _tool_proxy(name: str, out_fd: int, in_fd: int) -> Callable[..., Any]:
@@ -28,7 +29,6 @@ def _tool_proxy(name: str, out_fd: int, in_fd: int) -> Callable[..., Any]:
             if remaining > 0:
                 signal.setitimer(signal.ITIMER_REAL, remaining)
         if reply.get("error") is not None:
-            print(reply)
             raise RuntimeError(f"tool {name!r} failed: {reply['error']}")
         return reply.get("result")
     proxy.__name__ = name
@@ -45,7 +45,10 @@ def _apply_limits(config: SandboxConfig) -> None:
     max_bytes = config.max_memory_mb * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_AS, (max_bytes, max_bytes))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+    try:
+        resource.setrlimit(resource.RLIMIT_NPROC, (0, 0))
+    except (ValueError, OSError):
+        pass
 
 
 def _disable_network() -> None:
@@ -56,6 +59,7 @@ def _disable_network() -> None:
         return
 
     def blocked(*_a: Any, **_k: Any) -> Any:
+        """Refuse every socket operation."""
         raise PermissionError("network access is disabled")
 
     socket.socket = blocked  # type: ignore[assignment,misc]
@@ -116,3 +120,16 @@ def _recv(fd: int) -> dict[str, Any]:
 
     (length,) = struct.unpack("!I", read_exactly(4))
     return json.loads(read_exactly(length).decode("utf-8"))
+
+
+def _py_name(name: str) -> str:
+    """Turn an MCP tool name into a valid Python identifier.
+
+    MCP permits '-' and '.', which are not valid identifiers: a proxy
+    stored under such a key is injected into the namespace but can
+    never be called from generated code. The original name is kept
+    inside MCPToolFunction for the wire call, so only the namespace
+    key is rewritten here.
+    """
+    cleaned = re.sub(r"\W", "_", name)
+    return f"tool_{cleaned}" if cleaned[:1].isdigit() else cleaned

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
-from src.sandbox.code_lint import _safe_builtins
+from src.sandbox.code_lint import _safe_builtins, check_code
 from src.sandbox.sandbox_result import FinalAnswer
 from src.sandbox.sandbox_helper import (
     _apply_limits,
@@ -27,6 +27,11 @@ def _execute(
     code: str, namespace: dict[str, Any], config: SandboxConfig
 ) -> dict[str, Any]:
     """Run one snippet and describe what happened, as a dict."""
+    reject = check_code(code, config, frozenset(namespace))
+    if reject:
+        return {"kind": "error", "error": reject,
+                "stdout": "", "stderr": "", "timeout": False,
+                "truncated": False, "value": None}
     timeout = config.max_execution_time_seconds
     tree = ast.parse(code)
     tail = (tree.body.pop()

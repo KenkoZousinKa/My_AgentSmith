@@ -6,12 +6,16 @@ from pathlib import Path
 import builtins
 import os
 import ast
+import re
 
 
 _BLOCKED = frozenset({
     "eval", "exec", "compile", "__import__", "globals", "locals", "vars",
     "getattr", "setattr", "breakpoint", "input", "exit", "quit",
 })
+
+
+_DUNDER_RE = re.compile(r"__\w+__")
 
 
 def _allowed(name: str, authorized: frozenset[str]) -> bool:
@@ -59,6 +63,16 @@ class _Checker(ast.NodeVisitor):
         """Blocks dunder access, which reaches globals and subclasses."""
         if node.attr.startswith("__") and node.attr.endswith("__"):
             self.errors.append(f"access to dunder attribute {node.attr!r}")
+        elif node.attr == "format":
+            self.errors.append("use of '.format' is not allowed")
+        self.generic_visit(node)
+
+    def visit_Constant(self, node: ast.Constant) -> None:  # noqa: N802
+        """Reject dunder tokens hidden inside string literals."""
+        if isinstance(node.value, str) and _DUNDER_RE.search(node.value):
+            self.errors.append(
+                "dunder token in a string literal is not allowed"
+            )
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:  # noqa: N802

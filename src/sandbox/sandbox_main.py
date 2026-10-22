@@ -3,7 +3,7 @@
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
 from src.sandbox.code_lint import check_code, _BLOCKED
-from src.sandbox.sandbox_helper import _send, _recv, _truncate
+from src.sandbox.sandbox_helper import _send, _recv, _truncate, _py_name
 from src.sandbox.sandbox_child import _child_main
 from src.models.output import ExecuteResult
 from src.mcp_core.client.mcp_tool_function import MCPToolFunction
@@ -45,7 +45,7 @@ class Sandbox:
             try:
                 self.client.connect()
                 self.tools = {
-                    tool.name: MCPToolFunction(self.client, tool)
+                    _py_name(tool.name): MCPToolFunction(self.client, tool)
                     for tool in self.client.list_tools()
                 }
             except Exception:
@@ -214,7 +214,7 @@ class Sandbox:
             "- Dunder attribute access (__class__, __globals__) is blocked.",
             "",
             "## final_answer",
-            ""
+            "",
             "final_answer(value) ends the task. It is always available and",
             "is not an MCP tool. Call it once you have a verified answer.",
             "",
@@ -249,7 +249,10 @@ class Sandbox:
                 reply["result"] = raw
             except Exception as exc:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
-        _send(self._cmd_w, reply)
+        try:
+            _send(self._cmd_w, reply)
+        except OSError:
+            pass
 
     def _to_result(self, message: dict[str, Any]) -> ExecuteResult:
         """Turn a terminal worker message into an ExecuteResult."""
