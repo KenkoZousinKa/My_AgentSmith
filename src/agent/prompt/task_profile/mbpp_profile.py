@@ -8,6 +8,8 @@ MBPPの提出は関数のソースコード。
     提出物の前後の空白とmarkdownのコードフェンスを取り除く。
 - mbpp_rejection()
     提出物を受理できるか検査し、ダメなら理由を返す。
+- hardcoded_answers()
+    提出物が可視テストの期待値をリテラルのままreturnしているか検査し、ダメなら理由を返す。
 - MBPPProfile()
     MBPP用のTaskProfile
 """
@@ -102,6 +104,94 @@ def mbpp_rejection(solution: str) -> str | None:
         )
 
     return None
+
+
+_TRIVIAL_LITERALS: tuple[object, ...] = (None, True, False, 0, 1, -1, "", (), [], {})
+
+
+def _literal_value(node: ast.AST) -> tuple[bool, object]:
+    """ASTノードがリテラル値かを判定し、リテラル値ならその値を返す.
+
+    Args:
+        node (ast.AST): 調べるASTノード。
+
+    Returns:
+        tuple[bool, object]: (リテラル値かどうか, リテラル値ならその値、そうでなければNone)
+    """
+    # literalでなければValueErrorが投げられるので、例外をキャッチしてFalseを返す。
+    try:
+        return True, ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+        return False, None
+
+
+def _is_trivial(value: object) -> bool:
+    """ありふれた戻り値(None, 0, True, 空文字など)かを判定する.
+
+    Args:
+        node (ast.AST): 調べるASTノード。
+
+    Returns:
+        bool: trivial literal ならTrue、そうでなければFalse。
+    """
+    return any(
+        type(value) is type(trivial) and value == trivial for trivial in _TRIVIAL_LITERALS
+    )
+
+
+def hardcoded_answers(solution: str, test_list: list[str]) -> list[str]:
+    """提出物が可視テストの期待値をリテラルのままreturnしているか検査する.
+
+    Args:
+        solution (str): 提出物の文字列。
+        test_list (list[str]): 可視テストのassert文のリスト。
+
+    Returns:
+        list[str]: 可視テストの期待値をリテラルのままreturnしている場合は、理由の文字列のリスト。
+            そうでなければ空のリスト。
+    """
+    expected_values: list[object] = []
+    for test in test_list:
+        try:
+            test_tree = ast.parse(test.strip())
+        except SyntaxError:
+            continue
+        for node in ast.walk(test_tree):
+            if (
+                isinstance(node, ast.Assert)
+                and isinstance(node.test, ast.Compare)
+                and len(node.test.ops) == 1
+                and isinstance(node.test.ops[0], ast.Eq)
+            ):
+                # assert <expr> == <expected>
+                expected_node = node.test.comparators[0]
+                is_literal, value = _literal_value(expected_node)
+                if is_literal and not _is_trivial(value):
+                    expected_values.append(value)
+    if len(expected_values) < 2:
+        return []
+
+    try:
+        solution_tree = ast.parse(solution)
+    except SyntaxError:
+        return []
+
+    returned_values: list[object] = []
+    for node in ast.walk(solution_tree):
+        if isinstance(node, ast.Return) and node.value is not None:
+            is_literal, value = _literal_value(node.value)
+            if is_literal:
+                returned_values.append(value)
+
+    matched: list[str] = []
+    for value in expected_values:
+        if any(
+            type(value) is type(returned) and value == returned for returned in returned_values
+        ):
+            if repr(value) not in matched:
+                matched.append(repr(value))
+
+    return matched if len(matched) >= 2 else []
 
 
 _MBPP_FEW_SHOT_EXAMPLE = '''Thought: Implement the function, verify it with the given tests, submit if they pass.

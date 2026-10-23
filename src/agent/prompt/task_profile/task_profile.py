@@ -49,6 +49,12 @@ class TaskProfile(ABC):
         latest_observation_max_chars (int): 直前のObservation(これからLLMが読む)の最大文字数。
             テスト失敗の内容、読んだファイルの中身を途中で切らないために過去の分より長く残す。デフォルトは1500。
         assistant_max_chars (int): 再送するAssistantの発話1件の最大文字数。デフォルトは1200。
+        rotate_after_missed (int | None): 提出できなかった反復がこの回数続いたら別のプロバイダに切り替える。
+            同じプロバイダだと同じ傾向になることが多いのでプロバイダごと切り替える。デフォルトは2。
+            SWE-Benchでは探索が多くなるのでNoneで切り替えない。
+        rotate_after_response (int | None): 以前と同じコードの実行がこの回数続いたら別のプロバイダに切り替える。
+            Noneで切り替えない。
+        iteration_warn_at (int): 反復の残り回数がこの値以下になったらLLMに警告する。デフォルトは1。
     """
 
     # 既定はMBPP向けの値。累積input_tokensの上限が6000のため短く絞る。
@@ -56,6 +62,9 @@ class TaskProfile(ABC):
     observation_max_chars: int = 800
     latest_observation_max_chars: int = 1500
     assistant_max_chars: int = 1200
+    rotate_after_missed: int | None = 2
+    rotate_after_response: int | None = None
+    iteration_warn_at: int = 1
 
     def format_rules(self) -> str:
         """システムプロンプトの出力形式のルールを返す.
@@ -64,6 +73,14 @@ class TaskProfile(ABC):
             str: 出力形式のルール。## Output Format に入れる箇条書き。
         """
         return DEFAULT_FORMAT_RULES
+
+    def submit_hint(self) -> str:
+        """反復の残り回数が少ない時にどう提出するか、LLMに提出を促す文を返す.
+
+        Returns:
+            str: 提出を促す文。
+        """
+        return "Submit your best answer with final_answer(...) now."
 
     def sanitize_submission(self, raw: str) -> str:
         """final_answer()に渡された提出物を整形する.

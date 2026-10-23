@@ -80,6 +80,38 @@ class SWEBenchProfile(TaskProfile):
     observation_max_chars: int = 3000
     latest_observation_max_chars: int = 8000
     assistant_max_chars: int = 2000
+    # SWE-Benchでは探索が多くなるのでNoneで切り替えない。
+    rotate_after_missed: int | None = None
+    # [REPEATED]の指摘の後も同じコードを出し直したら別のプロバイダに切り替える。
+    # codestralがsympy-14711cで失敗するedit_fileを22反復出し続けたため。
+    # ただ、namespaceが残るので同じコードを出すことで改善することもあるので用検討。
+    rotate_after_response: int | None = 2
+    # テストの実行、パッチの確認、提出に数反復かかるので暫定4。
+    iteration_warn_at: int = 4
+
+    # =============== override methods ===============
+    def format_rules(self) -> str:
+        """SWE-bench用の出力形式のルールを返す.
+
+        - ツールが文字列を返すこと(print()で出力すること)。
+        - ツールをimportしないこと
+        - 名前空間が反復をまたいで残ることをMBPPの既定ルールに足して伝える。
+
+        Returns:
+            str: 出力形式のルール
+        """
+        return _SWEBENCH_FORMAT_RULES
+
+    def submit_hint(self) -> str:
+        """反復の残り回数が少ない時にどう提出するか、LLMに提出を促す文を返す.
+
+        Returns:
+            str: 提出を促す文。
+        """
+        return (
+            "Stop exploring: if your fix is in place, run run_tests() once and submit with "
+            "final_answer(get_patch()). If no fix is in place yet, make the most likely minimal edit now."
+        )
 
     def sanitize_submission(self, raw: str) -> str:
         """提出物のパッチをgit applyできる形に整形する.
@@ -168,6 +200,7 @@ class SWEBenchProfile(TaskProfile):
         patch = self.sanitize_submission(result.final_answer)
         return patch if self.submission_rejection(patch) is None else ""
 
+    # =============== abstract methods ===============
     def task_instructions(self) -> str:
         """SWEタスクの進め方を返す.
 
@@ -232,15 +265,3 @@ class SWEBenchProfile(TaskProfile):
             str: LLM向けツールマニュアル
         """
         return sandbox.manual()
-
-    def format_rules(self) -> str:
-        """SWE-bench用の出力形式のルールを返す.
-
-        - ツールが文字列を返すこと(print()で出力すること)。
-        - ツールをimportしないこと
-        - 名前空間が反復をまたいで残ることをMBPPの既定ルールに足して伝える。
-
-        Returns:
-            str: 出力形式のルール
-        """
-        return _SWEBENCH_FORMAT_RULES

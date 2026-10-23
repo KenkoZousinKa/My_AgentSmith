@@ -132,6 +132,29 @@ class ResilientLLMClient:
         self._log = logger if logger is not None else _LOGGER
         # 1周目で一過性でない失敗をした組み合わせ(認証 / 空応答 / 解釈できない応答)を記録し、1タスクの間は後回し
         self._demoted: set[_Combo] = set()
+        # 停滞して後回しにしたプロバイダ名と直前に成功した組み合せ
+        # 同じモデルが同じ解答を繰り返す時に別のプロバイダのモデルに切り替えるために使う。
+        self._rotated: list[str] = []
+        self._last_success: _Combo | None = None
+
+    def rotate(self) -> None:
+        """直前に成功したプロバイダを後回しにし次の生成から別のプロバイダを優先する.
+
+        Orchestratorが同じモデルで提出できない反復が続いたと判断し呼ぶ。
+        プロバイダ単位で回すのは同じプロバイダのモデルは似た誤り方をすることが多いため。
+            -> それは同じプロバイダ内で同じ会社のモデルを回すからか？
+        全プロバイダを後回しにしたら古くなったプロバイダから順に復帰する。
+        """
+        # 直前に成功したプロバイダがなければ何もしない。
+        if self._last_success is None:
+            return
+
+        # 直前に成功したプロバイダを取得
+        name = self._last_success[0]
+        if name in self._rotated:
+            self._rotated.remove(name)
+        self._rotated.append(name)
+        self._log.info("rotate: provider=%s moved to the back after stagnation", name)
 
     def _budget(self) -> float | None:
         """残り時間から安全マージンを引いた秒数を返す.
@@ -293,11 +316,14 @@ class ResilientLLMClient:
     def _candidates(self) -> list[_Candidate]:
         """この周回で試す組み合わせのリストを優先度順に返す。
 
+        停滞で後回しにしたプロバイダ(rotate())はその後ろに後回しにした古い順で並べる。
         一過性でない失敗を起こした時は、捨てずに最後に回す。
+
         Returns:
             list[_Candidate]: (provider_config, key_number, api_key, model_name) のリスト。
         """
         preferred: list[_Candidate] = []
+        rotated: dict[str, list[_Candidate]] = {name: [] for name in self._rotated}
         demoted: list[_Candidate] = []
 
         # 優先度順に並べたすべてのプロバイダを試す
@@ -320,10 +346,14 @@ class ResilientLLMClient:
                     # 一過性でない失敗を起こした組み合わせは後回しにする。
                     if (config.name, key_number, model) in self._demoted:
                         demoted.append(candidate)
+                    # 停滞で後回しにしたプロバイダは後回しした順に並べるために分ける。
+                    elif config.name in self._rotated:
+                        rotated[config.name].append(candidate)
                     else:
                         preferred.append(candidate)
 
-        return preferred + demoted
+        ordered_rotated = [candidate for name in self._rotated for candidate in rotated[name]]
+        return preferred + ordered_rotated + demoted
 
     def _sweep(
         self,
@@ -502,6 +532,8 @@ class ResilientLLMClient:
 
                     # 成功した組み合わせは、次のタスクで後回しにしないようにする。
                     self._demoted.discard(combo)
+                    # rotate()で後回しにするプロバイダを決めるために覚えておく。
+                    self._last_success = combo
                     self._log.info(
                         "provider=%s key#%d model=%s success after %d attempt(s)",
                         config.name,
