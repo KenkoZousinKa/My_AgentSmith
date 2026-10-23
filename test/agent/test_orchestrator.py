@@ -77,8 +77,9 @@ def test_no_code_then_success() -> None:
     solution = _orchestrator([_RESP_NO_CODE, _RESP_FINAL]).run("82", "mbpp", "task")
     assert solution.success is True
     assert solution.iterations == 2
+    # 何も実行していないので、stepの入出力は空(A-13)。[NO_CODE]は次のuserメッセージとしてLLMに届く。
     assert solution.steps[0].sandbox_input == ""
-    assert solution.steps[0].sandbox_output.startswith("[NO_CODE]")
+    assert solution.steps[0].sandbox_output == ""
 
 
 def test_limit_stop_max_iterations() -> None:
@@ -193,6 +194,7 @@ def test_total_requests_includes_failed_attempts() -> None:
     assert solution.success is False
     assert solution.error == "LLM_UNAVAILABLE"
     assert len(solution.steps) == 1          # 1回目のstepだけ積まれる
+    assert solution.iterations == 1          # 応答の無い反復は数えない(A-13)
     assert solution.total_requests == 1 + 3  # step1の1試行 + 全滅時の3試行
 
 
@@ -560,6 +562,8 @@ def test_input_guard_shrinks_window_before_giving_up() -> None:
     assert solution.error == "MAX_INPUT_TOKENS"
     sizes = [len(messages) for messages in provider.sent]
     assert max(sizes) == 6 and min(sizes[sizes.index(6):]) < 6  # 一度広げた窓を、途中で縮めて送った
+    # 送らずに止めた反復は数えない(A-13)。反復の数と step の数が一致する(実測: MBPP 138 で iter=5 / step 4件だった)
+    assert solution.iterations == len(solution.steps) == len(provider.sent)
 
 
 def test_input_guard_learns_a_finer_tokenizer_and_still_never_overshoots() -> None:
@@ -610,3 +614,100 @@ def test_input_guard_learns_from_what_was_actually_sent() -> None:
     assert solution.total_input_tokens <= 6000
     assert orchestrator._chars_per_token < 2.0
 
+
+# ============ A-13 / A-14 / A-15: step の記録・Observation の注記・モデルの切り替え ============
+class _RecordingProvider(StubProvider):
+    """送られたメッセージ列を記録し、rotate() の呼び出し回数を数えるスタブ(ResilientLLMClient の代わり)."""
+
+    def __init__(self, responses: list[str], output_tokens: int = 5) -> None:
+        super().__init__(responses)
+        self.output_tokens = output_tokens
+        self.sent: list[list[dict[str, str]]] = []
+        self.rotations = 0
+
+    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+        self.sent.append([dict(message) for message in messages])
+        response = super().generate(messages, stop_sequences, max_tokens)
+        return response.model_copy(update={"output_tokens": self.output_tokens})
+
+    def rotate(self) -> None:
+        self.rotations += 1
+
+
+def _recording_orchestrator(provider: _RecordingProvider, profile: object = None, **limit_kw: object) -> Orchestrator:
+    return Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(),
+        profile=profile if profile is not None else MBPPProfile(),  # type: ignore[arg-type]
+        limits=_limits(**limit_kw),
+    )
+
+
+def _observations(provider: _RecordingProvider) -> list[str]:
+    """LLMに届いた Observation(各リクエストの最後の user メッセージ)を、2回目のリクエストから順に返す."""
+    return [messages[-1]["content"] for messages in provider.sent[1:]]
+
+
+def test_no_code_cut_off_names_prose_as_the_cause() -> None:
+    """1反復の出力上限まで使い切ってコードが無ければ、散文で切れたことを名指しで伝える(A-14a)."""
+    provider = _RecordingProvider([_RESP_NO_CODE, _RESP_FINAL], output_tokens=600)
+    _recording_orchestrator(provider, max_output_tokens_per_iteration=600).run("82", "mbpp", "task")
+    assert "spent its whole 600-token allowance on prose" in _observations(provider)[0]
+
+
+def test_no_code_without_truncation_omits_cut_off_note() -> None:
+    """書き終えたのにコードが無いだけなら、切れたとは言わない."""
+    provider = _RecordingProvider([_RESP_NO_CODE, _RESP_FINAL], output_tokens=50)
+    _recording_orchestrator(provider, max_output_tokens_per_iteration=600).run("82", "mbpp", "task")
+    observation = _observations(provider)[0]
+    assert observation.startswith("[NO_CODE]")
+    assert "allowance on prose" not in observation
+
+
+def test_budget_note_appended_when_one_turn_of_output_remains() -> None:
+    """出力の残りが1反復分以下になったら、提出を促す(A-14b)."""
+    provider = _RecordingProvider([_RESP_PRINT, _RESP_FINAL], output_tokens=900)
+    _recording_orchestrator(
+        provider, max_output_tokens=1500, max_output_tokens_per_iteration=600
+    ).run("82", "mbpp", "task")
+    assert "[BUDGET] Only 600 output tokens remain" in _observations(provider)[0]
+
+
+def test_budget_note_absent_while_two_turns_of_output_remain() -> None:
+    """残りが2反復分あるうちは促さない(早すぎる提出に追い込まない)."""
+    provider = _RecordingProvider([_RESP_PRINT, _RESP_FINAL], output_tokens=300)
+    _recording_orchestrator(
+        provider, max_output_tokens=1500, max_output_tokens_per_iteration=600
+    ).run("82", "mbpp", "task")
+    assert "[BUDGET]" not in _observations(provider)[0]
+
+
+def test_iteration_note_asks_to_submit_near_the_limit() -> None:
+    """反復の残りが profile.iteration_warn_at 以下になったら、プロファイルの submit_hint で促す."""
+    provider = _RecordingProvider([_RESP_PRINT, _RESP_FINAL])
+    _recording_orchestrator(provider, max_iterations=2).run("82", "mbpp", "task")
+    assert "[BUDGET] Only 1 iteration remains for this task." in _observations(provider)[0]
+    assert MBPPProfile().submit_hint() in _observations(provider)[0]
+
+
+def test_repeated_code_is_flagged_and_provider_rotates() -> None:
+    """同じコードの再実行は [REPEATED] で指摘し、提出に至らない反復が2回続いたらモデルを替える(A-14c・A-15)."""
+    provider = _RecordingProvider([_RESP_PRINT, _RESP_PRINT, _RESP_FINAL])
+    _recording_orchestrator(provider).run("82", "mbpp", "task")
+    first, second = _observations(provider)
+    assert "[REPEATED]" not in first
+    assert second.startswith("[REPEATED] This code is identical to what you ran in step 1")
+    assert provider.rotations == 1
+
+
+def test_whitespace_only_changes_still_count_as_repeated() -> None:
+    """空白だけ違うコードも同じとみなす."""
+    provider = _RecordingProvider([_block("print( 'hello' )"), _block("print( 'hello' )  "), _RESP_FINAL])
+    _recording_orchestrator(provider).run("82", "mbpp", "task")
+    assert _observations(provider)[1].startswith("[REPEATED]")
+
+
+def test_swebench_rotates_after_repeating_the_same_code() -> None:
+    """SWE-bench は提出しない反復では切り替えず、同じコードを2回繰り返したら切り替える."""
+    provider = _RecordingProvider([_RESP_PRINT, _block("print(1)"), _RESP_PRINT, _RESP_PRINT])
+    _recording_orchestrator(provider, profile=_PatchCollectingProfile(), max_iterations=4).run("x", "swebench", "task")
+    assert provider.rotations == 1

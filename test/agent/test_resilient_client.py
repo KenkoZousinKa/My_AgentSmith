@@ -379,3 +379,26 @@ def test_demoted_combo_is_still_tried_last(monkeypatch: pytest.MonkeyPatch) -> N
     third = _gen(client)
     assert third.model_name == "p1/model"          # 成功したので後回しが解除され、先頭に戻った
     assert third.retries == 0
+
+
+def test_rotate_prefers_another_provider_next_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    """rotate() は直前に成功したプロバイダを後回しにする。全部後回しにしたら古い順に戻る(A-15)."""
+    monkeypatch.setenv("P1_KEY", "k1")
+    monkeypatch.setenv("P2_KEY", "k2")
+    providers = [_config("p1", "P1_KEY", 1), _config("p2", "P2_KEY", 2)]
+    scripts: dict[str, list[object]] = {
+        "k1": [_ok_response("p1/model"), _ok_response("p1/model")],
+        "k2": [_ok_response("p2/model")]}
+    client, _ = _client(providers, scripts)
+    assert _gen(client).model_name == "p1/model"
+    client.rotate()
+    assert _gen(client).model_name == "p2/model"   # p1を後回しにしたのでp2が先
+    client.rotate()
+    assert _gen(client).model_name == "p1/model"   # p2も後回しにしたので、先に後回しにしたp1から戻る
+
+
+def test_rotate_before_any_success_does_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("P1_KEY", "k1")
+    client, _ = _client([_config("p1", "P1_KEY", 1)], {"k1": [_ok_response("p1/model")]})
+    client.rotate()
+    assert _gen(client).model_name == "p1/model"

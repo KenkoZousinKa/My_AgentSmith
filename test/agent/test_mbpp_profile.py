@@ -1,7 +1,7 @@
 """MBPPProfile(mbpp_profile.py)の提出物の整形と検査のテスト(A-18の一部・A-12で使う)."""
 import pytest
 
-from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile, mbpp_rejection, strip_code_fences
+from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile, hardcoded_answers, mbpp_rejection, strip_code_fences
 
 _FUNCTION = "def f(x):\n    return x + 1"
 
@@ -77,3 +77,34 @@ def test_profile_hooks_use_the_mbpp_rules() -> None:
     assert profile.is_fallback_candidate(_FUNCTION) is True
     assert profile.is_fallback_candidate(f"{_FUNCTION}\nprint(f(1))") is False
     assert profile.is_fallback_candidate("print('hello')") is False
+
+
+_STAR_TESTS = ["assert find_star_num(3) == 37", "assert find_star_num(4) == 73", "assert find_star_num(5) == 121"]
+
+
+def test_hardcoded_answers_are_detected() -> None:
+    """可視テストの期待値を2つ以上 return のリテラルで直書きしていたら検出する(実測: MBPP 268)."""
+    solution = (
+        "def find_star_num(n):\n"
+        "    if n == 4:\n        return 73\n"
+        "    elif n == 5:\n        return 121\n"
+        "    return 6 * n * (n - 1) + 1\n"
+    )
+    assert hardcoded_answers(solution, _STAR_TESTS) == ["73", "121"]
+
+
+def test_general_rule_is_not_hardcoding() -> None:
+    assert hardcoded_answers("def find_star_num(n):\n    return 6 * n * (n - 1) + 1\n", _STAR_TESTS) == []
+
+
+def test_trivial_return_values_are_not_hardcoding() -> None:
+    """True / False / 0 のようなありふれた値は、一致しても直書きの証拠にしない."""
+    tests = ["assert is_even(2) == True", "assert is_even(3) == False", "assert count(0) == 0"]
+    solution = "def is_even(n):\n    if n % 2:\n        return False\n    return True\n"
+    assert hardcoded_answers(solution, tests) == []
+
+
+def test_a_single_match_is_not_enough() -> None:
+    """1つだけの一致は偶然でも起こるので見逃す."""
+    solution = "def find_star_num(n):\n    if n == 4:\n        return 73\n    return 6 * n * (n - 1) + 1\n"
+    assert hardcoded_answers(solution, _STAR_TESTS) == []

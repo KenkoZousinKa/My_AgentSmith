@@ -1,5 +1,5 @@
 """Observation 生成(observation.py)のテスト."""
-from src.agent.observation import Status, build_observation, collect_statuses, observation_no_code
+from src.agent.observation import Status, build_observation, collect_statuses, iteration_note, observation_no_code
 from src.models.output import ExecuteResult
 
 
@@ -66,3 +66,18 @@ def test_no_code_helper() -> None:
     obs = observation_no_code()
     assert obs.startswith("[NO_CODE]")
     assert "code block" in obs
+
+
+def test_value_of_last_expression_is_shown() -> None:
+    """print し忘れた最後の式の値も Observation に出す(A-14d)."""
+    observation = build_observation(_result(value="{'success': False}"))
+    assert "--- value of the last expression ---\n{'success': False}" in observation
+
+
+def test_no_value_section_without_a_value() -> None:
+    assert "value of the last expression" not in build_observation(_result(stdout="hi"))
+
+
+def test_iteration_note_is_singular_for_one_iteration() -> None:
+    assert iteration_note(1, "Submit.") == "[BUDGET] Only 1 iteration remains for this task. Submit."
+    assert iteration_note(3, "Submit.").startswith("[BUDGET] Only 3 iterations remain")

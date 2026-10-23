@@ -227,7 +227,7 @@ def test_mbpp_prompt_warns_about_hidden_tests_and_tool_imports(sandbox: _FakeSan
     assert "never import them" in prompt
     assert "NEVER derive formulas or trace arithmetic in prose" in prompt
     assert "{" not in prompt.replace("{'success'", "")  # 差し込み忘れの {name} が残っていない
-    assert "define the function directly (not inside a string)" in prompt  # 文字列のままでは呼べない(NameError)
+    assert "what your function actually returned" in prompt  # run_testsが実際の値を返す前提(テストブランチ版のサーバー)
 
 
 def test_mbpp_task_message_lists_test_imports() -> None:

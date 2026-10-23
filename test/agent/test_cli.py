@@ -269,3 +269,51 @@ def test_mbpp_visible_tests_are_predefined_in_the_sandbox(tmp_path: Path, monkey
     assert _NamespaceProbeOrchestrator.printed.strip() == repr(["import math", "assert math.isclose(add(1, 2), 3)"])
     assert _NamespaceProbeOrchestrator.passed.strip() == "True"
     assert "test_list=TASK_TESTS" in _NamespaceProbeOrchestrator.task_message
+
+
+# ============ A-19: 提出前に可視テストを本物の run_tests で検証する ============
+
+class _VerifierProbeOrchestrator:
+    """Orchestratorの代わりに、cliが渡した solution_verifier を本物のSandboxとサーバーで呼んでみる(LLMは呼ばない)."""
+
+    verdicts: dict[str, tuple[bool, str]] = {}
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.verifier = kwargs["solution_verifier"]
+
+    def run(self, task_id: str, benchmark: str, task_message: str) -> SolutionOutput:
+        candidates = {
+            "right": "def add(a, b):\n    return a + b\n",
+            "wrong": "def add(a, b):\n    return a - b\n",
+            "hardcoded": "def add(a, b):\n    if a == 10:\n        return 30\n    if a == 2:\n        return 7\n    return 3\n",
+        }
+        _VerifierProbeOrchestrator.verdicts = {name: self.verifier(code) for name, code in candidates.items()}
+        return SolutionOutput(
+            task_id=task_id, benchmark=benchmark, success=False, solution="", iterations=0,
+            total_requests=0, total_input_tokens=0, total_output_tokens=0, total_time_seconds=0.0,
+        )
+
+
+def test_mbpp_submission_is_verified_with_the_visible_tests(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """提出物は本物の run_tests で可視テスト(test_imports込み)にかけ、落ちたら実際の値つきで差し戻す.
+
+    試験は再試行なしなので、可視テストに落ちる提出を受理する理由は無い。
+    可視テストの答えを直書きした提出は、run_tests を通っても差し戻す(実測: MBPP 268)。
+    """
+    monkeypatch.chdir(_REPO_ROOT)
+    monkeypatch.setattr(cli, "Orchestrator", _VerifierProbeOrchestrator)
+    task_file = tmp_path / "task.json"
+    task_file.write_text(json.dumps({
+        "task_id": 7, "task_definition": "Add two numbers.", "function_definition": "def add(a, b):",
+        "test_imports": ["import math"],
+        "test_list": ["assert math.isclose(add(1, 2), 3)", "assert add(10, 20) == 30", "assert add(2, 5) == 7"],
+    }), encoding="utf-8")
+    run_mbpp_agent(str(task_file), str(tmp_path / "solution.json"))
+    verdicts = _VerifierProbeOrchestrator.verdicts
+    assert verdicts["right"] == (True, "")
+    passed, detail = verdicts["wrong"]
+    assert passed is False
+    assert "-10" in detail  # add(10, 20) が実際に返した値(テストブランチ版の run_tests は実際の値を返す)
+    passed, detail = verdicts["hardcoded"]
+    assert passed is False
+    assert "as literals (30, 7)" in detail
