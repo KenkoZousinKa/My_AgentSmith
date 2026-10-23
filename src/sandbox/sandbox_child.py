@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
-from src.sandbox.code_lint import _safe_builtins, check_code
+from src.sandbox.code_lint import safe_builtins, check_code
 from src.sandbox.sandbox_result import FinalAnswer
 from src.sandbox.sandbox_helper import (
-    _apply_limits,
-    _disable_network,
-    _tool_proxy,
-    _recv,
-    _send,
-    _on_alarm,
-    _truncate,
-    _Timeout
+    apply_limits,
+    disable_network,
+    catalog_relays,
+    scrub_environment,
+    install_audit_hook,
+    tool_proxy,
+    recv,
+    send,
+    on_alarm,
+    truncate,
+    Timeout
 )
 from typing import Any
 from contextlib import redirect_stdout, redirect_stderr
@@ -21,6 +24,18 @@ import signal
 import io
 import traceback
 import ast
+
+
+def _exit_code(code: Any) -> int:
+    """Map a systemexit code to an int the way Python itself does.
+
+    None -> 0, int -> itself, anything else (a string message) + 1.
+    """
+    if code is None:
+        return 0
+    if isinstance(code, int):
+        return code
+    return 1
 
 
 def _execute(
@@ -45,24 +60,29 @@ def _execute(
         with redirect_stdout(out), redirect_stderr(err):
             exec(body, namespace)
             if tail is not None:
+                assert isinstance(tail, ast.Expr)
                 expr = compile(
                     ast.Expression(tail.value), "<sandbox>", "eval"
                 )
                 value = eval(expr, namespace)
                 if value is not None:
-                    result["value"] = repr(value)
+                    result["value"] = (
+                        value if isinstance(value, str) else repr(value)
+                    )
     except FinalAnswer as answer:
         result = {"kind": "final_answer", "value": str(answer.value)}
-    except _Timeout:
+    except Timeout:
         result = {"kind": "error", "timeout": True, "error": (
             f"timeout after {timeout}s; any output above is partial"
         )}
     except MemoryError:
         result = {"kind": "error", "error": "memory limit exceeded"}
+    except (PermissionError, ImportError) as exc:
+        result = {"kind": "exit", "error": f"{type(exc).__name__}: {exc}"}
     except KeyboardInterrupt:
         result = {"kind": "interrupt"}
     except SystemExit as exc:
-        result = {"kind": "exit", "code": str(exc.code or 0)}
+        result = {"kind": "exit", "code": _exit_code(exc.code)}
     except BaseException:  # noqa: B036 - KeyboardInterrupt/SystemExit
         # are caught above; this is needed to catch LLM code that can
         # raise any exception.
@@ -71,24 +91,25 @@ def _execute(
         signal.setitimer(signal.ITIMER_REAL, 0.0)
 
     limit = config.max_output_chars
-    out_text, out_cut = _truncate(out.getvalue(), limit)
-    err_text, err_cut = _truncate(err.getvalue(), limit)
+    out_text, out_cut = truncate(out.getvalue(), limit)
+    err_text, err_cut = truncate(err.getvalue(), limit)
     result["stdout"] = out_text
     result["stderr"] = err_text
     result["truncated"] = out_cut or err_cut
     return result
 
 
-def _child_main(
+def child_main(
         config: SandboxConfig,
         cmd_fd: int,
         res_fd: int,
-        tool_names: list[str]
+        tool_names: list[str],
+        has_catalog: bool = False
 ) -> None:
     """Worker entry point. Never returns."""
     os.setsid()
-    signal.signal(signal.SIGALRM, _on_alarm)
-    _disable_network()
+    signal.signal(signal.SIGALRM, on_alarm)
+    disable_network()
 
     def final_answer(value: Any = None) -> Any:
         """Flag for final answer."""
@@ -96,23 +117,27 @@ def _child_main(
 
     namespace: dict[str, Any] = {
         "__name__": "__sandbox__",
-        "__builtins__": _safe_builtins(config),
+        "__builtins__": safe_builtins(config),
         "final_answer": final_answer,
     }
     for name in tool_names:
-        namespace[name] = _tool_proxy(name, res_fd, cmd_fd)
+        namespace[name] = tool_proxy(name, res_fd, cmd_fd)
+    if has_catalog:
+        namespace.update(catalog_relays(res_fd, cmd_fd))
 
-    _apply_limits(config)
+    scrub_environment()
+    apply_limits(config)
+    install_audit_hook(config)
 
     while True:
         try:
-            message = _recv(cmd_fd)
+            message = recv(cmd_fd)
         except (EOFError, OSError):
             os._exit(0)
         if message.get("kind") != "run":
             os._exit(0)
         outcome = _execute(message["code"], namespace, config)
         try:
-            _send(res_fd, outcome)
+            send(res_fd, outcome)
         except OSError:
             os._exit(1)

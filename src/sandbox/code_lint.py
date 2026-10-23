@@ -6,7 +6,6 @@ from pathlib import Path
 import builtins
 import os
 import ast
-import re
 
 
 _BLOCKED = frozenset({
@@ -15,7 +14,7 @@ _BLOCKED = frozenset({
 })
 
 
-_DUNDER_RE = re.compile(r"__\w+__")
+_IMPLICIT_IMPORTS = frozenset({"_strptime"})
 
 
 def _allowed(name: str, authorized: frozenset[str]) -> bool:
@@ -28,6 +27,7 @@ def _allowed(name: str, authorized: frozenset[str]) -> bool:
 
 class _Checker(ast.NodeVisitor):
     """Static pass: cheap rejection before anything happens."""
+
     def __init__(
         self,
         authorized: frozenset[str],
@@ -37,6 +37,7 @@ class _Checker(ast.NodeVisitor):
         self.authorized: frozenset[str] = authorized
         self.tool_names = tool_names
         self.errors: list[str] = []
+        self.module_names: set[str] = set()
 
     def _check_module(self, name: str) -> None:
         """Check if importing named module is allowed."""
@@ -49,6 +50,8 @@ class _Checker(ast.NodeVisitor):
         """Visit all nodes."""
         for alias in node.names:
             self._check_module(alias.name)
+            bound = alias.asname or alias.name.split(".")[0]
+            self.module_names.add(bound)
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
@@ -57,22 +60,29 @@ class _Checker(ast.NodeVisitor):
             self.errors.append("relative imports are not allowed")
         elif node.module:
             self._check_module(node.module)
+        for alias in node.names:
+            if alias.name.startswith("_") and not (
+                alias.name.startswith("__") and alias.name.endswith("__")
+            ):
+                self.errors.append(
+                    f"import of private name {alias.name!r} is not allowed"
+                )
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:  # noqa: N802
         """Blocks dunder access, which reaches globals and subclasses."""
         if node.attr.startswith("__") and node.attr.endswith("__"):
             self.errors.append(f"access to dunder attribute {node.attr!r}")
+        elif (
+            node.attr.startswith("_")
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.module_names
+        ):
+            self.errors.append(
+                f"access to private module attribute {node.attr!r}"
+            )
         elif node.attr == "format":
             self.errors.append("use of '.format' is not allowed")
-        self.generic_visit(node)
-
-    def visit_Constant(self, node: ast.Constant) -> None:  # noqa: N802
-        """Reject dunder tokens hidden inside string literals."""
-        if isinstance(node.value, str) and _DUNDER_RE.search(node.value):
-            self.errors.append(
-                "dunder token in a string literal is not allowed"
-            )
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:  # noqa: N802
@@ -117,7 +127,7 @@ def _guarded_open(config: SandboxConfig) -> Callable[..., Any]:
     return guard
 
 
-def _safe_builtins(config: SandboxConfig) -> dict[str, Any]:
+def safe_builtins(config: SandboxConfig) -> dict[str, Any]:
     """Bultins minus the dangerous ones, plus guarded __import__.
 
     This must be set explicitly: exec() given a globals dict with no
@@ -127,11 +137,14 @@ def _safe_builtins(config: SandboxConfig) -> dict[str, Any]:
         n: getattr(builtins, n)
         for n in dir(builtins) if not n.startswith("_") and n not in _BLOCKED
     }
+    safe["__build_class__"] = builtins.__build_class__
     authorized = frozenset(config.authorized_imports)
     real = builtins.__import__
 
     def guarded(name: str, *args: Any, **kwargs: Any) -> Any:
         """Enforcement point: every import compiles to this."""
+        if name in _IMPLICIT_IMPORTS:
+            return real(name, *args, **kwargs)
         if not _allowed(name, authorized):
             raise ImportError(f"import of {name!r} not allowed")
         return real(name, *args, **kwargs)
