@@ -25,12 +25,13 @@ from src.agent.extractor.composite_extractor import CompositeCodeExtractor
 from src.agent.llm.resilient_client import ResilientLLMClient
 from src.agent.llm.transport.requests_transport import RequestsTransport
 from src.agent.orchestrator import Orchestrator
-from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile
+from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile, hardcoded_answers
 from src.agent.prompt.task_profile.swebench_profile import SWEBenchProfile
 from src.config.settings import load_providers, load_settings, order_providers, Settings, Limits
 from src.models.input import MBPPTaskInput, SWEBenchTaskInput
 from src.sandbox.sandbox_main import Sandbox
 from src.models.sandbox_config import SandboxConfig
+from src.models.sandbox_base import SandboxBase
 # from src.sandbox.mock import MockSandbox
 
 # ========= add MangoMan ==========
@@ -136,6 +137,53 @@ def format_swebench_task(task_input: SWEBenchTaskInput) -> str:
         lines += ["", "Hints from the issue discussion:", hints]
 
     return "\n".join(lines)
+
+
+def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> Callable[[str], tuple[bool, str]]:
+    """提出物を受理する前に可視テストで検証する関数を作る。
+
+    提出のたびにrun_tests()で同じ形の検証を行い、可視テストに落ちる提出は受理しないでOrchestratorが理由付きで返す.
+
+    Args:
+        sandbox (SandboxBase): run_testsツールを名前空間に置いたサンドボックス。
+        test_list (list[str]): MBPPタスクの可視テスト
+
+    Returns:
+        Callable[[str], tuple[bool, str]]: 提出物を検証する関数。
+    """
+    def verify(solution: str) -> tuple[bool, str]:
+        """提出物をrun_test()で検証し(合否、不合格の理由)を返す.
+
+        Args:
+            solution (str): LLMがfinal_answer()で出力した提出物。
+
+        Returns:
+            tuple[bool, str]: (合格かどうか, 標準出力)
+        """
+        if not test_list:
+            return True, ""
+        # 可視テストの答えを直書きした提出は可視テストを通っても受理しない。
+        hardcoded = hardcoded_answers(solution, test_list)
+        if hardcoded:
+            return False, (
+                    f"it returns the visible tests' expected values as literals ({', '.join(hardcoded)}). "
+                    "The grader calls it with other inputs: implement the general rule instead of "
+                    "special-casing the examples"
+            )
+        # 名前空間のTASK_TESTSはLLMが書き換えられるのでテストはリテラルで返す。
+        snippet = (
+            "import json\n"
+            f"_report = json.loads(run_tests(code={solution!r}, test_list={list(test_list)!r}))\n"
+            "print('VERIFY_OK' if _report['success'] else "
+            "'VERIFY_FAIL ' + str(_report.get('output', ''))[:300])\n"
+        )
+        stdout = (sandbox.run(snippet).stdout or "").strip()
+        if "VERIFY_FAIL" in stdout:
+            return False, stdout.split("VERIFY_FAIL", 1)[1].strip()[:300]
+
+        return True, ""
+
+    return verify
 
 
 def run_mbpp_agent(
@@ -428,6 +476,7 @@ def _solve_mbpp(
                 sandbox=sandbox,
                 profile=MBPPProfile(),
                 limits=settings.limits,
+                solution_verifier=make_mbpp_verifier(sandbox, [*task_input.test_imports, *task_input.test_list]),
                 start_time=start_time
             )
 
