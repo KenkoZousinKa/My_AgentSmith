@@ -41,5 +41,5 @@ __pycache__
 #  Personal Settings |
 # --------------------
 .claude*
+# CLAUDE.md
 *.pdf
-

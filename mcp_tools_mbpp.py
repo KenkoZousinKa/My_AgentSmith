@@ -6,8 +6,8 @@ import subprocess
 import tempfile
 import argparse
 
-from src.mcp_core.server.server import MCPServer
-from src.mcp_core.server.http import HttpServerTransport
+from src.mcp.server.server import MCPServer
+from src.mcp.server.http import HttpServerTransport
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
 TIMEOUT = 30
@@ -38,6 +38,31 @@ def run_tests(code: str, test_list: list[str]) -> str:
 
     # 3. json形式のstrにして返す。
     return json.dumps({"success": True, "message": "passed", "output": result.stdout + result.stderr})
+
+
+@server.resource("mbpp://guide/run_tests", mime_type="text/markdown")
+def run_tests_guide() -> str:
+    """How to call run_tests and read its result."""
+    return (
+        "# run_tests\n"
+        "- Pass the full function source as `code` and the assert lines as `test_list`.\n"
+        "- `code` must contain real newlines and indentation, not a single line.\n"
+        "- The result is a JSON string: `success` is true only if every assert passed.\n"
+        "- On failure, read `output`: it holds the traceback (SyntaxError, NameError, AssertionError...).\n"
+    )
+
+
+@server.prompt()
+def solve_task(task_definition: str, function_definition: str, tests: str = "") -> str:
+    """Build the instruction for solving one MBPP task."""
+    lines = [
+        f"Task: {task_definition}",
+        f"Write this function: {function_definition}",
+        "Check your solution with run_tests before calling final_answer.",
+    ]
+    if tests:
+        lines.append(f"Example tests:\n{tests}")
+    return "\n".join(lines)
 
 
 def main() -> None:

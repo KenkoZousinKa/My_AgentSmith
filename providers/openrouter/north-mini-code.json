@@ -1,0 +1,11 @@
+{
+    "providers": [
+        {
+            "name": "openrouter",
+            "provider_url": "https://openrouter.ai/api/v1",
+            "models": ["cohere/north-mini-code:free"],
+            "keys_env": "OPENROUTER_API_KEY",
+            "priority": 1
+        }
+    ]
+}

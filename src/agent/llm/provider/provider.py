@@ -10,6 +10,16 @@ OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / Gemin
 具体的なプロバイダは、この抽象クラスを継承して実装する。
 プロバイダURL / モデル名 / キー郡などはJSONか.envで設定し、コードの変更なしでモデルを差し替えて
 ベンチマークを実行できるようにする。
+
+- 下記を提供
+ProviderConfig
+LLMResponse
+LLMError -> EmptyResponseError / LLMHTTPError
+LLMHTTPError -> RateLimitError / ServerError / AuthenticationError / BadRequestError
+def _parse_retry_after(header: dict[str, str]) -> float | None
+def _error_from_response(response: HttpResponse) -> LLMHTTPError
+LLMGenerator(Protocol)
+LLMProvider(ABC) def generate() / _build_request() / _parse_response()
 """
 import time
 from typing import Any, Protocol
@@ -30,16 +40,18 @@ class ProviderConfig(BaseModel):
         priority (int): プロバイダのフォールバック優先度。小さいほど優先度が高い。
         request_timeout_sec (float): HTTPリクエストのタイムアウト秒数。デフォルト60秒。MBPPの120秒にあわせる。
         additional_params (dict[str, Any]): プロバイダ固有のbodyに足す追加パラメータ。必要に応じて使用する。
+        model_params (dict[str, dict[str, Any]]): モデル固有のパラメータ。必要に応じて使用する。
     """
     model_config = ConfigDict(extra="forbid")
 
     name: str
     provider_url: str
-    model: str  # API body / provider.jsonのキーと同名
+    models: list[str]  # API body / provider.jsonのキーと同名
     keys_env: str
     priority: int = 1
     request_timeout_sec: float = 60.0
     additional_params: dict[str, Any] = {}
+    model_params: dict[str, dict[str, Any]] = {}
 
 
 class LLMResponse(BaseModel):
@@ -70,6 +82,30 @@ class LLMError(RuntimeError):
     解釈できないレスポンス由来の失敗(LLMError)をまとめる。
     上位はこのLLMErrorを捕まえて、全失敗を一括で扱える。
     """
+
+
+class EmptyResponseError(LLMError):
+    """HTTPは成功したが、本文が空(生成されたが使えない)場合を表す例外クラス.
+
+    推論モデルが思考だけでmax_tokensを使い切った場合などに発生する。
+    プロバイダ側ではトークンが消費されているので、その使用量を持たせて送出先で計上できるようにする。
+    (思考トークンも制限に数える。捨てると過小計上になる。)
+    """
+    def __init__(self, message: str, input_tokens: int = 0, output_tokens: int = 0) -> None:
+        """メッセージと(消費トークン数)使用量を保持する.
+
+        Args:
+            message (str): エラーメッセージ
+            input_tokens (int): 消費した入力トークン数
+            output_tokens (int): 消費した出力トークン数
+        """
+        super().__init__(message, input_tokens, output_tokens)
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+    def __str__(self) -> str:
+        """ログを見やすくするためにメッセージのみを返す。"""
+        return str(self.args[0])
 
 
 class LLMHTTPError(LLMError):
@@ -144,6 +180,8 @@ def _parse_retry_after(header: dict[str, str]) -> float | None:
 def _error_from_response(response: HttpResponse) -> LLMHTTPError:
     """非200系のHTTPレスポンスから、ステータスに応じて型付き例外に変換して返す.
 
+    LLMHTTPErrorの子孫クラスを返す。
+    429はRateLimitError、401/403はAuthenticationError、500系はServerError、400系はBadRequestError。
     """
     status = response.status
     snippet = response.body[:500]
@@ -191,17 +229,19 @@ class LLMProvider(ABC):
     プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
     """
 
-    def __init__(self, config: ProviderConfig, transport: HttpTransport, api_key: str) -> None:
+    def __init__(self, config: ProviderConfig, transport: HttpTransport, api_key: str, model: str) -> None:
         """LLMProviderの初期化.
 
         Args:
             config (ProviderConfig): プロバイダの設定情報。
             transport (HTTPTransport): HTTP POST で送信を担当するTransportクラス
             api_key (str): APIキー。key_managerがkeys_envから取得して渡す。
+            model (str): 使用するモデル名。
         """
         self.config = config
         self.transport = transport
         self.api_key = api_key
+        self.model = model
 
     def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
         """LLMに会話履歴を一回送って生成、リクエストを送信し、レスポンスを返す.
@@ -219,6 +259,8 @@ class LLMProvider(ABC):
         """
         url, headers, body = self._build_request(messages, stop_sequences, max_tokens)
         start_time = time.perf_counter()
+        # HTTPTransportにPOSTを依頼し、レスポンスを受け取る
+        # TransportErrorが登ってくる可能性がある。
         response = self.transport.post(url, headers, body, timeout=self.config.request_timeout_sec)
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         if not 200 <= response.status < 300:

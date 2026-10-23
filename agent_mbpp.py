@@ -15,6 +15,10 @@ def agent_mbpp(
     output: str,
     model_name: str | None = None,
     provider_url: str | None = None,
+    providers_file_path: str = "providers/providers.json",
+    transport: str = "stdio",
+    url: str | None = None,
+    command: str | None = None,
     **extra_args: object
 ) -> None:
     """MBPP用のエントリーポイント関数.
@@ -32,7 +36,11 @@ def agent_mbpp(
         task_file_path=task_file,
         output_file_path=output,
         model_name=model_name,
-        provider_url=provider_url
+        provider_url=provider_url,
+        providers_file_path=providers_file_path,
+        transport=transport,
+        url=url,
+        command=command
     )
 
 

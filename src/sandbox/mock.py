@@ -11,7 +11,7 @@ import traceback
 import contextlib
 from typing import Any
 
-from src.models.sandbox_base import ExecuteResult
+from src.models.output import ExecuteResult
 
 
 class _FinalAnswerSignal(Exception):

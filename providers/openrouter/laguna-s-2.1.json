@@ -1,0 +1,11 @@
+{
+    "providers": [
+        {
+            "name": "openrouter",
+            "provider_url": "https://openrouter.ai/api/v1",
+            "models": ["laguna-s-2.1:free"],
+            "keys_env": "OPENROUTER_API_KEY",
+            "priority": 1
+        }
+    ]
+}

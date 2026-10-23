@@ -2,13 +2,8 @@
 
 LLMの出力テキストから、サンドボックスで実行するコードブロックを取り出す責務を持つ。
 抽出の形式ごとに具象クラス(Python / XML / JSON-Hermes / React)を用意し、
+CompositeCodeExtractorがそれらを優先度順に試す。
 orchestratorはCodeExtractor型として扱い形式差を吸収する。
-
-- [ ] CodeExtracterをベースに、形式別にサブクラスを作成する。
-    - [ ] Pythonコード
-    - [ ] XML形式
-    - [ ] JSON-Hermes形式
-    - [ ] React形式
 """
 from abc import ABC, abstractmethod
 

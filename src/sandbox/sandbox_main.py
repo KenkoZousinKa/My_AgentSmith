@@ -3,13 +3,13 @@
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
 from src.sandbox.code_lint import check_code, _BLOCKED
-from src.sandbox.sandbox_helper import send, recv, truncate, py_name
+from src.sandbox.sandbox_helper import send, recv, py_name
 from src.sandbox.sandbox_child import child_main
 from src.models.output import ExecuteResult
-from src.mcp_core.client.mcp_tool_function import MCPToolFunction
-from src.mcp_core.client.client import MCPClient
-from src.mcp_core.client.stdio import StdioClientTransport
-from src.mcp_core.client.http import HttpClientTransport
+from src.mcp.client.mcp_tool_function import MCPToolFunction
+from src.mcp.client.client import MCPClient
+from src.mcp.client.stdio import StdioClientTransport
+from src.mcp.client.http import HttpClientTransport
 from typing import Any, Callable
 from pathlib import Path
 import os
@@ -57,11 +57,13 @@ class Sandbox:
                 self.client.close()
                 self.client = None
                 raise
+
         for d in self.config.allowed_directories:
             try:
                 os.makedirs(d, exist_ok=True)
             except OSError:
                 pass
+
         self._spawn()
 
     def __enter__(self) -> "Sandbox":
@@ -178,6 +180,10 @@ class Sandbox:
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
+        # ===== debug =====
+        print(code)
+        print("=======================")
+        # ===== debug =====
         rejection = check_code(code, self.config, frozenset(self.tools))
         if rejection:
             return ExecuteResult(error=rejection)
@@ -327,13 +333,16 @@ class Sandbox:
             reply["error"] = f"unknown tool {name!r}"
         else:
             try:
-                raw = handler(**(message.get("arguments") or {}))
-                if isinstance(raw, str):
-                    raw, was_cut = truncate(
-                        raw, self.config.max_output_chars
-                    )
-                    self._tool_truncated = self._tool_truncated or was_cut
-                reply["result"] = raw
+                # sympy-18189: config.max_output_charsを超える出力は切り詰められてるので、
+                # get_patch()の戻り値をそのまま提出させるためにツールの戻り値をそのまま返すようにする。
+                reply["result"] = handler(**(message.get("arguments") or {}))
+                # raw = handler(**(message.get("arguments") or {}))
+                # if isinstance(raw, str):
+                #     raw, was_cut = _truncate(
+                #         raw, self.config.max_output_chars
+                #     )
+                #     self._tool_truncated = self._tool_truncated or was_cut
+                # reply["result"] = raw
             except Exception as exc:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
         try:

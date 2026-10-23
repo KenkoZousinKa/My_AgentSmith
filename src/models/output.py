@@ -1,6 +1,8 @@
-from typing import Optional
+"""Models for the output of the agent and sandbox."""
+
 from datetime import datetime
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class ExecuteResult(BaseModel):
