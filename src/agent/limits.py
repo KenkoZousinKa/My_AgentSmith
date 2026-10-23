@@ -84,6 +84,14 @@ class LimitTracker:
         self.iterations += 1
         return None
 
+    def cancel_iteration(self) -> None:
+        """start_iteration()で進めた反復カウンタを1戻す.
+
+        LLMの応答が得られなかった反復(全プロバイダで失敗)はstepも反復にも数えない。
+        """
+        if self.iterations > 0:
+            self.iterations -= 1
+
     def record_usage(self, input_tokens: int, output_tokens: int) -> None:
         """LLM呼び出し後に累積トークン数を更新する.
 

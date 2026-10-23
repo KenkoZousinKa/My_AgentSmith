@@ -17,7 +17,10 @@ from src.agent.llm.provider.provider import LLMGenerator, LLMResponse, LLMError
 from src.agent.observation import (
     build_observation,
     observation_no_code,
+    budget_note,
+    iteration_note,
     malformed_code_note,
+    repeated_code_note,
     submission_rejected_note
 )
 from src.agent.llm.transport.transport import TransportError
@@ -94,14 +97,21 @@ class Orchestrator:
             {"role": "user", "content": task_message}
         ]
 
-        # ループ前の下準備
+        # =================== ループ前の下準備 ===================
+        # LimitTrackerを初期化し、ステップのメトリクスを保持するリストを作る。
         tracker = LimitTracker(self.limits, start_time=self.start_time)
         steps: list[StepMetrics] = []
         # 打ち切り時に提出するコードの候補を保持する変数。Observationが生成されるたびに更新される。
         # TaskProfileがそのまま提出できると判断したものを入れる。
         best_solution: str = ""
+        # {実行したコードの文字列: 実行したstepの番号}。同じコードの再実行指摘用。
+        excuted_codes: dict[str, int] = {}
+        # 提出できなかった反復の連続回数。続いたら別プロバイダに切り替える用。
+        misses_in_a_row = 0
+        # 以前と同じコードを実行した反復の連続数。指摘し繰り返すなら別のプロバイダに切り替える用。
+        repeats_in_a_row = 0
 
-        # ループ本体
+        # ================== ループ本体 ==================
         while True:
             # ループの先頭で制限をチェックし、打ち切りならSolutionOutputを返す
             stop_reason = tracker.start_iteration()
@@ -120,6 +130,8 @@ class Orchestrator:
             # 送信する履歴を制限に収まるように切り詰める。収まらなければSolutionOutputを返す
             windowed = self._fit_window(messages, tracker)
             if windowed is None:
+                # LLMにリクエストを送る前に止めるのでこの反復はstep、反復に数えない。
+                tracker.cancel_iteration()
                 return self._build_solution(
                     task_id=task_id,
                     benchmark=benchmark,
@@ -131,11 +143,12 @@ class Orchestrator:
                     error=StopReason.MAX_INPUT_TOKENS.value
                 )
 
-            # LLMにリクエストを送信し、レスポンスを取得する
+            # LLMの応答で制限したいトークン数(1反復の出力トークン上限と残りの出力トークン上限の小さい方)
             max_tokens = min(
                 self.limits.max_output_tokens_per_iteration,
                 tracker.remaining_output_tokens()
             )
+            # LLMにリクエストを送信し、レスポンスを取得する
             try:
                 response: LLMResponse = self.provider.generate(
                     messages=windowed,
@@ -143,11 +156,14 @@ class Orchestrator:
                     max_tokens=max_tokens
                 )
             # ResilientLLMClient.generate()は全部のプロバイダ / 全部のキーを試しても成功しなかった場合
-            # AllProvidersExhaustedを送出する。
+            # AllProvidersExhausted(LLMError)を送出する。
+            # except AllProvidersExhausted as error:
             # その他のLLMGeneratorを単体で使用した場合に、generate()の例外はLLMError / TransportErrorが送出される。
             except (LLMError, TransportError) as error:
                 # 総試行回数を取得する
                 failed_requests = getattr(error, "attempts", 1)
+                # LLMにリクエストを送っているが、出力が生成されなかったのでstep、反復に数えない。
+                tracker.cancel_iteration()
                 # 消費トークン数をLimitTrackerに記録する
                 tracker.record_usage(
                     getattr(error, "input_tokens", 0),
@@ -164,7 +180,7 @@ class Orchestrator:
                     error="LLM_UNAVAILABLE",
                     failed_requests=failed_requests
                 )
-
+            # =========== トークンの制限クリア -> LLMへのリクエストが成功 ==========
             # 消費トークン数をLimitTrackerに記録する
             tracker.record_usage(
                 response.input_tokens,
@@ -180,21 +196,37 @@ class Orchestrator:
             # レスポンスからコードを抽出する
             cleaned_code = strip_stop_sequences(response.text, self.stop_sequences)
             code = self.extractor.extract(cleaned_code)
-
             # コードが抽出できなかった場合は、Observationを生成して次のループに進む。
             if code is None:
-                observation = observation_no_code()
+                # 1反復の出力上限まで使い切っていたら散文で考え込んで切れているのでそれを伝える。
+                cut_off_at = response.output_tokens if response.output_tokens >= max_tokens else None
+                observation = self._with_budget_note(
+                    observation_no_code(cut_off_at), tracker
+                )
                 messages.append(
                     {"role": "user", "content": observation}
                 )
+                # 何も実行していないのでsandbox_input / sandbox_outputは空文字列でStepMetricsを作る。
+                # 作成したObservationは次のループでLLMに渡すので、StepMetricsのobservationは空文字列にする。
                 steps.append(
-                    self._build_step(len(steps) + 1, response, "", observation)
+                    self._build_step(len(steps) + 1, response, "", "")
                 )
+                misses_in_a_row = self._count_miss(misses_in_a_row, submitted=False)
                 continue
 
-            # コードが抽出できた場合はサンドボックスで実行しObservationを生成する
+            # ============= LLMの出力からコードが抽出できた =============
+            # サンドボックスで実行しObservationを生成する
             result: ExecuteResult = self.sandbox.run(code)
             observation = build_observation(result)
+
+            # 以前と同じコードなら、Observationの先頭に[REPEATED]を付ける。
+            fingerprint = " ".join(code.split())
+            if fingerprint in excuted_codes:
+                observation = f"{repeated_code_note(excuted_codes[fingerprint])}\n{observation}"
+                repeats_in_a_row = self._count_repeat(repeats_in_a_row)
+            else:
+                excuted_codes[fingerprint] = len(steps) + 1
+                repeats_in_a_row = 0
 
             # 崩れたコードを救済実行した場合は[MALFORMED_CODE]の種類をLLMに伝えるためにobservationの前に追加
             salvaged = salvage_kind(cleaned_code)
@@ -222,6 +254,9 @@ class Orchestrator:
             elif result.error is None and not result.timeout and self.profile.is_fallback_candidate(code):
                 best_solution = code
 
+            # 残りの出力 / 反復が少なければ提出を促す文をObservationの末尾に追加する。
+            observation = self._with_budget_note(observation, tracker)
+
             # Observationを履歴に追加し、StepMetricsを作成してstepsに追加する。
             messages.append(
                 {"role": "user", "content": observation}
@@ -229,6 +264,9 @@ class Orchestrator:
             steps.append(
                 self._build_step(len(steps) + 1, response, code, observation)
             )
+
+            # 提出に至らない反復が続いたら別のプロバイダに切り替えるためのカウンタを更新する。
+            misses_in_a_row = self._count_miss(misses_in_a_row, submitted=submission is not None)
 
             # 提出物が受理された場合は、SolutionOutputを生成して返す
             if submission is not None:
@@ -242,6 +280,90 @@ class Orchestrator:
                     system_prompt=system_prompt,
                     error=None
                 )
+
+    def _count_miss(self, misses_in_a_row: int, submitted: bool) -> int:
+        """提出に至らなかった反復の連続回数を更新する.
+
+        閾値を超えたら別のプロバイダに切り替えるためのカウンタ。
+        閾値はTaskProfileが決める。MBPPは2、SWE-BenchはNoneで切り替えない。
+
+        Args:
+            misses_in_a_row (int): これまでの提出に至らなかった反復の連続回数。
+            submitted (bool): 今回の反復で提出物が受理されたか。
+
+        Returns:
+            int: 更新後の提出に至らなかった反復の連続回数。切り替えたら0にリセットする。
+        """
+        if submitted:
+            return 0
+        misses_in_a_row += 1
+        threshold = self.profile.rotate_after_missed
+        if threshold is not None and misses_in_a_row >= threshold:
+            self._rotate_provider()
+            return 0
+        return misses_in_a_row
+
+    def _count_repeat(self, repeats_in_a_row: int) -> int:
+        """同じコードの再実行の連続回数を更新する。
+
+        閾値を超えたら別のプロバイダに切り替えるためのカウンタ。
+        閾値はTaskProfileが決める。MBPPはNoneで切り替えない、SWE-Benchは2。
+        [REPEATED]の指摘の後も同じコードを出し続けるモデルは履歴からは抜けられないことがある。
+
+        Args:
+            repeats_in_a_row (int): これまでの同じコードの再実行の連続回数。
+
+        Returns:
+            int: 更新後の同じコードの再実行の連続回数。切り替えたら0にリセットする。
+        """
+        repeats_in_a_row += 1
+        threshold = self.profile.rotate_after_response
+        if threshold is not None and repeats_in_a_row >= threshold:
+            self._rotate_provider()
+            return 0
+        return repeats_in_a_row
+
+    def _rotate_provider(self) -> None:
+        """LLMクライアントが切り替えに対応していれば別のプロバイダに切り替える.
+
+        ResilientLLMClientは内部で次のプロバイダに切り替えるrotate()を持つ。
+        """
+        rotate = getattr(self.provider, "rotate", None)
+        if callable(rotate):
+            rotate()
+
+    # 出力の残りが1反復の上限 * この倍率以下になったら提出を促す文をObservationの末尾に追加する。
+    # 2にすると本番だと1反復目の直後に出てしまうので1.0にする。
+    _BUDGET_WARN_FACTOR = 1
+
+    def _with_budget_note(self, observation: str, tracker: LimitTracker) -> str:
+        """出力 / 反復の残りが少なければ提出を促す文をObservationの末尾に追加する.
+
+        出力予算が切れて打ち切られると不合格なので、残りが1反復になった時点で今の最善を提出させる。
+
+        Args:
+            observation (str): 組み立て済みの生成されたObservation
+            tracker (LimitTracker): 今の消費状況。
+
+        Returns:
+            str: 必要ならObservationの末尾に提出を促す文を追加した文字列。
+        """
+        remaining = tracker.remaining_output_tokens()
+        # output_tokenのチェック
+        # max_output_tokens_per_iteration -> MBPP 500 / SWE-Bench 1200
+        # 0以下なら次の反復の先頭で打ち切られるので促しても送られないのでつけない。1反復分の残りがあれば促す。
+        # これ * 1じゃなくてちゃんと調整するべきでは？
+        if 0 < remaining <= self.limits.max_output_tokens_per_iteration * self._BUDGET_WARN_FACTOR:
+            return f"{observation}\n{budget_note(remaining)}"
+
+        # 反復回数のチェック
+        # tracker.iterations -> MBPP 1 / SWE-Bench 4
+        # MBPPは常に1反復でいいものだろうか
+        iterations_left = self.limits.max_iterations - tracker.iterations
+        if 0 < iterations_left <= self.profile.iteration_warn_at:
+            return f"{observation}\n{iteration_note(iterations_left, self.profile.submit_hint())}"
+
+        return observation
 
     # 入力トークンの見積もりの係数の初期値。超えないために小さめに取る。
     _CHARS_PER_TOKEN = 3.0
