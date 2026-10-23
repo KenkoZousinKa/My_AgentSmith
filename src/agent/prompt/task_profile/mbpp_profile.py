@@ -104,8 +104,7 @@ def mbpp_rejection(solution: str) -> str | None:
     return None
 
 
-_MBPP_FEW_SHOT_EXAMPLE = '''
-Thought: Implement the function, verify it with the given tests, submit if they pass.
+_MBPP_FEW_SHOT_EXAMPLE = '''Thought: Implement the function, verify it with the given tests, submit if they pass.
 ```python
 solution = """def add(a, b):
     return a + b
@@ -120,7 +119,7 @@ if report['success']:
 Observation:
 [OK] Executed successfully.
 --- stdout ---
-{'success': True, 'message': 'passed', 'output': ''}
+{'success': True, 'message': 'passed', 'output': '1/1 tests passed.'}
 '''
 
 
@@ -180,12 +179,30 @@ class MBPPProfile(TaskProfile):
             "given examples (they often encode a convention the wording leaves out).\n"
             "- Gate final_answer on the task's own asserts only. Do not add asserts you invented: "
             "if they are wrong they block a correct submission. To explore edge cases, print values.\n"
-            "- If run_tests fails, print what your function returns for the failing assert's input, "
-            "compare it with the expected value, fix the rule, retry.\n"
+            "- If run_tests fails, its output names each failing assert and what your function "
+            "actually returned. Compare that with the expected value, fix the rule, retry.\n"
             "- When the expected outputs follow a numeric or bit pattern you cannot see at once, "
             "compute it in code from the given examples (differences, ratios, binary forms) and "
             "print it, instead of guessing a formula."
         )
+        # 「MBPP: 課題で指定された正確な名前とシグネチャを持つ関数を1つ実装してください。\n」
+        # 「- そのソースコードを三重引用符で囲んだ文字列として構築し、」
+        # 「run_tests(code=..., test_list=[...]) を使用して課題のassertで検証し、パスした場合は 」
+        # 「final_answer(<その文字列>) を呼び出してください。\n」
+        # 「- 提出する文字列には、インポートと関数のみを含める必要があります。出力文、 」
+        # 「アサーション、デモ呼び出しは一切含めないでください。採点システムが独自のテストをコードに追加して実行するため、 」
+        # 「例外を発生させる余分な文があると、提出は不合格となります。\n」
+        # 「- 隠されたテスト：表示されるのはテストスイートの一部のみです。汎用的で正しい 」
+        # 「実装を記述してください。表示された値をハードコーディングしてはいけません。与えられた 」
+        # 「すべての例から意図されたルールを推測してください（例文には、説明文には明記されていない慣習が 」
+        # 「含まれていることがよくあります）。\n」
+        # "- final_answer の判定は、そのタスク固有のアサートのみに基づいて行ってください。自分で考案したアサートは追加しないでください： "
+        # 「それらが間違っていると、正しい提出がブロックされてしまいます。エッジケースを調べるには、値を出力してください。\n」
+        # 「- run_tests が失敗した場合、その出力には、失敗した各アサートと、関数が 」
+        # "実際に返した値が記載されています。期待される値と比較し、ルールを修正して再試行してください。\n"
+        # 「- 期待される出力が、一目でわからない数値やビットのパターンに従っている場合は、」
+        # 「与えられた例（差、比率、2進表記など）からコード内で計算し、」
+        # 「式を当て推量するのではなく、その結果を出力してください。」
 
     def final_answer_specification(self) -> str:
         """final_answer()に何を渡すべきか、最終的な回答の仕方を返す.

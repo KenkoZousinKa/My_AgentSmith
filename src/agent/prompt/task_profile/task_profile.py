@@ -33,8 +33,7 @@ DEFAULT_FORMAT_RULES = """- One brief Thought line (20 words max), then exactly 
 - Only what you print() (plus errors and tracebacks) comes back in the Observation.
 - The tools and final_answer are already defined globals: call them directly, never import them.
 - The namespace persists between turns, but your FINAL answer must be SELF-CONTAINED.
-- Limits on iterations, tokens and time are strict: keep turns short, never print large output.
-"""
+- Limits on iterations, tokens and time are strict: keep turns short, never print large output."""
 
 
 class TaskProfile(ABC):

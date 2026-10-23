@@ -5,11 +5,23 @@
 
 下記を提供
 - Status
+    Observationの先頭に付与するステータスラベルの列挙型。
 - collect_statuses()
+    ExecuteResultのフラグからObservationのステータスラベルを収集する。
 - build_observation()
+    ExecuteResultからLLMへ返すObservation文字列を構築する。
 - observation_no_code()
+    LLMに返すObservation文字列を構築する（コードがない場合）。
+- budget_note()
+    LLMのトークン使用量に関する注意を示す文を返す。
+- iteration_note()
+    LLMの反復回数に関する注意を示す文を返す。
 - malformed_code_note()
+    崩れたコードを救済実行したことをLLMへ明示する文を返す。
+- repeated_code_note()
+    以前と同じコードを実行したことをLLMへ明示する文を返す。
 - submission_rejected_note()
+    final_answer()の提出を差し戻したこととその理由をLLMへ伝える文を返す。
 """
 from enum import Enum
 
@@ -114,14 +126,54 @@ def build_observation(result: ExecuteResult) -> str:
     return _render_observation(statuses, stdout=result.stdout, detail=result.error or result.stderr)
 
 
-def observation_no_code() -> str:
+_CUT_OFF_NOTE = (
+    "Your reply spent its whole {spent}-token allowance on prose and was cut off before any "
+    "```python fence, so nothing ran. Do NOT derive formulas or trace arithmetic in words: "
+    "write a candidate implementation in code and let run_tests tell you if it is right."
+)
+
+
+def observation_no_code(cut_off_at: int | None = None) -> str:
     """LLMに返すObservation文字列を構築する（コードがない場合）.
 
     Returns:
         str: LLMに返すObservation文字列。
             [NO_CODE] No executable Python code block was found in your message. \n\n --- note ---
     """
-    return _render_observation([Status.NO_CODE], stdout="", detail="")
+    extra_note = "" if cut_off_at is None else _CUT_OFF_NOTE.format(spent=cut_off_at)
+    return _render_observation([Status.NO_CODE], stdout="", detail=extra_note)
+
+
+def budget_note(remaining_output_tokens: int) -> str:
+    """出力トークンの残りが少ないことをLLMに伝え、提出を促す文を返す.
+
+    出力予算が切れて打ち切られると不合格が確定するので、残りで今の最善をて提出するように促す。
+
+    Args:
+        remaining_output_tokens (int): このタスク全体で残りの出力トークン数。
+
+    Returns:
+        str: Observationの末尾に付ける説明文。
+    """
+    return (
+        f"[BUDGET] Only {remaining_output_tokens} output tokens remain for this whole task. "
+        "Submit now: one short Thought line, then a code block that calls final_answer() with "
+        "your best implementation."
+    )
+
+
+def iteration_note(iterations_left: int, submit_hint: str) -> str:
+    """反復の回数が上限に近いことをLLMに伝え、提出を促す文を返す.
+
+    Args:
+        iteration (int): このタスクで残っている反復の回数。
+        max_iterations (int): このタスク全体での最大打ち切り回数。
+
+    Returns:
+        str: Observationの末尾に付ける説明文。
+    """
+    plural = "iteration remains" if iteration_left == 1 else "iterations remain"
+    return f"[BUDGET] Only {iterations_left} {plural} for this task. {submit_hint}"
 
 
 # [MALFORMED_CODE]の種類ごとのLLMへの説明文
@@ -172,6 +224,21 @@ def malformed_code_note(kind: str) -> str:
         str: Observationの先頭に付ける説明文。未知の種類なら空文字。
     """
     return _MALFORMED_NOTES.get(kind, "")
+
+
+def repeated_code_note(first_step: int) -> str:
+    """以前と同じコードを実行したことをLLMへ明示する文を返す.
+
+    Args:
+        first_step (int): 以前の同じコードを最初に実行したstepの番号。
+
+    Returns:
+        str: Observationの先頭に付ける説明文。
+    """
+    return (
+        f"[REPEATED] This code is identical to what you ran in step {first_step}, so it fails the "
+        "same way. Do not resubmit it: re-read the failing values and change the logic."
+    )
 
 
 def submission_rejected_note(reason: str) -> str:
