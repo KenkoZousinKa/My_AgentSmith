@@ -171,7 +171,7 @@ class Orchestrator:
                 response.output_tokens,
             )
             # 送った文字数と報告された入力トークン数から見積もりの係数を安全側に補正する。
-            self._learn_chars_per_token(sent=messages, response=response)
+            self._learn_chars_per_token(sent=windowed, response=response)
             # LLMのレスポンスを履歴に追加する
             messages.append(
                 {"role": "assistant", "content": response.text}

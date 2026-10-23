@@ -587,3 +587,26 @@ def test_swebench_keeps_a_wider_window() -> None:
     )
     orchestrator.run("demo-1", "swebench", "task")
     assert [len(messages) for messages in provider.sent] == [2, 4, 6, 8, 10, 12, 14, 14]
+
+
+def test_input_guard_learns_from_what_was_actually_sent() -> None:
+    """係数は「実際に送った(窓で切り詰めた)メッセージ」の文字数から学ぶ.
+
+    1回目のあとに、細かいトークナイザ(1トークン=2文字)のモデルへ替わった場面を想定する
+    (ResilientLLMClient のフォールバック)。2回目以降は履歴が窓で切り詰められているので、
+    全履歴の文字数で割ると比が大きく出て係数を下げられず、上限を踏み越える(6,744 / 6,000)。
+    """
+    class _SwitchingTokenizer(_TokenizingProvider):
+        def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+            self.chars_per_token = 4.0 if not self.sent else 2.0
+            return super().generate(messages, stop_sequences, max_tokens)
+
+    provider = _SwitchingTokenizer([_long_print(3000)] * 10, chars_per_token=4.0)
+    orchestrator = Orchestrator(
+        provider=provider, extractor=PythonCodeExtractor(), sandbox=MockSandbox(), profile=MBPPProfile(),
+        limits=_limits(max_input_tokens=6000, max_iterations=10),
+    )
+    solution = orchestrator.run("1", "mbpp", "task")
+    assert solution.total_input_tokens <= 6000
+    assert orchestrator._chars_per_token < 2.0
+

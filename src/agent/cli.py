@@ -73,6 +73,9 @@ def _raise_terminated(signum: int, frame: FrameType | None) -> None:
     raise _Terminated(f"Received signal ({signum})")
 
 
+_TASK_TESTS_NAME = "TASK_TESTS"
+
+
 def format_mbpp_task(task_input: MBPPTaskInput) -> str:
     """MBPPTaskInputのタスク入力をLLMに渡すuser messages文字列に整形する.
 
@@ -94,6 +97,11 @@ def format_mbpp_task(task_input: MBPPTaskInput) -> str:
     if task_input.test_list:
         lines.append("\nYour solution must pass these tests:\n")
         lines.extend(task_input.test_list)
+
+        lines.append(
+            f"\nThese lines are predefined in your namespace as the list {_TASK_TESTS_NAME}: "
+            f"call run_tests(code=solution, test_list={_TASK_TESTS_NAME}) instead of retyping them."
+        )
 
     return "\n".join(lines)
 
@@ -404,6 +412,14 @@ def _solve_mbpp(
             config=sandbox_config,
             tools=tools
         ) as sandbox:
+
+            # 可視テスト(test_imports + test_list)を名前空間に置く。
+            # {[...]!r}はリストのreprでPythonのリテラルとして読める文字列。
+            # assertの中に引用符がいてもエスケープする。
+            # モデルが値を見なくなれば外す。
+            sandbox.run(
+                f"{_TASK_TESTS_NAME} = {[*task_input.test_imports, *task_input.test_list]!r}"
+            )
 
             # ================= Orchestrator 構築 =================
             orchestrator = Orchestrator(
