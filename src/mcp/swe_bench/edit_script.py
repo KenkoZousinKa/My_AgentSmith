@@ -12,7 +12,6 @@ import sys
 path = sys.argv[1]
 old = base64.b64decode(sys.argv[2]).decode("utf-8")
 new = base64.b64decode(sys.argv[3]).decode("utf-8")
-# ↑ base64 は英数字と +/= だけなので、シェルを通しても壊れない。ここで元の文字列に戻す
 
 
 def fail(message):
@@ -25,16 +24,14 @@ if old == "":
 try:
     with open(path, encoding="utf-8", newline="") as f:
         content = f.read()
-        # ↑ newline="" で、\r\n を \n に変えずに読む（書き戻しても改行コードが変わらない）
 except FileNotFoundError:
     fail("file not found: " + path)
 except IsADirectoryError:
     fail("is a directory: " + path)
-except UnicodeDecodeError:  # バイナリをそのまま読もうとした
+except UnicodeDecodeError:  # bin
     fail("file is not valid UTF-8: " + path)
 except OSError as e:
     fail("cannot read " + path + ": " + str(e))
-    # ↑ 権限がないなど、ほかの読み込みエラー（OSError は FileNotFoundError などの親クラスなので、最後に置く）
 
 count = content.count(old)
 if count == 0:
@@ -45,8 +42,6 @@ if count > 1:
          + ". Include more surrounding lines so that it matches exactly once.")
 
 line = content.count("\n", 0, content.index(old)) + 1
-# ↑ 置きかえ位置より前にある改行の数 + 1 = 置きかえが始まる行番号
-# indexが置き換え開始位置までの文字数、そこまで何回改行があったか
 try:
     with open(path, "w", encoding="utf-8", newline="") as f:
         f.write(content.replace(old, new, 1))
