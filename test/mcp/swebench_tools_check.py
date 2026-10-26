@@ -108,6 +108,10 @@ def run_checks(c: MCPClient, tb: str, docker: bool) -> None:
     out = text(c, "run_command", command="cat")
     check("run_command: stdin を読むコマンドがすぐ終わる（MCP の stdin を奪わない）", "exit_code: 0" in out, out)
     # ↑ 直後の呼び出しが通ることも、MCP の通信が壊れていない証拠になる
+    if docker:
+        out = text(c, "run_command",
+                   command="python -c \"import urllib.request; urllib.request.urlopen('https://github.com', timeout=3)\"")
+        check("Docker: --network none で外部通信が遮断されている", "exit_code: 0" not in out, out)
 
     # --- read_file ---
     out = text(c, "read_file", filepath="agentsmith_check/sample.py", start_line=4, end_line=6)
@@ -168,18 +172,19 @@ def run_checks(c: MCPClient, tb: str, docker: bool) -> None:
           out.startswith("diff --git a/agentsmith_check/sample.py") and
           '-        return "hello:" + name' in out and '+        return "hi:" + name' in out, out)
 
-    # --- run_tests ---（出力は抽出せず全部返す仕様）
+    # --- run_tests ---（Start Test Output 〜 End Test Output の間だけを抽出して返す仕様）
     out = text(c, "run_tests")
     check("run_tests: 時間内に終わる", not out.startswith("Timeout"), out[:800])
     if docker:
-        check("run_tests: eval_script の出力（テスト結果の印を含む）を返す", "Start Test Output" in out, out[-800:])
+        check("run_tests: Start〜End の間だけを抽出して返す",
+              out.startswith("--- result run_tests ---\n") and "Start Test Output" not in out and len(out.splitlines()) > 1,
+              out[:800])
         lines = out.splitlines()
-        start = next(i for i, line in enumerate(lines) if "Start Test Output" in line)
         print("----- run_tests の出力（テスト部分）-----")
-        print("\n".join(lines[start:start + 60]))  # 印の行から（長いタスクでも 60 行まで）
+        print("\n".join(lines[:60]))  # 先頭から最大 60 行まで表示
     else:
-        check("run_tests: eval_script の出力を全部返す",
-              out == "setup log\n>>>>> Start Test Output\nTESTS_OK\n>>>>> End Test Output\ncleanup log", out)
+        check("run_tests: Start〜End の間だけを抽出して返す",
+              out == "--- result run_tests ---\nTESTS_OK", out)
 
 
 def main() -> int:

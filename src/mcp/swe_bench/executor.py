@@ -51,7 +51,7 @@ class DockerExecutor:
         print('🐳Dockerコンテナを起動しています。', file=sys.stderr)
         self.process = subprocess.Popen(
             ["docker", "run", "-i", "--rm", "--name", self.name,
-             "--label", "agentsmith=1", self.image, "cat"],
+             "--network", "none", "--label", "agentsmith=1", self.image, "cat"],
             #   -i：コンテナの stdin を、docker runプロセスと繋ぐ(self.processを介してデーモンにコマンドに流せる
             #   cat：dockerを待機させるダミーコマンド。これがコンテナの主プロセスになる
             #   --rm：主プロセスが終わったら、コンテナを自動で消す
@@ -79,11 +79,12 @@ class DockerExecutor:
     def run(self, command: str, workdir: str, timeout: int, input: str = "") -> CommandResult:
         r = subprocess.run(
             ["docker", "exec", "-i", "-w", workdir, self.name,
-             "timeout", str(timeout), "bash", "-lc", command],
+             "timeout", "-s", "KILL", str(timeout), "bash", "-lc", command],
             input=input, capture_output=True, text=True)  # コンテナの中のコマンドを止めるためにtimeoutを設定
         # -i: inputをコンテナ内のコマンドのstdinに流す
         # bash -l: ログインシェルとして起動し、イメージが用意したtestbedのconda環境を有効にする。
         # bash -c: minicondaのbaseのPythonになり、リポジトリの依存がなくimportできない。
+        # timeoutをSIGTERMからSIGKILLに変更
         return CommandResult(r.stdout, r.stderr, r.returncode)
 
     def close(self) -> None:

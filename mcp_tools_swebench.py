@@ -206,8 +206,12 @@ def run_tests() -> str:
 @server.tool()
 def get_patch() -> str:
     """Return the unified git diff of all changes in the repository."""
-    r = executor.run("git -c core.fileMode=false diff", testbed_path, COMMAND_TIMEOUT)
+    command = "git add -N . && git -c core.fileMode=false diff HEAD"
+    # add -N：新規ファイルを「追加予定」として登録し diff に出す（.gitignore 対象は自動で除外）
     # core.fileMode=false：パーミッションだけの変更を無視する
+    # diff HEAD：最後のコミットとの差分を取る（git add 済みの変更も漏らさない）
+    # core.fileMode=false：パーミッションだけの変更を無視する
+    r = executor.run(command, testbed_path, COMMAND_TIMEOUT)
     if r.exit_code != 0:
         return f"パッチの取得に失敗しました。 {r.stderr.strip()}"
     return r.stdout  # 変更なしなら ""（final_answer にそのまま渡すので、メッセージは混ぜない）
