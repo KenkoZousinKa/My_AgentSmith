@@ -59,7 +59,7 @@ _SUMMARY: dict[Status, str] = {
 _NOTE: dict[Status, str] = {
     Status.EXCEPTION: "Fix the error shown above, then re-run.",
     Status.TIMEOUT: "Add a termination condition and avoid unbounded loops.",
-    Status.TRUNCATED: "Reduce the amount you printi.",
+    Status.TRUNCATED: "Print less: show only the values you need.",
     Status.FINAL_ANSWER_INVALID: "Call final_answer() with the actual solution as its argument.",
     Status.NO_CODE: "Write exactly one ```python ... ``` code block."
 }
@@ -88,13 +88,21 @@ def collect_statuses(result: ExecuteResult) -> list[Status]:
     return statuses
 
 
-def _render_observation(statuses: list[Status], stdout: str, detail: str) -> str:
+def _render_observation(
+    statuses: list[Status],
+    stdout: str,
+    detail: str,
+    extra_note: str = "",
+    value: str | None = None
+) -> str:
     """ラベル、stdout、詳細からObservation文字列を構築する.
 
     Args:
         statuses (list[Status]): Observationに付与するステータスラベルのリスト。
         stdout (str): sandbox.run()の標準出力。(空ならno output)
         detail (str): sandbox.run()の標準エラーまたは例外トレースバック。
+        extra_note (str): ステータスごとの固定の助言の後ろに足す助言。
+        value (str | None): 最後の式の値(REPLの表示)。
 
     Returns:
         str: 構築したObservation文字列。
@@ -102,10 +110,16 @@ def _render_observation(statuses: list[Status], stdout: str, detail: str) -> str
     label_prefix = "".join(f"[{status.value}]" for status in statuses)
     summary = " ".join(_SUMMARY[status] for status in statuses)
     lines: list[str] = [f"{label_prefix} {summary}", "--- stdout ---", stdout if stdout else "(no output)"]
+
+    if value is not None:
+        lines.append("--- value of the last expression ---")
+        lines.append(value)
     if detail:
         lines.append("--- stderr / traceback ---")
         lines.append(detail)
     notes = [_NOTE[status] for status in statuses if status in _NOTE]
+    if extra_note:
+        notes.append(extra_note)
     if notes:
         lines.append("--- note ---")
         lines.append(" ".join(notes))
@@ -123,7 +137,12 @@ def build_observation(result: ExecuteResult) -> str:
             [LABELS] 1行要約 \n\n --- stdout --- \n\n (stderr / traceback) --- \n\n --- note ---
     """
     statuses = collect_statuses(result)
-    return _render_observation(statuses, stdout=result.stdout, detail=result.error or result.stderr)
+    return _render_observation(
+        statuses,
+        stdout=result.stdout,
+        detail=result.error or result.stderr,
+        value=result.value
+    )
 
 
 _CUT_OFF_NOTE = (
@@ -134,14 +153,19 @@ _CUT_OFF_NOTE = (
 
 
 def observation_no_code(cut_off_at: int | None = None) -> str:
-    """LLMに返すObservation文字列を構築する（コードがない場合）.
+    """LLMに返すObservation文字列を構築する(コードがない場合).
 
     Returns:
         str: LLMに返すObservation文字列。
             [NO_CODE] No executable Python code block was found in your message. \n\n --- note ---
     """
     extra_note = "" if cut_off_at is None else _CUT_OFF_NOTE.format(spent=cut_off_at)
-    return _render_observation([Status.NO_CODE], stdout="", detail=extra_note)
+    return _render_observation(
+        [Status.NO_CODE],
+        stdout="",
+        detail="",
+        extra_note=extra_note
+    )
 
 
 def budget_note(remaining_output_tokens: int) -> str:
