@@ -167,10 +167,20 @@ def run_checks(c: MCPClient, tb: str, docker: bool) -> None:
     check("edit_file: 中身が変わっている", out == '6:         return "hi:" + name', out)
     out = text(c, "edit_file", filepath="agentsmith_check/sample.py", old_str="no such text", new_str="x")
     check("edit_file: 見つからない old_str はメッセージ", out != "" and "hi:" not in out, out)
+    out = text(c, "edit_file", filepath="agentsmith_check/sample.py",
+               old_str='return "hi:" + name', new_str='return "hi:" + (')
+    check("edit_file: 構文エラーは拒否しファイルを変更しない", "syntax error" in out.lower(), out)
+    out = text(c, "read_file", filepath="agentsmith_check/sample.py", start_line=6, end_line=6)
+    check("edit_file: 構文エラー後も元のコードが保たれている", out == '6:         return "hi:" + name', out)
     out = text(c, "get_patch")
     check("get_patch: unified diff",
           out.startswith("diff --git a/agentsmith_check/sample.py") and
           '-        return "hello:" + name' in out and '+        return "hi:" + name' in out, out)
+    text(c, "run_command", command="echo 'NEW_FILE_LINE' > agentsmith_check/new_mod.py")
+    out = text(c, "get_patch")
+    check("get_patch: 新規作成ファイルも diff に含まれる (git add -N)",
+          "diff --git a/agentsmith_check/new_mod.py" in out and "+NEW_FILE_LINE" in out, out)
+    text(c, "run_command", command="git rm -f agentsmith_check/new_mod.py")
 
     # --- run_tests ---（Start Test Output 〜 End Test Output の間だけを抽出して返す仕様）
     out = text(c, "run_tests")

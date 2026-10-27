@@ -42,9 +42,15 @@ if count > 1:
          + ". Include more surrounding lines so that it matches exactly once.")
 
 line = content.count("\n", 0, content.index(old)) + 1
+updated = content.replace(old, new, 1)
+if path.endswith(".py"):
+    try:
+        compile(updated.replace("\r\n", "\n"), path, "exec")
+    except SyntaxError as e:
+        fail("syntax error at line " + str(e.lineno) + ": " + str(e.msg) + " (file was not modified)")
 try:
     with open(path, "w", encoding="utf-8", newline="") as f:
-        f.write(content.replace(old, new, 1))
+        f.write(updated)
 except OSError as e:
     fail("cannot write " + path + ": " + str(e))
 print("Edited " + path + " (replaced 1 occurrence starting at line " + str(line) + ").")
