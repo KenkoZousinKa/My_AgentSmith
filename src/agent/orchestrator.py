@@ -105,7 +105,7 @@ class Orchestrator:
         # TaskProfileがそのまま提出できると判断したものを入れる。
         best_solution: str = ""
         # {実行したコードの文字列: 実行したstepの番号}。同じコードの再実行指摘用。
-        excuted_codes: dict[str, int] = {}
+        executed_codes: dict[str, int] = {}
         # 提出できなかった反復の連続回数。続いたら別プロバイダに切り替える用。
         misses_in_a_row = 0
         # 以前と同じコードを実行した反復の連続数。指摘し繰り返すなら別のプロバイダに切り替える用。
@@ -221,11 +221,11 @@ class Orchestrator:
 
             # 以前と同じコードなら、Observationの先頭に[REPEATED]を付ける。
             fingerprint = " ".join(code.split())
-            if fingerprint in excuted_codes:
-                observation = f"{repeated_code_note(excuted_codes[fingerprint])}\n{observation}"
+            if fingerprint in executed_codes:
+                observation = f"{repeated_code_note(executed_codes[fingerprint])}\n{observation}"
                 repeats_in_a_row = self._count_repeat(repeats_in_a_row)
             else:
-                excuted_codes[fingerprint] = len(steps) + 1
+                executed_codes[fingerprint] = len(steps) + 1
                 repeats_in_a_row = 0
 
             # 崩れたコードを救済実行した場合は[MALFORMED_CODE]の種類をLLMに伝えるためにobservationの前に追加
@@ -317,7 +317,7 @@ class Orchestrator:
             int: 更新後の同じコードの再実行の連続回数。切り替えたら0にリセットする。
         """
         repeats_in_a_row += 1
-        threshold = self.profile.rotate_after_response
+        threshold = self.profile.rotate_after_repeats
         if threshold is not None and repeats_in_a_row >= threshold:
             self._rotate_provider()
             return 0

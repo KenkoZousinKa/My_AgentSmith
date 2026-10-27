@@ -52,7 +52,7 @@ class TaskProfile(ABC):
         rotate_after_missed (int | None): 提出できなかった反復がこの回数続いたら別のプロバイダに切り替える。
             同じプロバイダだと同じ傾向になることが多いのでプロバイダごと切り替える。デフォルトは2。
             SWE-Benchでは探索が多くなるのでNoneで切り替えない。
-        rotate_after_response (int | None): 以前と同じコードの実行がこの回数続いたら別のプロバイダに切り替える。
+        rotate_after_repeats (int | None): 以前と同じコードの実行がこの回数続いたら別のプロバイダに切り替える。
             Noneで切り替えない。
         iteration_warn_at (int): 反復の残り回数がこの値以下になったらLLMに警告する。デフォルトは1。
     """
@@ -63,7 +63,7 @@ class TaskProfile(ABC):
     latest_observation_max_chars: int = 1500
     assistant_max_chars: int = 1200
     rotate_after_missed: int | None = 2
-    rotate_after_response: int | None = None
+    rotate_after_repeats: int | None = None
     iteration_warn_at: int = 1
 
     def format_rules(self) -> str:

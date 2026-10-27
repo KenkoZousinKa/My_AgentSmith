@@ -85,7 +85,7 @@ class SWEBenchProfile(TaskProfile):
     # [REPEATED]の指摘の後も同じコードを出し直したら別のプロバイダに切り替える。
     # codestralがsympy-14711cで失敗するedit_fileを22反復出し続けたため。
     # ただ、namespaceが残るので同じコードを出すことで改善することもあるので用検討。
-    rotate_after_response: int | None = 2
+    rotate_after_repeats: int | None = 2
     # テストの実行、パッチの確認、提出に数反復かかるので暫定4。
     iteration_warn_at: int = 4
 
