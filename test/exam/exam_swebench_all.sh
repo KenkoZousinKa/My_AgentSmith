@@ -46,10 +46,39 @@ TIME_LIMIT=900
 PASSED=0
 FAILED=0
 FAILED_IDS=()
+ERROR_LOG="$LOG_ROOT/failed_errors.log"
+: > "$ERROR_LOG"
+
+append_failure_report() {
+    local tid="$1"
+    local task_dir="$2"
+    python3 - "$tid" "$task_dir" >> "$ERROR_LOG" <<'PYEOF'
+import json, os, sys
+tid, td = sys.argv[1], sys.argv[2]
+sol_path = os.path.join(td, "solution.json")
+stdout_path = os.path.join(td, "stdout.log")
+stderr_path = os.path.join(td, "stderr.log")
+sol_data = json.load(open(sol_path)) if os.path.exists(sol_path) else {}
+stdout = open(stdout_path).read().strip() if os.path.exists(stdout_path) else ""
+stderr = open(stderr_path).read().strip() if os.path.exists(stderr_path) else ""
+print("=" * 70)
+print(f"Instance ID: {tid}")
+print(f"Claimed Success: {sol_data.get('success')} | Iterations: {sol_data.get('iterations')} | Tokens: {sol_data.get('total_input_tokens')} in / {sol_data.get('total_output_tokens')} out")
+print("--- Patch ---")
+print((sol_data.get("solution") or "(empty)").strip())
+print("--- Validation / Error Output ---")
+print(stdout)
+if stderr:
+    print("--- Stderr ---")
+    print(stderr)
+print("")
+PYEOF
+}
 
 echo "=========================================="
 echo " EXAM SWE-BENCH ALL ($TOTAL tasks in EXAM_POOL)"
 echo " Logs: $LOG_ROOT"
+echo " Error summary: $ERROR_LOG"
 echo "=========================================="
 
 i=0
@@ -97,11 +126,13 @@ for tid in $TASK_IDS; do
             echo "    Result: FAILED (validation failed — see $TASK_DIR/stdout.log)"
             FAILED=$((FAILED + 1))
             FAILED_IDS+=("$tid")
+            append_failure_report "$tid" "$TASK_DIR"
         fi
     else
         echo "    Result: FAILED (run_rc=$RUN_RC, cleanup_ok=$CLEANUP_OK — see $TASK_DIR/stderr.log)"
         FAILED=$((FAILED + 1))
         FAILED_IDS+=("$tid")
+        append_failure_report "$tid" "$TASK_DIR"
     fi
 done
 
@@ -110,6 +141,7 @@ echo "=========================================="
 echo " SWE-bench ALL Summary: $PASSED / $TOTAL passed ($FAILED failed)"
 if [ ${#FAILED_IDS[@]} -gt 0 ]; then
     echo " Failed Instance IDs: ${FAILED_IDS[*]}"
+    echo " Consolidated Error Log: $ERROR_LOG"
 fi
 echo "=========================================="
 [ "$FAILED" -eq 0 ]
