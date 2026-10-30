@@ -1,6 +1,7 @@
 """mcp_tools_swebench.py"""
 
 import os
+import sys
 import posixpath
 import signal
 import argparse
@@ -19,8 +20,8 @@ META_KEY = "agentsmith/swebench"
 server = MCPServer(name="agent-smith-swebench", version="0.1.0")
 executor: Executor = LocalExecutor()
 
-# testbed_path: str = "/testbed"
-testbed_path: str = "."
+testbed_path: str = "/testbed"
+# testbed_path: str = "."
 eval_script: str | None = None
 # on_initializeで環境変数から動的に代入される
 
@@ -187,22 +188,30 @@ def run_tests() -> str:
 
     lines = r.stdout.splitlines()
     # 結果が冗長なら追加
-    # marks = [i for i, line in enumerate(lines) if TEST_START in line or TEST_END in line]
-    # if len(marks) >= 2:
-    #     lines = lines[marks[0] + 1:marks[-1]]  # 印の間（採点と同じ範囲）だけ
+    marks = [i for i, line in enumerate(lines) if TEST_START in line or TEST_END in line]
+    if len(marks) >= 2:
+        lines = lines[marks[0] + 1:marks[-1]]  # 印の間（採点と同じ範囲）だけ
     output = "\n".join(lines)
 
-    if r.exit_code == 124:  # timeout コマンドの終了コード
+    if r.exit_code in (124, 137):  # timeout コマンドの終了コード or SIGKILL
+        for line in reversed(eval_script.splitlines()):
+            if line.startswith("git checkout "):
+                executor.run(line, testbed_path, COMMAND_TIMEOUT)  # テストファイルを元に戻す
+                break
         return f"Timeout after {EVAL_TIMEOUT}s\n{output}"
-    return output
+    return "--- result run_tests ---\n" + output
     # exit_code は使わない：テストが失敗しても最後の git checkout が成功すると 0 になる
 
 
 @server.tool()
 def get_patch() -> str:
     """Return the unified git diff of all changes in the repository."""
-    r = executor.run("git -c core.fileMode=false diff", testbed_path, COMMAND_TIMEOUT)
+    command = "git add -N . && git -c core.fileMode=false diff HEAD"
+    # add -N：新規ファイルを「追加予定」として登録し diff に出す（.gitignore 対象は自動で除外）
     # core.fileMode=false：パーミッションだけの変更を無視する
+    # diff HEAD：最後のコミットとの差分を取る（git add 済みの変更も漏らさない）
+    # core.fileMode=false：パーミッションだけの変更を無視する
+    r = executor.run(command, testbed_path, COMMAND_TIMEOUT)
     if r.exit_code != 0:
         return f"パッチの取得に失敗しました。 {r.stderr.strip()}"
     return r.stdout  # 変更なしなら ""（final_answer にそのまま渡すので、メッセージは混ぜない）
@@ -222,6 +231,7 @@ def run_command(command: str, workdir: str | None = None) -> str:
 
 
 def _on_sigterm(signum: int, frame: object) -> None:
+    print(f"[Server] MCP_TOOLS_SWEBENCHを終了します。", file=sys.stderr)
     raise SystemExit(0)
     # ↑ SIGTERM を受けたら、SystemExit を起こす。これで main() の finally が動き、コンテナを片付けられる
     #   （何もしないと、Python は SIGTERM で即座に終わり、finally が動かない）
@@ -257,14 +267,16 @@ def main() -> None:
     #     docker = DockerExecutor(image)
     #     docker.start()
     #     executor = docker
-    signal.signal(signal.SIGTERM, _on_sigterm)
+    signal.signal(signal.SIGTERM, _on_sigterm)  # SIGTERMを受け取ったら_on_sigterm()を実行する
     try:
+        print(f"[Server] MCP_TOOLS_SWEBENCHを起動します。", file=sys.stderr)
         if args.transport == "http":
             server.run(HttpServerTransport(host=args.host, port=args.port))
         else:
             server.run()
     finally:
         executor.close()
+        print(f"[Server] MCP_TOOLS_SWEBENCHを終了しました。", file=sys.stderr)
 
 
 if __name__ == "__main__":

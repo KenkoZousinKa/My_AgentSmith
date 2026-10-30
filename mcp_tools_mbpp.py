@@ -5,12 +5,13 @@ import json
 import subprocess
 import tempfile
 import argparse
+from pathlib import Path
 
 from src.mcp.server.server import MCPServer
 from src.mcp.server.http import HttpServerTransport
 
 server = MCPServer(name="agent-smith-mbpp", version="0.1.0")
-TIMEOUT = 30
+TIMEOUT = 10
 
 
 @server.tool()
@@ -25,8 +26,10 @@ def run_tests(code: str, test_list: list[str]) -> str:
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
-            # 2. 自動で削除されるtemp_dir内で実行
-            result = subprocess.run([sys.executable, '-I', '-c', script], cwd=temp_dir, env={},
+            # 2. 自動で削除されるtemp_dir内にファイルを作って実行
+            script_path = Path(temp_dir) / "test_run.py"
+            script_path.write_text(script, encoding="utf-8")
+            result = subprocess.run([sys.executable, '-I', str(script_path)], cwd=temp_dir, env={},
                                     capture_output=True, text=True, timeout=TIMEOUT, check=True)
     except subprocess.TimeoutExpired:
         return json.dumps({"success": False, "message": "Timeout",
@@ -72,11 +75,13 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
 
+
+    print(f"[Server] MCP_TOOLS_MBPPを起動します。", file=sys.stderr)
     if args.transport == "http":
         server.run(HttpServerTransport(host=args.host, port=args.port))
-        pass
     else:
         server.run()
+    print(f"[Server] MCP_TOOLS_MBPPを終了しました。", file=sys.stderr)
 
 
 if __name__ == "__main__":
