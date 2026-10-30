@@ -14,6 +14,9 @@ _BLOCKED = frozenset({
 })
 
 
+_IMPLICIT_IMPORTS = frozenset({"_strptime"})
+
+
 def _allowed(name: str, authorized: frozenset[str]) -> bool:
     """Match a module name against the allowlist."""
     return name in authorized or any(
@@ -22,8 +25,53 @@ def _allowed(name: str, authorized: frozenset[str]) -> bool:
     )
 
 
+def strip_provided_imports(
+        code: str, provided: set[str]
+) -> tuple[str, list[str]]:
+    """Drop 'import <name>' for names already live in the sandbox.
+
+    Modles traineed on other frameworks write 'import json, run_tests'.
+    Tools (and final_answer) are not modules, so the import raises and
+    kills the whole snippet. Remove only the provided names from plain
+    'import' statements, keep the rest of the same statement, and never
+    touch 'from x import y' (that is a real import). Return the rewritten
+    code and a not for each skipped name.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code, []
+
+    notes: list[str] = []
+    new_body: list[ast.stmt] = []
+    changed = False
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            kept = []
+            for alias in node.names:
+                if alias.asname is None and alias.name in provided:
+                    notes.append(
+                        f"{alias.name} is already available in the "
+                        f"sandbox; the import was skipped"
+                    )
+                    changed = True
+                else:
+                    kept.append(alias)
+            if kept:
+                node.names = kept
+                new_body.append(node)
+        else:
+            new_body.append(node)
+
+    if not changed:
+        return code, notes
+    tree.body = new_body
+    return ast.unparse(tree), notes
+
+
 class _Checker(ast.NodeVisitor):
     """Static pass: cheap rejection before anything happens."""
+
     def __init__(
         self,
         authorized: frozenset[str],
@@ -33,6 +81,7 @@ class _Checker(ast.NodeVisitor):
         self.authorized: frozenset[str] = authorized
         self.tool_names = tool_names
         self.errors: list[str] = []
+        self.module_names: set[str] = set()
 
     def _check_module(self, name: str) -> None:
         """Check if importing named module is allowed."""
@@ -45,6 +94,8 @@ class _Checker(ast.NodeVisitor):
         """Visit all nodes."""
         for alias in node.names:
             self._check_module(alias.name)
+            bound = alias.asname or alias.name.split(".")[0]
+            self.module_names.add(bound)
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:  # noqa: N802
@@ -53,12 +104,29 @@ class _Checker(ast.NodeVisitor):
             self.errors.append("relative imports are not allowed")
         elif node.module:
             self._check_module(node.module)
+        for alias in node.names:
+            if alias.name.startswith("_") and not (
+                alias.name.startswith("__") and alias.name.endswith("__")
+            ):
+                self.errors.append(
+                    f"import of private name {alias.name!r} is not allowed"
+                )
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:  # noqa: N802
         """Blocks dunder access, which reaches globals and subclasses."""
         if node.attr.startswith("__") and node.attr.endswith("__"):
             self.errors.append(f"access to dunder attribute {node.attr!r}")
+        elif (
+            node.attr.startswith("_")
+            and isinstance(node.value, ast.Name)
+            and node.value.id in self.module_names
+        ):
+            self.errors.append(
+                f"access to private module attribute {node.attr!r}"
+            )
+        elif node.attr == "format":
+            self.errors.append("use of '.format' is not allowed")
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:  # noqa: N802
@@ -103,7 +171,7 @@ def _guarded_open(config: SandboxConfig) -> Callable[..., Any]:
     return guard
 
 
-def _safe_builtins(config: SandboxConfig) -> dict[str, Any]:
+def safe_builtins(config: SandboxConfig) -> dict[str, Any]:
     """Bultins minus the dangerous ones, plus guarded __import__.
 
     This must be set explicitly: exec() given a globals dict with no
@@ -113,11 +181,14 @@ def _safe_builtins(config: SandboxConfig) -> dict[str, Any]:
         n: getattr(builtins, n)
         for n in dir(builtins) if not n.startswith("_") and n not in _BLOCKED
     }
+    safe["__build_class__"] = builtins.__build_class__
     authorized = frozenset(config.authorized_imports)
     real = builtins.__import__
 
     def guarded(name: str, *args: Any, **kwargs: Any) -> Any:
         """Enforcement point: every import compiles to this."""
+        if name in _IMPLICIT_IMPORTS:
+            return real(name, *args, **kwargs)
         if not _allowed(name, authorized):
             raise ImportError(f"import of {name!r} not allowed")
         return real(name, *args, **kwargs)

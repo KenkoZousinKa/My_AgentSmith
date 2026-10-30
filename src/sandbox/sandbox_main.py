@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
-from src.sandbox.code_lint import check_code, _BLOCKED
-from src.sandbox.sandbox_helper import _send, _recv
-from src.sandbox.sandbox_child import _child_main
+from src.sandbox.code_lint import check_code, _BLOCKED, strip_provided_imports
+from src.sandbox.sandbox_helper import send, recv, py_name
+from src.sandbox.sandbox_child import child_main
 from src.models.output import ExecuteResult
 from src.mcp.client.mcp_tool_function import MCPToolFunction
 from src.mcp.client.client import MCPClient
@@ -20,8 +20,16 @@ import signal
 import argparse
 
 
+def _tool_params(tool: Any) -> list[str]:
+    """Parameter names for a tool, in input-schema order."""
+    schema = getattr(tool, "input_schema", None) or {}
+    props = schema.get("properties") or {}
+    return list(props.keys())
+
+
 class Sandbox:
     """Runs snippets in an isolated child with a persistent namespace."""
+
     def __init__(
         self,
         config: SandboxConfig | None = None,
@@ -37,6 +45,9 @@ class Sandbox:
         self._cmd_w = -1
         self._res_r = -1
         self._tool_truncated = False
+        self.resources: list[Any] = []
+        self.prompts: list[Any] = []
+        self._tool_params: dict[str, list[str]] = {}
         if mcp_stdio:
             self.client = MCPClient(StdioClientTransport(mcp_stdio))
         elif mcp_server:
@@ -45,17 +56,26 @@ class Sandbox:
             try:
                 self.client.connect()
                 self.tools = {
-                    tool.name: MCPToolFunction(self.client, tool)
+                    py_name(tool.name): MCPToolFunction(self.client, tool)
                     for tool in self.client.list_tools()
                 }
-                print(self.client.list_tools())
-                print(self.client.list_resources())
-                print(self.client.list_prompts())
+                self._tool_params = {
+                    py_name(tool.name): _tool_params(tool)
+                    for tool in self.client.list_tools()
+                }
+                self.resources = self.client.list_resources()
+                self.prompts = self.client.list_prompts()
             except Exception:
                 self.client.close()
                 self.client = None
                 raise
-        self.client = MCPClient(StdioClientTransport("python mcp_tools_mbpp.py"))
+
+        for d in self.config.allowed_directories:
+            try:
+                os.makedirs(d, exist_ok=True)
+            except OSError:
+                pass
+
         self._spawn()
 
     def __enter__(self) -> "Sandbox":
@@ -77,7 +97,11 @@ class Sandbox:
             os.close(cmd_w)
             os.close(res_r)
             try:
-                _child_main(self.config, cmd_r, res_w, sorted(self.tools))
+                child_main(
+                    self.config, cmd_r, res_w,
+                    self._tool_params,
+                    bool(self.resources or self.prompts),
+                )
             finally:
                 os._exit(1)
         os.close(cmd_r)
@@ -138,19 +162,52 @@ class Sandbox:
         except ChildProcessError:
             pass
 
+    def _catalog_text(self, result: Any) -> Any:
+        """Make an MCP result JSON-safe for the pipe."""
+        if hasattr(result, "model_dump"):
+            try:
+                return result.model_dump(mode="json")
+            except Exception:
+                return str(result)
+        return result
+
+    def _dispatch_catalog(self, message: dict[str, Any]) -> None:
+        """Serve a read_resource / get_prompt relay from the child."""
+        kind = message.get("kind")
+        reply: dict[str, Any] = {"result": None, "error": None}
+        if self.client is None:
+            reply["error"] = "no MCP server connected"
+        else:
+            try:
+                if kind == "resource_read":
+                    res = self.client.read_resource(message["uri"])
+                else:
+                    res = self.client.get_prompt(
+                        message["name"], message.get("arguments")
+                    )
+                reply["result"] = self._catalog_text(res)
+            except Exception as exc:
+                reply["error"] = f"{type(exc).__name__}: {exc}"
+        try:
+            send(self._cmd_w, reply)
+        except OSError:
+            pass
+
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
-        # ===== debug =====
-        print(code)
-        print("=======================")
-        # ===== debug =====
+        provided = set(self.tools)
+        provided.add("final_answer")
+        if self.resources or self.prompts:
+            provided.update(("read_resource", "get_prompt"))
+        code, import_notes = strip_provided_imports(code, provided)
+
         rejection = check_code(code, self.config, frozenset(self.tools))
         if rejection:
             return ExecuteResult(error=rejection)
 
         self._tool_truncated = False
         try:
-            _send(self._cmd_w, {"kind": "run", "code": code})
+            send(self._cmd_w, {"kind": "run", "code": code})
         except OSError:
             self.reset()
             return ExecuteResult(error="worker was dead; restarted")
@@ -161,19 +218,40 @@ class Sandbox:
             if not ready:
                 self.reset()
                 return ExecuteResult(
-                    error="worker unresponsive; killed and restarted"
+                    error="timed out and the worker was restarted: all"
+                          "Names from previous steps are gone - redefine "
+                          "anything you still need.",
+                    timeout=True
                 )
             try:
-                message = _recv(self._res_r)
+                message = recv(self._res_r)
             except (EOFError, OSError, ValueError):
                 self.reset()
                 return ExecuteResult(
-                    error="worker died (likely memory limit); restarted"
+                    error="the worker died (likely the memory limit) and "
+                          "was restarted; all names from previous steps "
+                          "are gone - redefine anything you still need."
                 )
-            if message.get("kind") == "tool_call":
+            kind = message.get("kind")
+            if kind == "tool_call":
                 self._dispatch(message)
                 continue
-            return self._to_result(message)
+            if kind in ("resource_read", "prompt_get"):
+                self._dispatch_catalog(message)
+                continue
+            return self._with_notes(self._to_result(message), import_notes)
+
+    @staticmethod
+    def _with_notes(
+        result: ExecuteResult, notes: list[str]
+    ) -> ExecuteResult:
+        """Prepend skipped-import notes to the result's stdout."""
+        if not notes:
+            return result
+        prefix = "".join(f"[NOTE] {n}\n" for n in notes)
+        return result.model_copy(
+            update={"stdout": prefix + (result.stdout or "")}
+        )
 
     def _tool_doc(self, name: str, tool: Any) -> str:
         """Render one tool as a Python-looking signature plus its docs."""
@@ -197,6 +275,23 @@ class Sandbox:
             if spec.get("description"):
                 out.append(f"   - {arg}: {spec['description']}")
         return "\n".join(out)
+
+    def _resource_doc(self, res: Any) -> str:
+        """Render one resource as uri plus its description."""
+        uri = getattr(res, "uri", "")
+        name = getattr(res, "name", "") or ""
+        desc = getattr(res, "description", "") or ""
+        head = f"{uri}" + (f" ({name})" if name else "")
+        return head + (f"\n  {desc.strip()}" if desc else "")
+
+    def _prompt_doc(self, prompt: Any) -> str:
+        """Render one prompt as a name plus its arguments."""
+        name = getattr(prompt, "name", "")
+        desc = getattr(prompt, "description", "") or ""
+        args = getattr(prompt, "arguments", "") or []
+        arg_names = ", ".join(getattr(a, "name", str(a)) for a in args)
+        head = f"{name}({arg_names})"
+        return head + (f"\n  {desc.strip()}" if desc else "")
 
     def manual(self) -> str:
         """Render the sandbox manual for the LLM's first prompt.
@@ -222,7 +317,7 @@ class Sandbox:
             "- Dunder attribute access (__class__, __globals__) is blocked.",
             "",
             "## final_answer",
-            ""
+            "",
             "final_answer(value) ends the task. It is always available and",
             "is not an MCP tool. Call it once you have a verified answer.",
             "",
@@ -236,6 +331,25 @@ class Sandbox:
             return "\n".join(lines)
         for name in sorted(self.tools):
             lines.append(self._tool_doc(name, self.tools[name]))
+            lines.append("")
+        if self.resources:
+            lines.append("")
+            lines.append("## Resources")
+            lines.append("")
+            lines.append(
+                "Read with read_resource(uri=...) Available:"
+            )
+            for res in self.resources:
+                lines.append(self._resource_doc(res))
+            lines.append("")
+        if self.prompts:
+            lines.append("## Prompts")
+            lines.append("")
+            lines.append(
+                "Fetch with get_prompt(name=..., arguments={...}). Available:"
+            )
+            for prompt in self.prompts:
+                lines.append(self._prompt_doc(prompt))
             lines.append("")
         return "\n".join(lines)
 
@@ -260,7 +374,10 @@ class Sandbox:
                 # reply["result"] = raw
             except Exception as exc:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
-        _send(self._cmd_w, reply)
+        try:
+            send(self._cmd_w, reply)
+        except OSError:
+            pass
 
     def _to_result(self, message: dict[str, Any]) -> ExecuteResult:
         """Turn a terminal worker message into an ExecuteResult."""
@@ -287,7 +404,7 @@ class Sandbox:
 
 
 def _show(result: ExecuteResult) -> None:
-    """Shows the result of the executed code."""
+    """Show the result of the executed code."""
     if result.stdout:
         print(result.stdout, end="")
     if result.stderr:
