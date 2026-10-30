@@ -200,6 +200,34 @@ moulinette は、解答が正しいかに加えて、次の制限を守ってい
 ### 4-2. Sandbox
 <!-- TODO（Sandbox 担当）：隔離の方法、制限（メモリ・時間・ネットワーク）、REPL、MCP ツールの公開方法 -->
 
+To isolate the sandbox is done in a newly made namespace. This namespace has only allowed imports and builtins that is set in the config.
+
+To ensure resource limits and time limits it is done in two processes.
+	The parent process manages the tool calls and memory while the child does the actual running of code.
+
+	Time limits and memory limits are paused during tool calls and to ensure that the timing errors only happen during sandbox process.
+
+	Network access is removed by blocking all socket functions. This is to ensure that the network is never accessed during the sandbox code, even if the AI requests it.
+	The name-space sets the socket calls to all raise errors.
+
+Final_answer:
+	A baseException so that it is not eaten up by the LLM loop exception.
+	It is a callable function for the LLM to call when it thinks its code does what is asked correctly.
+
+Manual:
+	A single use function to call to send information to the AI about the MCP tools and final answer usage.
+
+```bash
+# test repl of sandbox
+uv run python -m src.sandbox.sandbox_main (config)
+
+# test with MCP server/stdio
+uv run python -m src.sandbox.sandbox_main (config) --mcp-stdio or --mcp-server (server/stdio)
+
+# 1 test of code
+uv run python -m src.sandbox.sandbox_main (config) -c "code"
+```
+
 ### 4-3. MCP
 
 MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアントの両方を標準ライブラリと pydantic で実装しました。

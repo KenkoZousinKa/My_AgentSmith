@@ -59,16 +59,16 @@ class Sandbox:
                     py_name(tool.name): MCPToolFunction(self.client, tool)
                     for tool in self.client.list_tools()
                 }
-                self._tool_params = {
-                    py_name(tool.name): _tool_params(tool)
-                    for tool in self.client.list_tools()
-                }
                 self.resources = self.client.list_resources()
                 self.prompts = self.client.list_prompts()
             except Exception:
                 self.client.close()
                 self.client = None
                 raise
+
+        self._tool_params = {
+            name: _tool_params(fn) for name, fn in self.tools.items()
+        }
 
         for d in self.config.allowed_directories:
             try:
@@ -429,6 +429,9 @@ def _repl(sandbox: Sandbox) -> int:
             return 0
         if line.strip() in {"exit", "quit"}:
             return 0
+        if line.strip() in {".manual", ".tools"}:
+            print(sandbox.manual())
+            continue
         if not line.strip():
             continue
         buffer = [line]
