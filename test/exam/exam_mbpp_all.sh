@@ -55,24 +55,119 @@ ERROR_LOG="$LOG_ROOT/failed_errors.log"
 append_failure_report() {
     local tid="$1"
     local task_dir="$2"
-    python3 - "$tid" "$task_dir" >> "$ERROR_LOG" <<'PYEOF'
-import json, os, sys
-tid, td = sys.argv[1], sys.argv[2]
+    python3 - "$tid" "$task_dir" "$MOULINETTE_PATH" >> "$ERROR_LOG" <<'PYEOF'
+import ast, json, os, re, sys
+tid, td, moulinette_path = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+sanitized_path = os.path.join(moulinette_path, "moulinette/mbpp/data/sanitized_tasks.json")
+all_tasks = {t["task_id"]: t for t in json.load(open(sanitized_path))} if os.path.exists(sanitized_path) else {}
+raw_task = all_tasks.get(tid, {})
+test_imports = raw_task.get("test_imports", [])
+test_list = raw_task.get("test_list", [])
+
+def extract_solution_str(sandbox_in):
+    try:
+        tree = ast.parse(sandbox_in)
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    if isinstance(t, ast.Name) and t.id == "solution" and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                        return node.value.value
+    except Exception:
+        pass
+    return None
+
 task_path = os.path.join(td, "task.json")
 sol_path = os.path.join(td, "solution.json")
 stdout_path = os.path.join(td, "stdout.log")
 stderr_path = os.path.join(td, "stderr.log")
 task_data = json.load(open(task_path)) if os.path.exists(task_path) else {}
 sol_data = json.load(open(sol_path)) if os.path.exists(sol_path) else {}
+public_tests = task_data.get("test_list", [])
 stdout = open(stdout_path).read().strip() if os.path.exists(stdout_path) else ""
 stderr = open(stderr_path).read().strip() if os.path.exists(stderr_path) else ""
+
+succ = sol_data.get("success")
+err_reason = sol_data.get("error")
+sol_code_raw = sol_data.get("solution") or ""
+code_lines = (sol_code_raw + "\n").splitlines() if sol_code_raw else [""]
+imp_lines = ("\n".join(test_imports) + "\n").splitlines() if test_imports else []
+first_test_line = len(code_lines) + len(imp_lines) + 1
+m = re.search(r'File "<string>", line (\d+), in <module>', stdout)
+failed_line = int(m.group(1)) if m else None
+failed_test_idx = (failed_line - first_test_line) if (succ and failed_line is not None and first_test_line <= failed_line < first_test_line + len(test_list)) else None
+
+if not succ:
+    fail_reason = f"FAILED PUBLIC TESTS / BUDGET EXHAUSTED (error={err_reason}, final_answer never called)"
+elif failed_test_idx == 0:
+    fail_reason = "FAILED ON HIDDEN TEST (passed all public tests, failed test_list[0])"
+elif failed_test_idx is not None:
+    fail_reason = f"FAILED ON PUBLIC TEST (test_list[{failed_test_idx}])"
+else:
+    fail_reason = "FAILED (Runtime or metrics error)"
+
 print("=" * 70)
-print(f"Task ID: {tid}")
+print(f"Task ID: {tid}  -->  {fail_reason}")
 print(f"Definition: {task_data.get('task_definition', '').strip()}")
 print(f"Signature:  {task_data.get('function_definition', '').strip()}")
-print(f"Claimed Success: {sol_data.get('success')} | Iterations: {sol_data.get('iterations')} | Tokens: {sol_data.get('total_input_tokens')} in / {sol_data.get('total_output_tokens')} out")
-print("--- Solution ---")
-print((sol_data.get("solution") or "(empty)").strip())
+if test_imports:
+    print("Test Imports:")
+    for idx, imp in enumerate(test_imports):
+        tag = "[HIDDEN]" if idx == 0 else "[PUBLIC]"
+        print(f"  {tag} {imp}")
+print("Test List:")
+for idx, t_stmt in enumerate(test_list):
+    tag = "[HIDDEN]" if idx == 0 else "[PUBLIC]"
+    if succ:
+        line_no = first_test_line + idx
+        marker = "  <-- FAILED HERE" if failed_test_idx == idx else ""
+        print(f"  {tag} (validate line {line_no:2d}) {t_stmt}{marker}")
+    else:
+        print(f"  {tag} {t_stmt}")
+print(f"Claimed Success: {succ} | Error: {err_reason} | Iterations: {sol_data.get('iterations')} | Tokens: {sol_data.get('total_input_tokens')} in / {sol_data.get('total_output_tokens')} out")
+
+if succ:
+    print("--- Executed Script in validate (with exact line numbers) ---")
+    cur = 1
+    for cl in code_lines:
+        tag = "<-- (blank line because solution ended with \\n)" if (cur == len(code_lines) and cl == "") else ""
+        print(f"  {cur:2d}: {cl} {tag}".rstrip())
+        cur += 1
+    for il in imp_lines:
+        print(f"  {cur:2d}: {il}  # [IMPORT]")
+        cur += 1
+    for idx, tl in enumerate(test_list):
+        tag = "[HIDDEN]" if idx == 0 else "[PUBLIC]"
+        marker = "  <-- FAILED HERE" if cur == failed_line else ""
+        print(f"  {cur:2d}: {tl}  # {tag}{marker}")
+        cur += 1
+else:
+    print("--- Solution ---")
+    steps = sol_data.get("steps") or []
+    if steps:
+        last = steps[-1]
+        st_num = last.get("step")
+        st_mod = last.get("model_name")
+        st_in = last.get("sandbox_input", "").strip()
+        st_out = last.get("sandbox_output", "").strip()
+        print(f"(empty — final_answer was never called because public tests failed in all {len(steps)} steps)")
+        cand = extract_solution_str(st_in)
+        if cand is not None:
+            test_run_script = f"{cand}\n" + "\n".join(public_tests)
+            m_tr = re.search(r'test_run\.py", line (\d+)', st_out)
+            tr_fail_line = int(m_tr.group(1)) if m_tr else None
+            print(f"--- Step {st_num} ({st_mod}) Executed test_run.py (with exact line numbers) ---")
+            for idx, tr_line in enumerate(test_run_script.splitlines(), 1):
+                marker = "  <-- FAILED HERE" if idx == tr_fail_line else ("  <-- (blank line from trailing \\n in solution)" if tr_line == "" else "")
+                print(f"  {idx:2d}: {tr_line}{marker}")
+        else:
+            print(f"--- Last Attempt in Step {st_num} ({st_mod}) ---")
+            for idx, sl in enumerate(st_in.splitlines(), 1):
+                print(f"  {idx:2d}: {sl}")
+        print("--- Last Step Sandbox Output ---")
+        print(st_out)
+    else:
+        print("(empty)")
+
 print("--- Validation / Error Output ---")
 print(stdout)
 if stderr:
