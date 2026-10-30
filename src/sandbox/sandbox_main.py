@@ -179,6 +179,7 @@ class Sandbox:
             reply["error"] = "no MCP server connected"
         else:
             try:
+                res: Any
                 if kind == "resource_read":
                     res = self.client.read_resource(message["uri"])
                 else:
