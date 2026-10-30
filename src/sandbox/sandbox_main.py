@@ -70,6 +70,13 @@ class Sandbox:
                 self.client = None
                 raise
 
+        # agentから呼び出してsels.client = Noneの時にtool_paramsが空になるため追加。
+        # 上の同じ処理の行とこのif not節を消して、どちらにしてもself.toolsから作成でも可。
+        if not self._tool_params:
+            self._tool_params = {
+                name: _tool_params(tool) for name, tool in self.tools.items()
+            }
+
         for d in self.config.allowed_directories:
             try:
                 os.makedirs(d, exist_ok=True)
