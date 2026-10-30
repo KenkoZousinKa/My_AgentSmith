@@ -295,7 +295,7 @@ class _VerifierProbeOrchestrator:
 
 
 def test_mbpp_submission_is_verified_with_the_visible_tests(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """提出物は本物の run_tests で可視テスト(test_imports込み)にかけ、落ちたら実際の値つきで差し戻す.
+    """提出物は本物の run_tests で可視テスト(test_imports込み)にかけ、落ちたら最初に落ちたassertつきで差し戻す.
 
     試験は再試行なしなので、可視テストに落ちる提出を受理する理由は無い。
     可視テストの答えを直書きした提出は、run_tests を通っても差し戻す(実測: MBPP 268)。
@@ -313,7 +313,8 @@ def test_mbpp_submission_is_verified_with_the_visible_tests(tmp_path: Path, monk
     assert verdicts["right"] == (True, "")
     passed, detail = verdicts["wrong"]
     assert passed is False
-    assert "-10" in detail  # add(10, 20) が実際に返した値(テストブランチ版の run_tests は実際の値を返す)
+    # チームのサーバーの run_tests は、最初に落ちたassertの行をトレースバックで返す(実際の値は返さない)
+    assert "assert math.isclose(add(1, 2), 3)" in detail
     passed, detail = verdicts["hardcoded"]
     assert passed is False
     assert "as literals (30, 7)" in detail

@@ -250,7 +250,6 @@ class MBPPProfile(TaskProfile):
         """
         return mbpp_rejection(code) is None
 
-
     def task_instructions(self) -> str:
         """MBPPタスクの進め方を返す.
 
@@ -270,9 +269,10 @@ class MBPPProfile(TaskProfile):
             "given examples (they often encode a convention the wording leaves out).\n"
             "- Gate final_answer on the task's own asserts only. Do not add asserts you invented: "
             "if they are wrong they block a correct submission. To explore edge cases, print values.\n"
-            "- If run_tests fails, it does not say which assert failed or what your function returned. "
-            "In the next block, define the function directly (not inside a string) and print its result "
-            "for each assert's input next to the expected value, then fix the rule and retry.\n"
+            "- If run_tests fails, its output shows only the FIRST failing assert (as a traceback), "
+            "not what your function returned. In the next block, define the function directly "
+            "(not inside a string) and print its result for each assert's input next to the expected "
+            "value, then fix the rule and retry.\n"
             "- When the expected outputs follow a numeric or bit pattern you cannot see at once, "
             "compute it in code from the given examples (differences, ratios, binary forms) and "
             "print it, instead of guessing a formula."
@@ -290,13 +290,13 @@ class MBPPProfile(TaskProfile):
         # 「含まれていることがよくあります）。\n」
         # "- final_answer の判定は、そのタスク固有のアサートのみに基づいて行ってください。自分で考案したアサートは追加しないでください： "
         # 「それらが間違っていると、正しい提出がブロックされてしまいます。エッジケースを調べるには、値を出力してください。\n」
-        # 「- run_tests が失敗しても、どのアサートが落ちたか・関数が何を返したかは分かりません。」
+        # 「- run_tests が失敗したとき、出力に出るのは最初に落ちたアサートだけ(トレースバックとして)で、」
+        # 「関数が何を返したかは出ません。」
         # 「次のブロックで関数を(文字列の中ではなく)直接定義し、各アサートの入力での結果を期待値と並べて print し、」
         # 「ルールを修正して再試行してください。\n」
         # 「- 期待される出力が、一目でわからない数値やビットのパターンに従っている場合は、」
         # 「与えられた例（差、比率、2進表記など）からコード内で計算し、」
         # 「式を当て推量するのではなく、その結果を出力してください。」
-
 
     def final_answer_specification(self) -> str:
         """final_answer()に何を渡すべきか、最終的な回答の仕方を返す.
