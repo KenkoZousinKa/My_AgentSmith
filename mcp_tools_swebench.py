@@ -231,7 +231,7 @@ def run_command(command: str, workdir: str | None = None) -> str:
 
 
 def _on_sigterm(signum: int, frame: object) -> None:
-    print(f"[Server] MCP_TOOLS_SWEBENCHを終了します。", file=sys.stderr)
+    print("[Server] MCP_TOOLS_SWEBENCHを終了します。", file=sys.stderr)
     raise SystemExit(0)
     # ↑ SIGTERM を受けたら、SystemExit を起こす。これで main() の finally が動き、コンテナを片付けられる
     #   （何もしないと、Python は SIGTERM で即座に終わり、finally が動かない）
@@ -269,14 +269,14 @@ def main() -> None:
     #     executor = docker
     signal.signal(signal.SIGTERM, _on_sigterm)  # SIGTERMを受け取ったら_on_sigterm()を実行する
     try:
-        print(f"[Server] MCP_TOOLS_SWEBENCHを起動します。", file=sys.stderr)
+        print("[Server] MCP_TOOLS_SWEBENCHを起動します。", file=sys.stderr)
         if args.transport == "http":
             server.run(HttpServerTransport(host=args.host, port=args.port))
         else:
             server.run()
     finally:
         executor.close()
-        print(f"[Server] MCP_TOOLS_SWEBENCHを終了しました。", file=sys.stderr)
+        print("[Server] MCP_TOOLS_SWEBENCHを終了しました。", file=sys.stderr)
 
 
 if __name__ == "__main__":
