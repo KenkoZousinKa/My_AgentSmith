@@ -35,7 +35,8 @@ dev = [
 [tool.mypy]
 exclude = [
     "^\\.venv/",
-	"^data/"
+	"^data/",
+	"^script"
 ]
 
 # .関数はAnyで返せなくなる
@@ -67,5 +68,6 @@ exclude = [
 	"test",
 	"dist",
 	"build",
+	"script"
 ]
 max-line-length = 130
