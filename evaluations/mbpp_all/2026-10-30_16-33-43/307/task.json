@@ -1,0 +1,10 @@
+{
+  "task_id": 307,
+  "task_definition": "Write a function to get a colon of a tuple.",
+  "function_definition": "def colon_tuplex(tuplex,m,n):",
+  "test_imports": [],
+  "test_list": [
+    "assert colon_tuplex((\"HELLO\", 5, [], True) ,2,100)==((\"HELLO\", 5, [100],True))",
+    "assert colon_tuplex((\"HELLO\", 5, [], True) ,2,500)==(\"HELLO\", 5, [500], True)"
+  ]
+}

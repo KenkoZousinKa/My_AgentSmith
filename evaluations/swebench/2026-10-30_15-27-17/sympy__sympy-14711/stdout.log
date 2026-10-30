@@ -1,0 +1,31 @@
+Agent finished in 64.6s
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: sympy__sympy-14711
+Benchmark: swebench
+Success claimed: True
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Started container ed8ddadcc5f7cf7f834d56b9fc74a493b9ae221f186848f3e1b1a67f39f6098e
+Error validating solution: 500 Server Error for http+docker://localhost/v1.56/containers/ed8ddadcc5f7cf7f834d56b9fc74a493b9ae221f186848f3e1b1a67f39f6098e/archive?path=%2Ftmp: Internal Server Error ("failed to Lchown "patch.diff" for UID 101756, GID 4225: lchownat patch.diff: invalid argument")
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 7 / 30 OK
+Input tokens: 22553 / 300000 OK
+Output tokens: 713 / 10000 OK
+Time: 64.3s / 900.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED

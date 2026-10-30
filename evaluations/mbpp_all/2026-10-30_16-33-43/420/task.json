@@ -1,0 +1,10 @@
+{
+  "task_id": 420,
+  "task_definition": "Write a python function to find the cube sum of first n even natural numbers.",
+  "function_definition": "def cube_Sum(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert cube_Sum(3) == 288",
+    "assert cube_Sum(4) == 800"
+  ]
+}

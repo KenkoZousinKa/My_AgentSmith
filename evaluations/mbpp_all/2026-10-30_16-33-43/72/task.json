@@ -1,0 +1,10 @@
+{
+  "task_id": 72,
+  "task_definition": "Write a python function to check whether the given number can be represented as difference of two squares or not.",
+  "function_definition": "def dif_Square(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert dif_Square(10) == False",
+    "assert dif_Square(15) == True"
+  ]
+}

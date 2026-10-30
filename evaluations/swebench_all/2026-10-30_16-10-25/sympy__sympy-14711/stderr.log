@@ -1,0 +1,9 @@
+warning: `VIRTUAL_ENV=/home/ayhirose/ayhirose/rank05/Agent_Smith/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=cohere key#1 model=command-a-03-2025 bad request; skip combo: ('LLM HTTP 422 (bad request): {"error_type":"NO_VALID_RESPONSE_GENERATED","id":"c0b5a44e-8c21-42bd-a2ba-f9baac75bc99","message":"No valid response generated. Try updating messages"}', 422, None).
+provider=cohere key#1 model=command-a-reasoning-08-2025 bad request; skip combo: ('LLM HTTP 422 (bad request): {"error_type":"INVALID_TOOL_GENERATION","id":"f2a94330-3295-4a6c-a77e-f9bcfa690cd0","message":"your request resulted in an invalid tool generation. Try updating the messages or tool definitions"}', 422, None).
+provider=nvidia key#1 model=nvidia/nemotron-3-super-120b-a12b bad request; skip combo: ('LLM HTTP 404 (bad request): {"status":404,"title":"Not Found","detail":"Function \'ac74040f-9fc9-4c5e-ac74-279ba5161d69\': Not found for account \'H5hzdDb4WaXxVAXJZF8kY1zslxl9nwmFULu6jLoaIPY\'"}', 404, None).
+[Server] MCP_TOOLS_SWEBENCHを終了しました。

@@ -1,0 +1,10 @@
+{
+  "task_id": 256,
+  "task_definition": "Write a python function to count the number of prime numbers less than a given non-negative number.",
+  "function_definition": "def count_Primes_nums(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_Primes_nums(10) == 4",
+    "assert count_Primes_nums(100) == 25"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 389,
+  "task_definition": "Write a function to find the n'th lucas number.",
+  "function_definition": "def find_lucas(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert find_lucas(4) == 7",
+    "assert find_lucas(3) == 4"
+  ]
+}

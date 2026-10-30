@@ -1,0 +1,10 @@
+{
+  "task_id": 237,
+  "task_definition": "Write a function to check the occurrences of records which occur similar times in the given tuples.",
+  "function_definition": "def check_occurences(test_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert check_occurences([(4, 2), (2, 4), (3, 6), (6, 3), (7, 4)] ) == {(2, 4): 2, (3, 6): 2, (4, 7): 1}",
+    "assert check_occurences([(13, 2), (11, 23), (12, 25), (25, 12), (16, 23)] ) == {(2, 13): 1, (11, 23): 1, (12, 25): 2, (16, 23): 1}"
+  ]
+}

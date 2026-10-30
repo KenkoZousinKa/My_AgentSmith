@@ -1,0 +1,10 @@
+{
+  "task_id": 228,
+  "task_definition": "Write a python function to check whether all the bits are unset in the given range or not.",
+  "function_definition": "def all_Bits_Set_In_The_Given_Range(n,l,r):",
+  "test_imports": [],
+  "test_list": [
+    "assert all_Bits_Set_In_The_Given_Range(17,2,4) == True",
+    "assert all_Bits_Set_In_The_Given_Range(39,4,6) == False"
+  ]
+}

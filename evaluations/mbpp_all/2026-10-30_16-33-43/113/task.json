@@ -1,0 +1,10 @@
+{
+  "task_id": 113,
+  "task_definition": "Write a function to check if a string represents an integer or not.",
+  "function_definition": "def check_integer(text):",
+  "test_imports": [],
+  "test_list": [
+    "assert check_integer(\"1\")==True",
+    "assert check_integer(\"12345\")==True"
+  ]
+}

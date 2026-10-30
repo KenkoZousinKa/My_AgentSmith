@@ -1,0 +1,10 @@
+{
+  "task_id": 165,
+  "task_definition": "Write a python function to count characters at same position in a given string (lower and uppercase characters) as in english alphabet.",
+  "function_definition": "def count_char_position(str1):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_char_position(\"ABcED\") == 3",
+    "assert count_char_position(\"AbgdeF\") == 5"
+  ]
+}

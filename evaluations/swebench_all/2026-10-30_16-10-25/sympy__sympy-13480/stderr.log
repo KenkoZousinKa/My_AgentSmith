@@ -1,0 +1,48 @@
+warning: `VIRTUAL_ENV=/home/ayhirose/ayhirose/rank05/Agent_Smith/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+Unable to find image 'swebench/sweb.eval.x86_64.sympy_1776_sympy-13480:latest' locally
+latest: Pulling from swebench/sweb.eval.x86_64.sympy_1776_sympy-13480
+39a945af8df2: Pulling fs layer
+1d333da9808a: Pulling fs layer
+4f4fb700ef54: Pulling fs layer
+a4d326e88417: Pulling fs layer
+fd7a87c0b95b: Pulling fs layer
+d07e7f5cb3eb: Pulling fs layer
+3d473160e8e5: Pulling fs layer
+6a99d82d9a89: Pulling fs layer
+dc407fa36252: Pulling fs layer
+c271b27e967a: Pulling fs layer
+dc407fa36252: Already exists
+c271b27e967a: Already exists
+39a945af8df2: Already exists
+a4d326e88417: Already exists
+fd7a87c0b95b: Already exists
+d07e7f5cb3eb: Already exists
+3d473160e8e5: Already exists
+4f4fb700ef54: Already exists
+6a99d82d9a89: Already exists
+4f4fb700ef54: Pull complete
+fbb0e2847ced: Download complete
+1d333da9808a: Download complete
+1d333da9808a: Pull complete
+Digest: sha256:98270682f9052def68c8c42f78fb6ce6573f2dc7b8cb7fe741139a0543b30e21
+Status: Downloaded newer image for swebench/sweb.eval.x86_64.sympy_1776_sympy-13480:latest
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=cohere key#1 model=command-a-03-2025 bad request; skip combo: ('LLM HTTP 422 (bad request): {"error_type":"NO_VALID_RESPONSE_GENERATED","id":"9d5a3edf-23ec-42b1-90a9-750d747075a8","message":"No valid response generated. Try updating messages"}', 422, None).
+provider=cohere key#1 model=command-a-reasoning-08-2025 bad request; skip combo: ('LLM HTTP 422 (bad request): {"error_type":"INVALID_TOOL_GENERATION","id":"f681beb6-6a3b-4cc5-9cd1-dbd97a4a0993","message":"your request resulted in an invalid tool generation. Try updating the messages or tool definitions"}', 422, None).
+provider=nvidia key#1 model=nvidia/nemotron-3-super-120b-a12b bad request; skip combo: ('LLM HTTP 404 (bad request): {"status":404,"title":"Not Found","detail":"Function \'ac74040f-9fc9-4c5e-ac74-279ba5161d69\': Not found for account \'H5hzdDb4WaXxVAXJZF8kY1zslxl9nwmFULu6jLoaIPY\'"}', 404, None).
+[Server] MCP_TOOLS_SWEBENCHを終了しました。
+2026-10-30 16:28:14,621 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-30 16:28:14,622 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-10-30 16:28:14,637 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/datasets/SWE-bench/SWE-bench_Verified/78f471bf655a3137b2e8a75af1501690ec009ec3/README.md "HTTP/1.1 200 OK"
+2026-10-30 16:28:14,822 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified/resolve/78f471bf655a3137b2e8a75af1501690ec009ec3/SWE-bench_Verified.py "HTTP/1.1 404 Not Found"
+2026-10-30 16:28:15,401 - httpx - INFO - HTTP Request: HEAD https://s3.amazonaws.com/datasets.huggingface.co/datasets/datasets/SWE-bench/SWE-bench_Verified/SWE-bench/SWE-bench_Verified.py "HTTP/1.1 404 Not Found"
+2026-10-30 16:28:15,593 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/datasets/SWE-bench/SWE-bench_Verified/revision/78f471bf655a3137b2e8a75af1501690ec009ec3 "HTTP/1.1 200 OK"
+2026-10-30 16:28:15,779 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified/resolve/78f471bf655a3137b2e8a75af1501690ec009ec3/.huggingface.yaml "HTTP/1.1 404 Not Found"
+2026-10-30 16:28:15,992 - httpx - INFO - HTTP Request: GET https://datasets-server.huggingface.co/info?dataset=SWE-bench/SWE-bench_Verified "HTTP/1.1 200 OK"
+2026-10-30 16:28:16,179 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/datasets/SWE-bench/SWE-bench_Verified/tree/78f471bf655a3137b2e8a75af1501690ec009ec3/data?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-10-30 16:28:16,364 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/datasets/SWE-bench/SWE-bench_Verified/tree/78f471bf655a3137b2e8a75af1501690ec009ec3?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-10-30 16:28:16,552 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/datasets/SWE-bench/SWE-bench_Verified/resolve/78f471bf655a3137b2e8a75af1501690ec009ec3/dataset_infos.json "HTTP/1.1 404 Not Found"

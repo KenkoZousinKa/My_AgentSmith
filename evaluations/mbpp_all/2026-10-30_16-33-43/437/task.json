@@ -1,0 +1,10 @@
+{
+  "task_id": 437,
+  "task_definition": "Write a function to remove odd characters in a string.",
+  "function_definition": "def remove_odd(str1):",
+  "test_imports": [],
+  "test_list": [
+    "assert remove_odd(\"program\")==(\"rga\")",
+    "assert remove_odd(\"language\")==(\"agae\")"
+  ]
+}

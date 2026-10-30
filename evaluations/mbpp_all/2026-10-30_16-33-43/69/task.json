@@ -1,0 +1,10 @@
+{
+  "task_id": 69,
+  "task_definition": "Write a function to check whether a list contains the given sublist or not.",
+  "function_definition": "def is_sublist(l, s):",
+  "test_imports": [],
+  "test_list": [
+    "assert is_sublist([2,4,3,5,7],[4,3])==True",
+    "assert is_sublist([2,4,3,5,7],[1,6])==False"
+  ]
+}

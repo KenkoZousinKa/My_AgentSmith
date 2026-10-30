@@ -1,0 +1,10 @@
+{
+  "task_id": 447,
+  "task_definition": "Write a function to find cubes of individual elements in a list using lambda function.",
+  "function_definition": "def cube_nums(nums):",
+  "test_imports": [],
+  "test_list": [
+    "assert cube_nums([10,20,30])==([1000, 8000, 27000])",
+    "assert cube_nums([12,15])==([1728, 3375])"
+  ]
+}

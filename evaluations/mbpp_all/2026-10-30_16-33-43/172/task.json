@@ -1,0 +1,12 @@
+{
+  "task_id": 172,
+  "task_definition": "Write a function to find the occurence of characters 'std' in the given string 1. list item 1. list item 1. list item 2. list item 2. list item 2. list item",
+  "function_definition": "def count_occurance(s):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_occurance(\"truststdsolensporsd\") == 1",
+    "assert count_occurance(\"makestdsostdworthit\") == 2",
+    "assert count_occurance(\"stds\") == 1",
+    "assert count_occurance(\"\") == 0"
+  ]
+}

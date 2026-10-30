@@ -1,0 +1,10 @@
+{
+  "task_id": 123,
+  "task_definition": "Write a function to sum all amicable numbers from 1 to a specified number.",
+  "function_definition": "def amicable_numbers_sum(limit):",
+  "test_imports": [],
+  "test_list": [
+    "assert amicable_numbers_sum(9999)==31626",
+    "assert amicable_numbers_sum(99)==0"
+  ]
+}

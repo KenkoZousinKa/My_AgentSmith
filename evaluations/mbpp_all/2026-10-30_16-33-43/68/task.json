@@ -1,0 +1,10 @@
+{
+  "task_id": 68,
+  "task_definition": "Write a python function to check whether the given array is monotonic or not.",
+  "function_definition": "def is_Monotonic(A):",
+  "test_imports": [],
+  "test_list": [
+    "assert is_Monotonic([1, 2, 2, 3]) == True",
+    "assert is_Monotonic([1, 3, 2]) == False"
+  ]
+}

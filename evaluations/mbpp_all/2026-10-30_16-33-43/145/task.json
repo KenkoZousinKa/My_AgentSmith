@@ -1,0 +1,10 @@
+{
+  "task_id": 145,
+  "task_definition": "Write a python function to find the maximum difference between any two elements in a given array.",
+  "function_definition": "def max_Abs_Diff(arr):",
+  "test_imports": [],
+  "test_list": [
+    "assert max_Abs_Diff((9,3,2,5,1)) == 8",
+    "assert max_Abs_Diff((3,2,1)) == 2"
+  ]
+}

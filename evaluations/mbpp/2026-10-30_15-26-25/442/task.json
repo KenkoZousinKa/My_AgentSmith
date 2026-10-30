@@ -1,0 +1,10 @@
+{
+  "task_id": 442,
+  "task_definition": "Write a function to find the ration of positive numbers in an array of integers.",
+  "function_definition": "def positive_count(nums):",
+  "test_imports": [],
+  "test_list": [
+    "assert positive_count([2, 1, 2, -1, -5, 6, 4, -3, -2, 3, 4, 6, 8])==0.69",
+    "assert positive_count([2, 4, -6, -9, 11, -12, 14, -5, 17])==0.56"
+  ]
+}

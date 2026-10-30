@@ -1,0 +1,10 @@
+{
+  "task_id": 248,
+  "task_definition": "Write a function to calculate the harmonic sum of n-1.",
+  "function_definition": "def harmonic_sum(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert math.isclose(harmonic_sum(4), 2.083333333333333, rel_tol=0.001)",
+    "assert math.isclose(harmonic_sum(19), 3.547739657143682, rel_tol=0.001)"
+  ]
+}

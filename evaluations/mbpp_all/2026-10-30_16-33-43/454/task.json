@@ -1,0 +1,10 @@
+{
+  "task_id": 454,
+  "task_definition": "Write a function that matches a word containing 'z'.",
+  "function_definition": "def text_match_wordz(text):",
+  "test_imports": [],
+  "test_list": [
+    "assert text_match_wordz(\"xyz.\")==True",
+    "assert text_match_wordz(\"  lang  .\")==False"
+  ]
+}

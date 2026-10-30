@@ -1,0 +1,10 @@
+{
+  "task_id": 268,
+  "task_definition": "Write a function to find the n'th star number.",
+  "function_definition": "def find_star_num(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert find_star_num(4) == 73",
+    "assert find_star_num(5) == 121"
+  ]
+}

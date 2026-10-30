@@ -1,0 +1,10 @@
+{
+  "task_id": 98,
+  "task_definition": "Write a function to multiply all the numbers in a list and divide with the length of the list.",
+  "function_definition": "def multiply_num(numbers):",
+  "test_imports": [],
+  "test_list": [
+    "assert math.isclose(multiply_num((-10,-20,-30)), -2000.0, rel_tol=0.001)",
+    "assert math.isclose(multiply_num((19,15,18)), 1710.0, rel_tol=0.001)"
+  ]
+}

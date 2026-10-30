@@ -1,0 +1,10 @@
+{
+  "task_id": 95,
+  "task_definition": "Write a python function to find the minimum length of sublist.",
+  "function_definition": "def Find_Min_Length(lst):",
+  "test_imports": [],
+  "test_list": [
+    "assert Find_Min_Length([[1,2],[1,2,3],[1,2,3,4]]) == 2",
+    "assert Find_Min_Length([[3,3,3],[4,4,4,4]]) == 3"
+  ]
+}

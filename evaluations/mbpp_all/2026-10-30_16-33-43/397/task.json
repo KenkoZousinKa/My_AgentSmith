@@ -1,0 +1,10 @@
+{
+  "task_id": 397,
+  "task_definition": "Write a function to find the median of three specific numbers.",
+  "function_definition": "def median_numbers(a,b,c):",
+  "test_imports": [],
+  "test_list": [
+    "assert median_numbers(20,10,30)==20.0",
+    "assert median_numbers(15,45,75)==45.0"
+  ]
+}

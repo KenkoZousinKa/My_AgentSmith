@@ -1,0 +1,5 @@
+warning: `VIRTUAL_ENV=/home/ayhirose/ayhirose/rank05/Agent_Smith/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_MBPPを起動します。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=groq key#1 model=openai/gpt-oss-120b attempts=1 empty response(wasted in=1464, out=600); next combo.
+[Server] MCP_TOOLS_MBPPを終了しました。

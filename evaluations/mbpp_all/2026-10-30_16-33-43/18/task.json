@@ -1,0 +1,10 @@
+{
+  "task_id": 18,
+  "task_definition": "Write a function to remove characters from the first string which are present in the second string.",
+  "function_definition": "def remove_dirty_chars(string, second_string):",
+  "test_imports": [],
+  "test_list": [
+    "assert remove_dirty_chars(\"digitalindia\", \"talent\") == 'digiidi'",
+    "assert remove_dirty_chars(\"exoticmiles\", \"toxic\") == 'emles'"
+  ]
+}

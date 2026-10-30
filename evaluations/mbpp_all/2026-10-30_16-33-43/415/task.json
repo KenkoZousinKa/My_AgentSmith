@@ -1,0 +1,10 @@
+{
+  "task_id": 415,
+  "task_definition": "Write a python function to find a pair with highest product from a given array of integers.",
+  "function_definition": "def max_Product(arr):",
+  "test_imports": [],
+  "test_list": [
+    "assert max_Product([0,-1,-2,-4,5,0,-6]) == (-4,-6)",
+    "assert max_Product([1,2,3]) == (2,3)"
+  ]
+}

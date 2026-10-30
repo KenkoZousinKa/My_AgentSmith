@@ -1,0 +1,10 @@
+{
+  "task_id": 430,
+  "task_definition": "Write a function to find the directrix of a parabola.",
+  "function_definition": "def parabola_directrix(a, b, c):",
+  "test_imports": [],
+  "test_list": [
+    "assert parabola_directrix(9,8,4)==-2336",
+    "assert parabola_directrix(2,4,6)==-130"
+  ]
+}

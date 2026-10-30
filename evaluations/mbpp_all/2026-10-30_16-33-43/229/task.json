@@ -1,0 +1,10 @@
+{
+  "task_id": 229,
+  "task_definition": "Write a function to re-arrange the elements of the given array so that all negative elements appear before positive ones.",
+  "function_definition": "def re_arrange_array(arr, n):",
+  "test_imports": [],
+  "test_list": [
+    "assert re_arrange_array([12, -14, -26, 13, 15], 5) == [-14, -26, 12, 13, 15]",
+    "assert re_arrange_array([10, 24, 36, -42, -39, -78, 85], 7) == [-42, -39, -78, 10, 24, 36, 85]"
+  ]
+}

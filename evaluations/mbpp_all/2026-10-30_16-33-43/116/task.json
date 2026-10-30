@@ -1,0 +1,10 @@
+{
+  "task_id": 116,
+  "task_definition": "Write a function to convert a given tuple of positive integers into an integer.",
+  "function_definition": "def tuple_to_int(nums):",
+  "test_imports": [],
+  "test_list": [
+    "assert tuple_to_int((4,5,6))==456",
+    "assert tuple_to_int((5,6,7))==567"
+  ]
+}
