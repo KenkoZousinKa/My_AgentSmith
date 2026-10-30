@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from src.models.sandbox_config import SandboxConfig
-from src.sandbox.code_lint import check_code, _BLOCKED
+from src.sandbox.code_lint import check_code, _BLOCKED, strip_provided_imports
 from src.sandbox.sandbox_helper import send, recv, py_name
 from src.sandbox.sandbox_child import child_main
 from src.models.output import ExecuteResult
@@ -18,6 +18,13 @@ import sys
 import select
 import signal
 import argparse
+
+
+def _tool_params(tool: Any) -> list[str]:
+    """Parameter names for a tool, in input-schema order."""
+    schema = getattr(tool, "input_schema", None) or {}
+    props = schema.get("properties") or {}
+    return list(props.keys())
 
 
 class Sandbox:
@@ -40,6 +47,7 @@ class Sandbox:
         self._tool_truncated = False
         self.resources: list[Any] = []
         self.prompts: list[Any] = []
+        self._tool_params: dict[str, list[str]] = {}
         if mcp_stdio:
             self.client = MCPClient(StdioClientTransport(mcp_stdio))
         elif mcp_server:
@@ -49,6 +57,10 @@ class Sandbox:
                 self.client.connect()
                 self.tools = {
                     py_name(tool.name): MCPToolFunction(self.client, tool)
+                    for tool in self.client.list_tools()
+                }
+                self._tool_params = {
+                    py_name(tool.name): _tool_params(tool)
                     for tool in self.client.list_tools()
                 }
                 self.resources = self.client.list_resources()
@@ -80,13 +92,16 @@ class Sandbox:
         sys.stderr.flush()
         cmd_r, cmd_w = os.pipe()
         res_r, res_w = os.pipe()
-        has_catalog = bool(self.resources or self.prompts)
         pid = os.fork()
         if pid == 0:
             os.close(cmd_w)
             os.close(res_r)
             try:
-                child_main(self.config, cmd_r, res_w, sorted(self.tools), has_catalog)
+                child_main(
+                    self.config, cmd_r, res_w,
+                    self._tool_params,
+                    bool(self.resources or self.prompts),
+                )
             finally:
                 os._exit(1)
         os.close(cmd_r)
@@ -180,10 +195,12 @@ class Sandbox:
 
     def run(self, code: str) -> ExecuteResult:
         """Check, exectue, and service tool calls untill the snippet ends."""
-        # ===== debug =====
-        print(code)
-        print("=======================")
-        # ===== debug =====
+        provided = set(self.tools)
+        provided.add("final_answer")
+        if self.resources or self.prompts:
+            provided.update(("read_resource", "get_prompt"))
+        code, import_notes = strip_provided_imports(code, provided)
+
         rejection = check_code(code, self.config, frozenset(self.tools))
         if rejection:
             return ExecuteResult(error=rejection)
@@ -222,7 +239,19 @@ class Sandbox:
             if kind in ("resource_read", "prompt_get"):
                 self._dispatch_catalog(message)
                 continue
-            return self._to_result(message)
+            return self._with_notes(self._to_result(message), import_notes)
+
+    @staticmethod
+    def _with_notes(
+        result: ExecuteResult, notes: list[str]
+    ) -> ExecuteResult:
+        """Prepend skipped-import notes to the result's stdout."""
+        if not notes:
+            return result
+        prefix = "".join(f"[NOTE] {n}\n" for n in notes)
+        return result.model_copy(
+            update={"stdout": prefix + (result.stdout or "")}
+        )
 
     def _tool_doc(self, name: str, tool: Any) -> str:
         """Render one tool as a Python-looking signature plus its docs."""

@@ -78,7 +78,7 @@ def _execute(
     except MemoryError:
         result = {"kind": "error", "error": "memory limit exceeded"}
     except (PermissionError, ImportError) as exc:
-        result = {"kind": "exit", "error": f"{type(exc).__name__}: {exc}"}
+        result = {"kind": "error", "error": f"{type(exc).__name__}: {exc}"}
     except KeyboardInterrupt:
         result = {"kind": "interrupt"}
     except SystemExit as exc:
@@ -103,7 +103,7 @@ def child_main(
         config: SandboxConfig,
         cmd_fd: int,
         res_fd: int,
-        tool_names: list[str],
+        tool_params: dict[str, list[str]],
         has_catalog: bool = False
 ) -> None:
     """Worker entry point. Never returns."""
@@ -120,8 +120,8 @@ def child_main(
         "__builtins__": safe_builtins(config),
         "final_answer": final_answer,
     }
-    for name in tool_names:
-        namespace[name] = tool_proxy(name, res_fd, cmd_fd)
+    for name, params in tool_params.items():
+        namespace[name] = tool_proxy(name, params, res_fd, cmd_fd)
     if has_catalog:
         namespace.update(catalog_relays(res_fd, cmd_fd))
 

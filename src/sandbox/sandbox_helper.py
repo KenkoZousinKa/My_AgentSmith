@@ -11,19 +11,34 @@ import struct
 import re
 
 
-def tool_proxy(name: str, out_fd: int, in_fd: int) -> Callable[..., Any]:
+def tool_proxy(
+    name: str, params: list[str], out_fd: int, in_fd: int
+) -> Callable[..., Any]:
     """Build a stub that forwards a call to the parent's MCP client.
 
-    The interval timer is cancelled across the round trip and the
-    remainder restored afterwards, so a tool spawning a container does
-    not burn the snippet's exectuion budget.
+    Positional arguments are mapped onto the tool's parameter names in
+    input-schema order.
     """
-    def proxy(**kwargs: Any) -> Any:
-        """Proxy the tools."""
+    def proxy(*args: Any, **kwargs: Any) -> Any:
+        """Proxy the tools, mapping positional args to parameter names."""
+        if len(args) > len(params):
+            allowed = ", ".join(params) or "none"
+            raise TypeError(
+                f"{name}() takes at most {len(params)} positional "
+                f"arguments(s) ({allowed}), got {len(args)}"
+            )
+        merged = dict(zip(params, args))
+        for key in kwargs:
+            if key in merged:
+                raise TypeError(
+                    f"{name}() got multiple values for argument {key!r}"
+                )
+        merged.update(kwargs)
+
         remaining, _ = signal.setitimer(signal.ITIMER_REAL, 0.0)
         try:
             send(out_fd, {
-                "kind": "tool_call", "name": name, "arguments": kwargs,
+                "kind": "tool_call", "name": name, "arguments": merged,
             })
             reply = recv(in_fd)
         finally:
@@ -32,6 +47,7 @@ def tool_proxy(name: str, out_fd: int, in_fd: int) -> Callable[..., Any]:
         if reply.get("error") is not None:
             raise RuntimeError(f"tool {name!r} failed: {reply['error']}")
         return reply.get("result")
+
     proxy.__name__ = name
     proxy.__doc__ = f"MCP tool {name!r}, executed outside the sandbox."
     return proxy
@@ -282,7 +298,3 @@ def catalog_relays(out_fd: int, in_fd: int) -> dict[str, Callable[..., Any]]:
         })
 
     return {"read_resource": read_resource, "get_prompt": get_prompt}
-
-
-
-

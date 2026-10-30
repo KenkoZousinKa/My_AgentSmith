@@ -25,6 +25,50 @@ def _allowed(name: str, authorized: frozenset[str]) -> bool:
     )
 
 
+def strip_provided_imports(
+        code: str, provided: set[str]
+) -> tuple[str, list[str]]:
+    """Drop 'import <name>' for names already live in the sandbox.
+
+    Modles traineed on other frameworks write 'import json, run_tests'.
+    Tools (and final_answer) are not modules, so the import raises and
+    kills the whole snippet. Remove only the provided names from plain
+    'import' statements, keep the rest of the same statement, and never
+    touch 'from x import y' (that is a real import). Return the rewritten
+    code and a not for each skipped name.
+    """
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return code, []
+
+    notes: list[str] = []
+    new_body: list[ast.stmt] = []
+    changed = False
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            kept = []
+            for alias in node.names:
+                if alias.asname is None and alias.name in provided:
+                    notes.append(
+                        f"{alias.name} is already available in the "
+                        f"sandbox; the import was skipped"
+                    )
+                    changed = True
+                else:
+                    kept.append(alias)
+            if kept:
+                node.names = kept
+                new_body.append(node)
+        else:
+            new_body.append(node)
+
+    if not changed:
+        return code, notes
+    tree.body = new_body
+    return ast.unparse(tree), notes
+
+
 class _Checker(ast.NodeVisitor):
     """Static pass: cheap rejection before anything happens."""
 
