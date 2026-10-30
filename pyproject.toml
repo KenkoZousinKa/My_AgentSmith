@@ -36,7 +36,8 @@ dev = [
 exclude = [
     "^\\.venv/",
 	"^data/",
-	"^script"
+	"test/",
+	"^script/"
 ]
 
 # .関数はAnyで返せなくなる
