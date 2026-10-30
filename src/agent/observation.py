@@ -172,7 +172,7 @@ def iteration_note(iterations_left: int, submit_hint: str) -> str:
     Returns:
         str: Observationの末尾に付ける説明文。
     """
-    plural = "iteration remains" if iteration_left == 1 else "iterations remain"
+    plural = "iteration remains" if iterations_left == 1 else "iterations remain"
     return f"[BUDGET] Only {iterations_left} {plural} for this task. {submit_hint}"
 
 
