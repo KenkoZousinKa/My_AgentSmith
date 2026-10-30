@@ -1,0 +1,10 @@
+{
+  "task_id": 118,
+  "task_definition": "[link text](https:// [link text](https:// [link text](https://)))write a function to convert a string to a list.",
+  "function_definition": "def string_to_list(string):",
+  "test_imports": [],
+  "test_list": [
+    "assert string_to_list(\"lists tuples strings\")==['lists','tuples','strings']",
+    "assert string_to_list(\"write a program\")==['write','a','program']"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 92,
+  "task_definition": "Write a function to check whether the given number is undulating or not.",
+  "function_definition": "def is_undulating(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert is_undulating(1991) == False",
+    "assert is_undulating(121) == True"
+  ]
+}

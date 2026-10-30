@@ -1,0 +1,10 @@
+{
+  "task_id": 301,
+  "task_definition": "Write a function to find the depth of a dictionary.",
+  "function_definition": "def dict_depth(d):",
+  "test_imports": [],
+  "test_list": [
+    "assert dict_depth({'a':1, 'b': {'c':'python'}})==2",
+    "assert dict_depth({1: 'Sun', 2: {3: {4:'Mon'}}})==3"
+  ]
+}

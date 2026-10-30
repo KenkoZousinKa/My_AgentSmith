@@ -1,0 +1,4 @@
+warning: `VIRTUAL_ENV=/home/nsato/42Tokyo/Private_Cursus/Mile5/Agent_Smith_Project/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_MBPPを起動します。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+[Server] MCP_TOOLS_MBPPを終了しました。
