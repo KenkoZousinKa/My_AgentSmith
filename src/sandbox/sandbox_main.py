@@ -70,7 +70,7 @@ class Sandbox:
                 self.client = None
                 raise
 
-        # agentから呼び出してsels.client = Noneの時にtool_paramsが空になるため追加。
+        # agentから呼び出してself.client = Noneの時にtool_paramsが空になるため追加。
         # 上の同じ処理の行とこのif not節を消して、どちらにしてもself.toolsから作成でも可。
         if not self._tool_params:
             self._tool_params = {
