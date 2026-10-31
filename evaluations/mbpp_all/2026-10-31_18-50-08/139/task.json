@@ -1,0 +1,10 @@
+{
+  "task_id": 139,
+  "task_definition": "Write a function to find the circumference of a circle.",
+  "function_definition": "def circle_circumference(r):",
+  "test_imports": [],
+  "test_list": [
+    "assert math.isclose(circle_circumference(5), 31.415000000000003, rel_tol=0.001)",
+    "assert math.isclose(circle_circumference(4), 25.132, rel_tol=0.001)"
+  ]
+}

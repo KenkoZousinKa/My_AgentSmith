@@ -1,0 +1,10 @@
+{
+  "task_id": 461,
+  "task_definition": "Write a python function to count the upper case characters in a given string.",
+  "function_definition": "def upper_ctr(str):",
+  "test_imports": [],
+  "test_list": [
+    "assert upper_ctr('BigData') == 1",
+    "assert upper_ctr('program') == 0"
+  ]
+}

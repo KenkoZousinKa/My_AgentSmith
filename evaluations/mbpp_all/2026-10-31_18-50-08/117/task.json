@@ -1,0 +1,10 @@
+{
+  "task_id": 117,
+  "task_definition": "Write a function to convert all possible convertible elements in the list to float.",
+  "function_definition": "def list_to_float(test_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert list_to_float( [(\"4\", \"4\"), (\"2\", \"27\"), (\"4.12\", \"9\"), (\"7\", \"11\")] ) == [(4.0, 4.0), (2.0, 27.0), (4.12, 9.0), (7.0, 11.0)]",
+    "assert list_to_float( [(\"6\", \"78\"), (\"5\", \"26.45\"), (\"1.33\", \"4\"), (\"82\", \"13\")] ) == [(6.0, 78.0), (5.0, 26.45), (1.33, 4.0), (82.0, 13.0)]"
+  ]
+}

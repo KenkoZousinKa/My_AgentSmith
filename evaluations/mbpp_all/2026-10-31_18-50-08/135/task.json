@@ -1,0 +1,10 @@
+{
+  "task_id": 135,
+  "task_definition": "Write a function to find the nth hexagonal number.",
+  "function_definition": "def hexagonal_num(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert hexagonal_num(5) == 45",
+    "assert hexagonal_num(7) == 91"
+  ]
+}

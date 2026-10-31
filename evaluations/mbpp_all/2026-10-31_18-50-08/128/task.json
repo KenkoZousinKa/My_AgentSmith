@@ -1,0 +1,10 @@
+{
+  "task_id": 128,
+  "task_definition": "Write a function to shortlist words that are longer than n from a given list of words.",
+  "function_definition": "def long_words(n, str):",
+  "test_imports": [],
+  "test_list": [
+    "assert long_words(2,\"writing a program\")==['writing','program']",
+    "assert long_words(5,\"sorting list\")==['sorting']"
+  ]
+}

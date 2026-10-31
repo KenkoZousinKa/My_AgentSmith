@@ -1,0 +1,10 @@
+{
+  "task_id": 103,
+  "task_definition": "Write a function to find eulerian number a(n, m).",
+  "function_definition": "def eulerian_num(n, m):",
+  "test_imports": [],
+  "test_list": [
+    "assert eulerian_num(4, 1) == 11",
+    "assert eulerian_num(5, 3) == 26"
+  ]
+}

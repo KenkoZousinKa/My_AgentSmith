@@ -1,0 +1,11 @@
+{
+  "task_id": 223,
+  "task_definition": "Write a function to check for majority element in the given sorted array.",
+  "function_definition": "def is_majority(arr, n, x):",
+  "test_imports": [],
+  "test_list": [
+    "assert is_majority([1, 1, 2, 4, 4, 4, 6, 6], 8, 4) == False",
+    "assert is_majority([1, 1, 1, 2, 2], 5, 1) == True",
+    "assert is_majority([1, 1, 2, 2], 5, 1) == False"
+  ]
+}

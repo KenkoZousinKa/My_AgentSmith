@@ -1,0 +1,10 @@
+{
+  "task_id": 440,
+  "task_definition": "Write a function to find all adverbs and their positions in a given sentence.",
+  "function_definition": "def find_adverb_position(text):",
+  "test_imports": [],
+  "test_list": [
+    "assert find_adverb_position(\"seriously!! there are many roses\")==(0, 9, 'seriously')",
+    "assert find_adverb_position(\"unfortunately!! sita is going to home\")==(0, 13, 'unfortunately')"
+  ]
+}

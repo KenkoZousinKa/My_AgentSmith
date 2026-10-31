@@ -1,0 +1,10 @@
+{
+  "task_id": 160,
+  "task_definition": "Write a function to find x and y that satisfies ax + by = n.",
+  "function_definition": "def find_solution(a, b, n):",
+  "test_imports": [],
+  "test_list": [
+    "assert find_solution(4, 2, 7) == None",
+    "assert find_solution(1, 13, 17) == (4, 1)"
+  ]
+}

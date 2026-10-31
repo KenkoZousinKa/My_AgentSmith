@@ -1,0 +1,10 @@
+{
+  "task_id": 239,
+  "task_definition": "Write a function to find the number of possible sequences of length n such that each of the next element is greater than or equal to twice of the previous element but less than or equal to m.",
+  "function_definition": "def get_total_number_of_sequences(m,n):",
+  "test_imports": [],
+  "test_list": [
+    "assert get_total_number_of_sequences(5, 2) == 6",
+    "assert get_total_number_of_sequences(16, 3) == 84"
+  ]
+}

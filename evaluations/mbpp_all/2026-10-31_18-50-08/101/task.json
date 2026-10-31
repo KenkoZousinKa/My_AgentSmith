@@ -1,0 +1,10 @@
+{
+  "task_id": 101,
+  "task_definition": "Write a function to find the kth element in the given array.",
+  "function_definition": "def kth_element(arr, k):",
+  "test_imports": [],
+  "test_list": [
+    "assert kth_element([17,24,8,23], 3) == 8",
+    "assert kth_element([16,21,25,36,4], 4) == 36"
+  ]
+}

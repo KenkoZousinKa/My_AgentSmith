@@ -1,0 +1,10 @@
+{
+  "task_id": 310,
+  "task_definition": "Write a function to convert a given string to a tuple.",
+  "function_definition": "def string_to_tuple(str1):",
+  "test_imports": [],
+  "test_list": [
+    "assert string_to_tuple(\"item1\")==('i', 't', 'e', 'm', '1')",
+    "assert string_to_tuple(\"15.10\")==('1', '5', '.', '1', '0')"
+  ]
+}

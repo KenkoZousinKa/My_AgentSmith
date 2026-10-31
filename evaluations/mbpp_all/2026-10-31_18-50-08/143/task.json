@@ -1,0 +1,10 @@
+{
+  "task_id": 143,
+  "task_definition": "Write a function to find number of lists present in the given tuple.",
+  "function_definition": "def find_lists(Input):",
+  "test_imports": [],
+  "test_list": [
+    "assert find_lists(([1, 2], [3, 4], [5, 6]))  == 3",
+    "assert find_lists(([9, 8, 7, 6, 5, 4, 3, 2, 1])) == 1"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 105,
+  "task_definition": "Write a python function to count true booleans in the given list.",
+  "function_definition": "def count(lst):",
+  "test_imports": [],
+  "test_list": [
+    "assert count([False,False]) == 0",
+    "assert count([True,True,True]) == 3"
+  ]
+}

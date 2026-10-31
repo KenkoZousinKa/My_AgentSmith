@@ -1,0 +1,10 @@
+{
+  "task_id": 129,
+  "task_definition": "Write a function to calculate magic square.",
+  "function_definition": "def magic_square_test(my_matrix):",
+  "test_imports": [],
+  "test_list": [
+    "assert magic_square_test([[2, 7, 6], [9, 5, 1], [4, 3, 8]])==True",
+    "assert magic_square_test([[2, 7, 6], [9, 5, 1], [4, 3, 7]])==False"
+  ]
+}

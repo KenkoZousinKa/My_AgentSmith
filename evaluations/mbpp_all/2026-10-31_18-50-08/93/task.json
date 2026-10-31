@@ -1,0 +1,10 @@
+{
+  "task_id": 93,
+  "task_definition": "Write a function to calculate the value of 'a' to the power 'b'.",
+  "function_definition": "def power(a,b):",
+  "test_imports": [],
+  "test_list": [
+    "assert power(2,3) == 8",
+    "assert power(5,5) == 3125"
+  ]
+}

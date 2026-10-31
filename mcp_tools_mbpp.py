@@ -1,5 +1,6 @@
 """mcp_tools_mbpp.py"""
 
+import ast
 import sys
 import json
 import subprocess
@@ -21,8 +22,8 @@ def run_tests(code: str, test_list: list[str]) -> str:
     Returns a JSON string with "success" (True if all tests passed),
     "message" and "output" (stdout and stderr of the run).
     """
-    # 1. 実行するスクリプトを用意
-    script = f"{code}\n" + '\n'.join(test_list)
+    # 1. 実行するスクリプトを用意（各 assert に got/expected 表示を付与）
+    script = f"{code}\n" + "\n".join(_enrich(t) for t in test_list)
 
     try:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -41,6 +42,24 @@ def run_tests(code: str, test_list: list[str]) -> str:
 
     # 3. json形式のstrにして返す。
     return json.dumps({"success": True, "message": "passed", "output": result.stdout + result.stderr})
+
+
+def _enrich(stmt: str) -> str:
+    """'assert A == B' に失敗時の値表示（got / expected）を付ける."""
+    try:
+        node = ast.parse(stmt).body[0]
+        # Assert文であり、比較されているか
+        if isinstance(node, ast.Assert) and isinstance(node.test, ast.Compare):
+            # 比較演算子が一つであり、==であるか
+            if len(node.test.ops) == 1 and isinstance(node.test.ops[0], ast.Eq):
+                a = ast.unparse(node.test.left)
+                b = ast.unparse(node.test.comparators[0])
+                return f'assert (_g := ({a})) == (_e := ({b})), f"got {{_g!r}}, expected {{_e!r}}"'
+                # ({a}) :式順序を崩さないため。 {{_g!r}} :埋め込み展開。 !r :intなら12 strなら'12'
+                # _g _e :LLMのコードと被らせないため
+    except Exception:
+        pass
+    return stmt
 
 
 @server.resource("mbpp://guide/run_tests", mime_type="text/markdown")

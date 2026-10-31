@@ -1,0 +1,10 @@
+{
+  "task_id": 233,
+  "task_definition": "Write a function to find the lateral surface area of a cylinder.",
+  "function_definition": "def lateralsuface_cylinder(r,h):",
+  "test_imports": [],
+  "test_list": [
+    "assert math.isclose(lateralsuface_cylinder(4,5), 125.66000000000001, rel_tol=0.001)",
+    "assert math.isclose(lateralsuface_cylinder(4,10), 251.32000000000002, rel_tol=0.001)"
+  ]
+}

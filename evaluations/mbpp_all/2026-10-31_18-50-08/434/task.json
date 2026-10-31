@@ -1,0 +1,10 @@
+{
+  "task_id": 434,
+  "task_definition": "Write a function that matches a string that has an a followed by one or more b's.",
+  "function_definition": "def text_match_one(text):",
+  "test_imports": [],
+  "test_list": [
+    "assert text_match_one(\"dc\")==False",
+    "assert text_match_one(\"abba\")==True"
+  ]
+}

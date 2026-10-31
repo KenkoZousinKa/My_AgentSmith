@@ -1,0 +1,10 @@
+{
+  "task_id": 424,
+  "task_definition": "Write a function to extract only the rear index element of each string in the given tuple.",
+  "function_definition": "def extract_rear(test_tuple):",
+  "test_imports": [],
+  "test_list": [
+    "assert extract_rear(('Avenge', 'for', 'People') ) == ['e', 'r', 'e']",
+    "assert extract_rear(('Gotta', 'get', 'go') ) == ['a', 't', 'o']"
+  ]
+}

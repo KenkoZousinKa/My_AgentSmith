@@ -1,0 +1,10 @@
+{
+  "task_id": 300,
+  "task_definition": "Write a function to find the count of all binary sequences of length 2n such that sum of first n bits is same as sum of last n bits.",
+  "function_definition": "def count_binary_seq(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert math.isclose(count_binary_seq(2), 6.0, rel_tol=0.001)",
+    "assert math.isclose(count_binary_seq(3), 20.0, rel_tol=0.001)"
+  ]
+}

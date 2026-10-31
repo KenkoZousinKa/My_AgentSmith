@@ -1,0 +1,10 @@
+{
+  "task_id": 164,
+  "task_definition": "Write a python function to check whether the sum of divisors are same or not.",
+  "function_definition": "def are_equivalent(num1, num2):",
+  "test_imports": [],
+  "test_list": [
+    "assert are_equivalent(2, 4) == False",
+    "assert are_equivalent(23, 47) == True"
+  ]
+}

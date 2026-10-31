@@ -1,0 +1,10 @@
+{
+  "task_id": 427,
+  "task_definition": "Write a function to convert a date of yyyy-mm-dd format to dd-mm-yyyy format by using regex.",
+  "function_definition": "def change_date_format(dt):",
+  "test_imports": [],
+  "test_list": [
+    "assert change_date_format(\"2020-11-13\") == '13-11-2020'",
+    "assert change_date_format(\"2021-04-26\") == '26-04-2021'"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 304,
+  "task_definition": "Write a python function to find element at a given index after number of rotations.",
+  "function_definition": "def find_Element(arr,ranges,rotations,index) :",
+  "test_imports": [],
+  "test_list": [
+    "assert find_Element([1,2,3,4],[[0,1],[0,2]],1,2) == 3",
+    "assert find_Element([1,2,3,4,5,6],[[0,1],[0,2]],1,1) == 1"
+  ]
+}

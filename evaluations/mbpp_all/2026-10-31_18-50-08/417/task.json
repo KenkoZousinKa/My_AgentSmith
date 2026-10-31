@@ -1,0 +1,10 @@
+{
+  "task_id": 417,
+  "task_definition": "Write a function to find common first element in given list of tuple.",
+  "function_definition": "def group_tuples(Input):",
+  "test_imports": [],
+  "test_list": [
+    "assert group_tuples([('a', 'b'), ('a', 'c'), ('d', 'e')]) == [('a', 'b', 'c'), ('d', 'e')]",
+    "assert group_tuples([('f', 'g'), ('f', 'g'), ('h', 'i')]) == [('f', 'g', 'g'), ('h', 'i')]"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 290,
+  "task_definition": "Write a function to find the list of lists with maximum length.",
+  "function_definition": "def max_length(list1):",
+  "test_imports": [],
+  "test_list": [
+    "assert max_length([[1], [5, 7], [10, 12, 14,15]])==(4, [10, 12, 14,15])",
+    "assert max_length([[5], [15,20,25]])==(3, [15,20,25])"
+  ]
+}

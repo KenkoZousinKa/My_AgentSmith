@@ -1,0 +1,10 @@
+{
+  "task_id": 405,
+  "task_definition": "Write a function to check whether an element exists within a tuple.",
+  "function_definition": "def check_tuplex(tuplex,tuple1):",
+  "test_imports": [],
+  "test_list": [
+    "assert check_tuplex((\"w\", 3, \"r\", \"e\", \"s\", \"o\", \"u\", \"r\", \"c\", \"e\"),'5')==False",
+    "assert check_tuplex((\"w\", 3, \"r\", \"e\", \"s\", \"o\", \"u\", \"r\", \"c\",\"e\"),3)==True"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 426,
+  "task_definition": "Write a function to filter odd numbers using lambda function.",
+  "function_definition": "def filter_oddnumbers(nums):",
+  "test_imports": [],
+  "test_list": [
+    "assert filter_oddnumbers([10,20,45,67,84,93])==[45,67,93]",
+    "assert filter_oddnumbers([5,7,9,8,6,4,3])==[5,7,9,3]"
+  ]
+}

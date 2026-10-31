@@ -1,0 +1,10 @@
+{
+  "task_id": 458,
+  "task_definition": "Write a function to find the area of a rectangle.",
+  "function_definition": "def rectangle_area(l,b):",
+  "test_imports": [],
+  "test_list": [
+    "assert rectangle_area(10,5)==50",
+    "assert rectangle_area(4,2)==8"
+  ]
+}
