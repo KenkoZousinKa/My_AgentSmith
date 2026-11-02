@@ -200,22 +200,27 @@ moulinette は、解答が正しいかに加えて、次の制限を守ってい
 ### 4-2. Sandbox
 <!-- TODO（Sandbox 担当）：隔離の方法、制限（メモリ・時間・ネットワーク）、REPL、MCP ツールの公開方法 -->
 
-To isolate the sandbox is done in a newly made namespace. This namespace has only allowed imports and builtins that is set in the config.
+## Isolation
 
-To ensure resource limits and time limits it is done in two processes.
-	The parent process manages the tool calls and memory while the child does the actual running of code.
+The sandbox enforces three independent layers.
 
-	Time limits and memory limits are paused during tool calls and to ensure that the timing errors only happen during sandbox process.
+1. Restricted namespace (First layer)
+	LLM code runs in a fresh namespace whose builtins have the dangerous ones removed and whose __import__ is guarded to the config's authorised_imports. A static AST pass rejects disallowed imports, dunder access, and 'module._private' access before anything runs. This layer is cheap but bypassable on its own, so it sits in front of the real boundary
 
-	Network access is removed by blocking all socket functions. This is to ensure that the network is never accessed during the sandbox code, even if the AI requests it.
-	The name-space sets the socket calls to all raise errors.
+2. Runtime audit hook (The real boundary)
+	A PEP 578 audit hook watches operations, not names, so it catches an escape however it was reached (e.g. typing.sys.modules['os'].system). It denies process access creation, ctypes, heap inspection, and network operations (socket.connect/bind/getaddrinfo), and confines file access to allowed_directories. Socket constructors are also neutered as a second layer.
 
-Final_answer:
-	A baseException so that it is not eaten up by the LLM loop exception.
-	It is a callable function for the LLM to call when it thinks its code does what is asked correctly.
+3. Process isolation
+	LLM code runs in a forked child. Memory is cappped with RLIMIT_AS and time with an interval timer, both set in the child - they can only apply to a seperate process, not the agent itself. The parent dispatches tool calls and acts as a watchdog, killing and restarting the worker if it goes unresponsive. the child's environment is scrubbed at startup so inherited API keys are not readable.
 
-Manual:
-	A single use function to call to send information to the AI about the MCP tools and final answer usage.
+	The execution timeout is paused during tool call, because tool runs outside the sandbox and its runtime must not count against the budget.
+
+## final_answer
+A callable injected into the namespace for the LLM to call when it believes its solution is correct. It raises a FinalAnswer exception that inherits a BaseException, so generated code wrapping its work in 'try/except Exception' cannot swallow the task-complete signal.
+
+## manual()
+Generates the text describing the sandbox to the LLM - The rules, final_answer usage, and the connected server's tools (and resources / prompts) - built from the live schema so its reflects whichever MCP server is connected. This text goes into the system prompt.
+
 
 ```bash
 # test repl of sandbox
