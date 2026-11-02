@@ -270,7 +270,6 @@ def test_mbpp_visible_tests_are_predefined_in_the_sandbox(tmp_path: Path, monkey
     assert _NamespaceProbeOrchestrator.passed.strip() == "True"
     assert "test_list=TASK_TESTS" in _NamespaceProbeOrchestrator.task_message
 
-
 # ============ A-19: 提出前に可視テストを本物の run_tests で検証する ============
 
 class _VerifierProbeOrchestrator:
@@ -313,8 +312,30 @@ def test_mbpp_submission_is_verified_with_the_visible_tests(tmp_path: Path, monk
     assert verdicts["right"] == (True, "")
     passed, detail = verdicts["wrong"]
     assert passed is False
-    # チームのサーバーの run_tests は、最初に落ちたassertの行をトレースバックで返す(実際の値は返さない)
+    # 1件目が math.isclose(== ではない)なので、M10 でも got/expected は付かず、落ちたassertの行で確かめる
+    assert "assert math.isclose(add(1, 2), 3)" in detail
     assert "assert math.isclose(add(1, 2), 3)" in detail
     passed, detail = verdicts["hardcoded"]
     assert passed is False
     assert "as literals (30, 7)" in detail
+
+
+def test_mbpp_rejection_keeps_got_and_expected_of_a_long_assert(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """長い assert A == B に落ちても、差し戻しの理由に run_tests の「got ..., expected ...」が残る(fix/M10).
+
+    run_tests は落ちたassertの行をトレースバックで出し、値は最後の行に付ける。
+    先頭から切ると、長いassertではassertの行だけで上限が埋まり、値が落ちる(11-02 に実測)。
+    """
+    monkeypatch.chdir(_REPO_ROOT)
+    monkeypatch.setattr(cli, "Orchestrator", _VerifierProbeOrchestrator)
+    first = 10 ** 60
+    second = 2 * 10 ** 60
+    task_file = tmp_path / "task.json"
+    task_file.write_text(json.dumps({
+        "task_id": 7, "task_definition": "Add two numbers.", "function_definition": "def add(a, b):",
+        "test_imports": [], "test_list": [f"assert add({first}, {second}) == {first + second}"],
+    }), encoding="utf-8")
+    run_mbpp_agent(str(task_file), str(tmp_path / "solution.json"))
+    passed, detail = _VerifierProbeOrchestrator.verdicts["wrong"]
+    assert passed is False
+    assert f"AssertionError: got {first - second}, expected {first + second}" in detail

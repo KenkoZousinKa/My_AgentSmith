@@ -227,9 +227,10 @@ def test_mbpp_prompt_warns_about_hidden_tests_and_tool_imports(sandbox: _FakeSan
     assert "never import them" in prompt
     assert "NEVER derive formulas or trace arithmetic in prose" in prompt
     assert "{" not in prompt.replace("{'success'", "")  # 差し込み忘れの {name} が残っていない
-    # チームのサーバーの run_tests は、最初に落ちたassertの行だけを返し、関数が返した値は返さない(M-01を割り切った)
-    assert "shows only the FIRST failing assert" in prompt
-    assert "not what your function returned" in prompt
+    # チームのサーバーの run_tests は、最初に落ちたassertをトレースバックで返し、== の形なら got / expected を付ける(fix/M10)
+    assert "shows the FIRST failing assert as a traceback" in prompt
+    assert "'AssertionError: got <your result>, expected <x>'" in prompt
+    assert "not what your function returned" not in prompt  # M-01を割り切っていたときの古い1文が残っていない
 
 
 def test_mbpp_task_message_lists_test_imports() -> None:

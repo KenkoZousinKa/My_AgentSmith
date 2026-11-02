@@ -172,12 +172,13 @@ def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> Callable[[
                     "special-casing the examples"
             )
         # 名前空間のTASK_TESTSはLLMが書き換えられるのでテストはリテラルで返す。
-        # run_testsの失敗の出力はTracebackの最後の行にAssertionErrorのメッセージが入るので末尾を返す。
+        # run_testsの失敗の出力は、トレースバックの最後の行に「AssertionError: got ..., expected ...」が付くので、
+        # 先頭ではなく末尾を残す(長いassertだと、先頭の300字はassertの行だけで埋まる)。
         snippet = (
             "import json\n"
             f"_report = json.loads(run_tests(code={solution!r}, test_list={list(test_list)!r}))\n"
             "print('VERIFY_OK' if _report['success'] else "
-            f"'VERIFY_FAIL ' + str(_report.get('output', '')).strip()[-{_VERIFY_DETAIL_CHARS}:] + ')'\n"
+            f"'VERIFY_FAIL ' + str(_report.get('output', '')).strip()[-{_VERIFY_DETAIL_CHARS}:])\n"
         )
         stdout = (sandbox.run(snippet).stdout or "").strip()
         if "VERIFY_FAIL" in stdout:
