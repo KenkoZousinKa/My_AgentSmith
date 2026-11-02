@@ -314,7 +314,6 @@ def test_mbpp_submission_is_verified_with_the_visible_tests(tmp_path: Path, monk
     assert passed is False
     # 1件目が math.isclose(== ではない)なので、M10 でも got/expected は付かず、落ちたassertの行で確かめる
     assert "assert math.isclose(add(1, 2), 3)" in detail
-    assert "assert math.isclose(add(1, 2), 3)" in detail
     passed, detail = verdicts["hardcoded"]
     assert passed is False
     assert "as literals (30, 7)" in detail
