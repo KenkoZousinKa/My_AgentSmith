@@ -43,7 +43,42 @@ AgentSmith は、プログラミングの課題を自分で考え、コードを
 | Sandbox | LLM が書いたコードを、隔離した環境で実行する | joseo（要確認） |
 | MCP | ツールを提供するサーバーと、それを呼ぶクライアント | ayhirose |
 
-<!-- TODO: 全体の構成図（Agent → Sandbox → MCPClient → MCP サーバー → Docker）を入れる -->
+### システムアーキテクチャ
+
+```mermaid
+flowchart LR
+    TASK[("task.json")] --> ORCH
+    subgraph AGENT["エージェントのプロセス（agent_mbpp.py / agent_swebench.py）"]
+        ORCH["Orchestrator<br>ループ・制限・提出の検査"]
+        LLMC["ResilientLLMClient<br>プロバイダ → キー → モデル"]
+        EXT["CodeExtractor<br>応答からコードを取り出す"]
+        SBP["Sandbox（親）<br>ツールの取り次ぎ・見張り"]
+        MCPC["MCPClient"]
+        ORCH --> LLMC
+        ORCH --> EXT
+        ORCH -- コード --> SBP
+        SBP --> MCPC
+    end
+    LLMC -- "HTTPS（Chat Completions）" --> API["LLM の API<br>Ollama・NVIDIA・Mistral など"]
+    SBP <-- "パイプ" --> CHILD["サンドボックスの子プロセス（fork）<br>制限した名前空間・監査フック・rlimit"]
+    MCPC <-- "JSON-RPC（stdio / HTTP）" --> SRV["MCP サーバー（別プロセス）<br>mcp_tools_mbpp.py / mcp_tools_swebench.py"]
+    SRV -- "docker exec" --> DOCKER["Docker コンテナ（SWE-bench）<br>/testbed のリポジトリ"]
+    ORCH --> SOL[("solution.json")]
+```
+
+| 部品 | 受け持つこと | コード |
+|---|---|---|
+| Orchestrator | Thought → Code → Observation のループ。制限の確認・送る履歴の選択・提出の検査 | `src/agent/orchestrator.py` |
+| ResilientLLMClient | `providers*.json` の並びで「プロバイダ → キー → モデル」を順に試す。429・5xx などの扱い | `src/agent/llm/` |
+| CodeExtractor | LLM の応答から Python のコードを取り出す（Markdown・XML・JSON・ReAct） | `src/agent/extractor/` |
+| Sandbox | LLM のコードを、fork した子プロセスで実行する。親はツールの呼び出しを取り次ぎ、子を見張る | `src/sandbox/` |
+| MCPClient / MCP サーバー | ツールを JSON-RPC 2.0 で呼ぶ。サーバーは別のプロセス（stdio の子プロセスか HTTP） | `src/mcp/`・`mcp_tools_*.py` |
+| Executor（SWE-bench） | タスクの Docker イメージでコンテナを起動し、ツールを `docker exec` で中で実行する | `src/mcp/swe_bench/` |
+
+- **LLM のコード**は、fork した子プロセスで動きます。子はネットワークもプロセスの作成もできないので、ツールを呼ぶときは、パイプで親に頼みます。親が MCPClient でサーバーを呼び、結果を子に返します。
+- **ツールの実行**は、MCP サーバーのプロセスで行います。SWE-bench では、さらにタスクごとの Docker のコンテナの中です。LLM がツールの引数として渡したコード（`run_tests(code=...)` など）は、サンドボックスではなく、こちらの環境で動きます。
+- **LLM の API** だけが、外部のネットワークに出ます。どのプロバイダを使うかは `providers*.json` で決め、Orchestrator はプロバイダを知りません（インターフェースの `LLMGenerator` にだけ依存します）。
+- **設定**は、制限が `config.json`、プロバイダが `providers/providers*.json`、サンドボックスが `sandbox_template.json`、API キーが `.env` です。
 
 
 ## 📁2. ファイル構成
@@ -193,7 +228,6 @@ moulinette は、解答が正しいかに加えて、次の制限を守ってい
 ## ⛏4. 追加要件
 
 ### 4-1. Agent
-<!-- TODO（Agent 担当）：ループの設計、プロンプト、答えの取り出し形式、リトライ、制限、ログ -->
 Agentは、LLMに「考え（Thought）→ コード（Code）→ 実行結果（Observation）」をくり返させるループです（`src/agent/`）。  
 MBPP と SWE-bench は同じループで動きます。2つの違いは、プロンプト・提出物の扱い・制限の値だけで、これをタスクごとの設定（`TaskProfile`）が持ちます。  
 
@@ -313,7 +347,6 @@ flowchart TD
 - MBPP, SWE-Benchともにベンチマークの結果、それに対する分析は[`BENCHMARK_REPORT_ja.md`](BENCHMARK_REPORT_ja.md)に記載した。
 
 ### 4-2. Sandbox
-<!-- TODO（Sandbox 担当）：隔離の方法、制限（メモリ・時間・ネットワーク）、REPL、MCP ツールの公開方法 -->
 
 #### 隔離（Isolation）
 

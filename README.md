@@ -43,7 +43,42 @@ The system is made of three components.
 | Sandbox | Runs the code written by the LLM in an isolated environment | joseo (to be confirmed) |
 | MCP | A server that provides tools, and a client that calls them | ayhirose |
 
-<!-- TODO: add an overall architecture diagram (Agent → Sandbox → MCPClient → MCP server → Docker) -->
+### 1-1. System architecture
+
+```mermaid
+flowchart LR
+    TASK[("task.json")] --> ORCH
+    subgraph AGENT["Agent process (agent_mbpp.py / agent_swebench.py)"]
+        ORCH["Orchestrator<br>loop, limits, submission checks"]
+        LLMC["ResilientLLMClient<br>provider → key → model"]
+        EXT["CodeExtractor<br>pulls code out of the response"]
+        SBP["Sandbox (parent)<br>dispatches tool calls, watchdog"]
+        MCPC["MCPClient"]
+        ORCH --> LLMC
+        ORCH --> EXT
+        ORCH -- code --> SBP
+        SBP --> MCPC
+    end
+    LLMC -- "HTTPS (Chat Completions)" --> API["LLM APIs<br>Ollama, NVIDIA, Mistral, ..."]
+    SBP <-- "pipe" --> CHILD["Sandbox child process (fork)<br>restricted namespace, audit hook, rlimits"]
+    MCPC <-- "JSON-RPC (stdio / HTTP)" --> SRV["MCP server (separate process)<br>mcp_tools_mbpp.py / mcp_tools_swebench.py"]
+    SRV -- "docker exec" --> DOCKER["Docker container (SWE-bench)<br>repository in /testbed"]
+    ORCH --> SOL[("solution.json")]
+```
+
+| Component | Responsibility | Code |
+|---|---|---|
+| Orchestrator | The Thought → Code → Observation loop: checks the limits, chooses the history to send, checks the submission | `src/agent/orchestrator.py` |
+| ResilientLLMClient | Tries "provider → key → model" entries in the order of `providers*.json`; handles 429, 5xx, etc. | `src/agent/llm/` |
+| CodeExtractor | Pulls Python code out of the LLM's response (Markdown, XML, JSON, ReAct) | `src/agent/extractor/` |
+| Sandbox | Runs the LLM's code in a forked child process. The parent dispatches tool calls and watches the child | `src/sandbox/` |
+| MCPClient / MCP server | Call tools over JSON-RPC 2.0. The server is a separate process (a stdio child process, or HTTP) | `src/mcp/`, `mcp_tools_*.py` |
+| Executor (SWE-bench) | Starts a container from the task's Docker image and runs each tool inside it with `docker exec` | `src/mcp/swe_bench/` |
+
+- **The LLM's code** runs in a forked child process. The child can neither use the network nor create processes, so to call a tool it asks the parent through a pipe. The parent calls the server with the MCPClient and sends the result back to the child.
+- **Tools run** in the MCP server's process, and for SWE-bench inside the task's Docker container. Code that the LLM passes as a tool argument (such as `run_tests(code=...)`) runs there, not in the sandbox.
+- **Only the LLM APIs** go out to the external network. Which providers to use is set in `providers*.json`; the Orchestrator does not know about providers (it depends only on the `LLMGenerator` interface).
+- **Settings**: limits in `config.json`, providers in `providers/providers*.json`, the sandbox in `sandbox_template.json`, API keys in `.env`.
 
 
 ## 📁2. File Structure
