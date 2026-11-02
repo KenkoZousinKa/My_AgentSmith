@@ -75,6 +75,7 @@ def _raise_terminated(signum: int, frame: FrameType | None) -> None:
 
 
 _TASK_TESTS_NAME = "TASK_TESTS"
+_VERIFY_DETAIL_CHARS = 300
 
 
 def format_mbpp_task(task_input: MBPPTaskInput) -> str:
@@ -171,15 +172,16 @@ def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> Callable[[
                     "special-casing the examples"
             )
         # 名前空間のTASK_TESTSはLLMが書き換えられるのでテストはリテラルで返す。
+        # run_testsの失敗の出力はTracebackの最後の行にAssertionErrorのメッセージが入るので末尾を返す。
         snippet = (
             "import json\n"
             f"_report = json.loads(run_tests(code={solution!r}, test_list={list(test_list)!r}))\n"
             "print('VERIFY_OK' if _report['success'] else "
-            "'VERIFY_FAIL ' + str(_report.get('output', ''))[:300])\n"
+            f"'VERIFY_FAIL ' + str(_report.get('output', '')).strip()[-{_VERIFY_DETAIL_CHARS}:] + ')'\n"
         )
         stdout = (sandbox.run(snippet).stdout or "").strip()
         if "VERIFY_FAIL" in stdout:
-            return False, stdout.split("VERIFY_FAIL", 1)[1].strip()[:300]
+            return False, stdout.split("VERIFY_FAIL", 1)[1].strip()[-_VERIFY_DETAIL_CHARS:]
 
         return True, ""
 
