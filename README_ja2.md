@@ -200,12 +200,18 @@ moulinette は、解答が正しいかに加えて、次の制限を守ってい
 ### 4-2. Sandbox
 <!-- TODO（Sandbox 担当）：隔離の方法、制限（メモリ・時間・ネットワーク）、REPL、MCP ツールの公開方法 -->
 
-## Isolation
+#### Isolation
 
 The sandbox enforces three independent layers.
 
 1. Restricted namespace (First layer)
 	LLM code runs in a fresh namespace whose builtins have the dangerous ones removed and whose __import__ is guarded to the config's authorised_imports. A static AST pass rejects disallowed imports, dunder access, and 'module._private' access before anything runs. This layer is cheap but bypassable on its own, so it sits in front of the real boundary
+```python
+_BLOCKED = frozenset({
+    "eval", "exec", "compile", "__import__", "globals", "locals", "vars",
+    "getattr", "setattr", "breakpoint", "input", "exit", "quit",
+})
+```
 
 2. Runtime audit hook (The real boundary)
 	A PEP 578 audit hook watches operations, not names, so it catches an escape however it was reached (e.g. typing.sys.modules['os'].system). It denies process access creation, ctypes, heap inspection, and network operations (socket.connect/bind/getaddrinfo), and confines file access to allowed_directories. Socket constructors are also neutered as a second layer.
@@ -215,12 +221,13 @@ The sandbox enforces three independent layers.
 
 	The execution timeout is paused during tool call, because tool runs outside the sandbox and its runtime must not count against the budget.
 
-## final_answer
+#### final_answer
 A callable injected into the namespace for the LLM to call when it believes its solution is correct. It raises a FinalAnswer exception that inherits a BaseException, so generated code wrapping its work in 'try/except Exception' cannot swallow the task-complete signal.
 
-## manual()
+#### manual()
 Generates the text describing the sandbox to the LLM - The rules, final_answer usage, and the connected server's tools (and resources / prompts) - built from the live schema so its reflects whichever MCP server is connected. This text goes into the system prompt.
 
+#### repl
 
 ```bash
 # test repl of sandbox
@@ -232,6 +239,58 @@ uv run python -m src.sandbox.sandbox_main (config) --mcp-stdio or --mcp-server (
 # 1 test of code
 uv run python -m src.sandbox.sandbox_main (config) -c "code"
 ```
+```bash
+sandbox - 'exit' or Ctrl-D to quit
+>>> def add(x, y):
+...     return x + y
+>>> print(add(1, 2))
+3
+>>> eval()
+use of 'eval' is not allowed
+>>> .tools
+# Sandbox
+
+Your code runs in a restricted Python namespace.
+State persists between steps: names you define stay defined.
+
+## Rules
+- Imports allowed: array, bisect, cmath, collections, collections.*, copy, datetime, datetime.*, functools, heapq, itertools, json, math, math.*, operator, random, re, string, typing, typing.*
+- File access limited to: /testbed, /tmp/agent
+- No network access.
+- Execution time limit: 30s (tool calls are not counted against this limit).
+- Memory limit: 512MB.
+- Unavaiable: __import__, breakpoint, compile, eval, exec, exit, getattr, globals, input, locals, quit, setattr, vars
+- Dunder attribute access (__class__, __globals__) is blocked.
+
+## final_answer
+
+final_answer(value) ends the task. It is always available and
+is not an MCP tool. Call it once you have a verified answer.
+
+## Tools
+
+Call these as normal Python functions, keywords arguments only.
+
+run_tests(code: str, test_list: list)
+   Run candidate solution code against a list of assert statements.
+
+Returns a JSON string with "success" (True if all tests passed),
+"message" and "output" (stdout and stderr of the run).
+
+
+## Resources
+
+Read with read_resource(uri=...) Available:
+mbpp://guide/run_tests (run_tests_guide)
+  How to call run_tests and read its result.
+
+## Prompts
+
+Fetch with get_prompt(name=..., arguments={...}). Available:
+solve_task(task_definition, function_definition, tests)
+  Build the instruction for solving one MBPP task.
+```
+
 
 ### 4-3. MCP
 
@@ -283,4 +342,4 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
 <!-- 各自が「どの作業で、どの部分に」使ったかを書く -->
 - **ayhirose（MCP）**：MCP と HTTP・SSE の仕様の解説、設計の壁打ち、テストスクリプト（`test/mcp/`）の作成、コードのレビューに Claude を使用。SWE-bench のツールの一部は、生成させたコードを元に修正して取り込んだ。
 - **nsato**：<!-- TODO -->
-- **joseo**：<!-- TODO -->
+- **joseo(Sandbox)**：Used AI for learning the way to implement a sandbox that is isolated. Used for debugging.
