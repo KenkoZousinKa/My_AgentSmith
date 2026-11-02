@@ -73,15 +73,21 @@ exclude = [
 ]
 max-line-length = 130
 
+# コマンド名 = モジュールの場所:関数名
 [project.scripts]
 sandbox = "src.sandbox.sandbox_main:main"
 
+# このプロジェクトはパッケージとして扱い、uv syncでプロジェクト自体を.venvにインストール
 [tool.uv]
 package = true
 
+# このプロジェクトをビルドする時はhatchlingを使う
 [build-system]
+# .venvではなく一時的な環境にhatchlingを入れる
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+# hatchlingにwheelに入れるのはsrc/パッケージと指定
+# 書かれていないとプロジェクト名(agentsmith)から探す
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
