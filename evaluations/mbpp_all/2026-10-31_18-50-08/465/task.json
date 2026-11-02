@@ -1,0 +1,10 @@
+{
+  "task_id": 465,
+  "task_definition": "Write a function to drop empty items from a given dictionary.",
+  "function_definition": "def drop_empty(dict1):",
+  "test_imports": [],
+  "test_list": [
+    "assert drop_empty({'c1': 'Red', 'c2': None, 'c3':None})=={'c1': 'Red'}",
+    "assert drop_empty({'c1': None, 'c2': 'Green', 'c3':None})=={ 'c2': 'Green'}"
+  ]
+}

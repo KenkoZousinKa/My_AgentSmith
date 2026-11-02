@@ -1,0 +1,10 @@
+{
+  "task_id": 286,
+  "task_definition": "Write a function to find the largest sum of contiguous array in the modified array which is formed by repeating the given array k times.",
+  "function_definition": "def max_sub_array_sum_repeated(a, n, k):",
+  "test_imports": [],
+  "test_list": [
+    "assert max_sub_array_sum_repeated([-1, 10, 20], 3, 2) == 59",
+    "assert max_sub_array_sum_repeated([-1, -2, -3], 3, 3) == -1"
+  ]
+}

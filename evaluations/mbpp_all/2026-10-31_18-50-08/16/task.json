@@ -1,0 +1,10 @@
+{
+  "task_id": 16,
+  "task_definition": "Write a function to find sequences of lowercase letters joined with an underscore.",
+  "function_definition": "def text_lowercase_underscore(text):",
+  "test_imports": [],
+  "test_list": [
+    "assert text_lowercase_underscore(\"aab_Abbbc\")==(False)",
+    "assert text_lowercase_underscore(\"Aaab_abbbc\")==(False)"
+  ]
+}

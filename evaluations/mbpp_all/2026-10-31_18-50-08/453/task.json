@@ -1,0 +1,10 @@
+{
+  "task_id": 453,
+  "task_definition": "Write a python function to find the sum of even factors of a number.",
+  "function_definition": "def sumofFactors(n) :",
+  "test_imports": [],
+  "test_list": [
+    "assert sumofFactors(30) == 48",
+    "assert sumofFactors(6) == 8"
+  ]
+}

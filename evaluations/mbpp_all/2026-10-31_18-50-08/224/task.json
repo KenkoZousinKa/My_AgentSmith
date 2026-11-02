@@ -1,0 +1,10 @@
+{
+  "task_id": 224,
+  "task_definition": "Write a python function to count set bits of a given number.",
+  "function_definition": "def count_Set_Bits(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_Set_Bits(4) == 1",
+    "assert count_Set_Bits(6) == 2"
+  ]
+}

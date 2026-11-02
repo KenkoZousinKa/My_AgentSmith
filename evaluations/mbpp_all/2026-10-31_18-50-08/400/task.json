@@ -1,0 +1,10 @@
+{
+  "task_id": 400,
+  "task_definition": "Write a function to extract the frequency of unique tuples in the given list order irrespective.",
+  "function_definition": "def extract_freq(test_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert extract_freq([(4, 15), (2, 3), (5, 4), (6, 7)] ) == 4",
+    "assert extract_freq([(5, 16), (2, 3), (6, 5), (6, 9)] ) == 4"
+  ]
+}

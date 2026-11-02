@@ -1,0 +1,10 @@
+{
+  "task_id": 281,
+  "task_definition": "Write a python function to check if the elements of a given list are unique or not.",
+  "function_definition": "def all_unique(test_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert all_unique([1,2,1,2]) == False",
+    "assert all_unique([1,2,3,4,5]) == True"
+  ]
+}

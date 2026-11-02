@@ -1,0 +1,10 @@
+{
+  "task_id": 476,
+  "task_definition": "Write a python function to find the sum of the largest and smallest value in a given array.",
+  "function_definition": "def big_sum(nums):",
+  "test_imports": [],
+  "test_list": [
+    "assert big_sum([-1,2,3,4]) == 3",
+    "assert big_sum([2,3,6]) == 8"
+  ]
+}

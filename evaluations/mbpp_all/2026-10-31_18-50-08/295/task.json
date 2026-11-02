@@ -1,0 +1,10 @@
+{
+  "task_id": 295,
+  "task_definition": "Write a function to return the sum of all divisors of a number.",
+  "function_definition": "def sum_div(number):",
+  "test_imports": [],
+  "test_list": [
+    "assert sum_div(12)==16",
+    "assert sum_div(7)==1"
+  ]
+}

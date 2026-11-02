@@ -1,0 +1,10 @@
+{
+  "task_id": 246,
+  "task_definition": "Write a function for computing square roots using the babylonian method.",
+  "function_definition": "def babylonian_squareroot(number):",
+  "test_imports": [],
+  "test_list": [
+    "assert math.isclose(babylonian_squareroot(2), 1.414213562373095, rel_tol=0.001)",
+    "assert math.isclose(babylonian_squareroot(9), 3.0, rel_tol=0.001)"
+  ]
+}

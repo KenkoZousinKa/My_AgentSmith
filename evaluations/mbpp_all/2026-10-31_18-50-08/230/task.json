@@ -1,0 +1,10 @@
+{
+  "task_id": 230,
+  "task_definition": "Write a function to replace blank spaces with any character in a string.",
+  "function_definition": "def replace_blank(str1,char):",
+  "test_imports": [],
+  "test_list": [
+    "assert replace_blank(\"python program language\",'$')==(\"python$program$language\")",
+    "assert replace_blank(\"blank space\",\"-\")==(\"blank-space\")"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 11,
+  "task_definition": "Write a python function to remove first and last occurrence of a given character from the string.",
+  "function_definition": "def remove_Occ(s,ch):",
+  "test_imports": [],
+  "test_list": [
+    "assert remove_Occ(\"abcda\",\"a\") == \"bcd\"",
+    "assert remove_Occ(\"PHP\",\"P\") == \"H\""
+  ]
+}

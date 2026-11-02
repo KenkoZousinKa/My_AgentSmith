@@ -1,0 +1,10 @@
+{
+  "task_id": 12,
+  "task_definition": "Write a function to sort a given matrix in ascending order according to the sum of its rows.",
+  "function_definition": "def sort_matrix(M):",
+  "test_imports": [],
+  "test_list": [
+    "assert sort_matrix([[1, 2, 3], [-2, 4, -5], [1, -1, 1]])==[[-2, 4, -5], [1, -1, 1], [1, 2, 3]]",
+    "assert sort_matrix([[5,8,9],[6,4,3],[2,1,4]])==[[2, 1, 4], [6, 4, 3], [5, 8, 9]]"
+  ]
+}

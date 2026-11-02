@@ -1,0 +1,10 @@
+{
+  "task_id": 271,
+  "task_definition": "Write a python function to find the sum of fifth power of first n even natural numbers.",
+  "function_definition": "def even_Power_Sum(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert even_Power_Sum(3) == 8832",
+    "assert even_Power_Sum(1) == 32"
+  ]
+}

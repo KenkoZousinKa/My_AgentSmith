@@ -1,0 +1,10 @@
+{
+  "task_id": 441,
+  "task_definition": "Write a function to find the surface area of a cube.",
+  "function_definition": "def surfacearea_cube(l):",
+  "test_imports": [],
+  "test_list": [
+    "assert surfacearea_cube(3)==54",
+    "assert surfacearea_cube(10)==600"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "task_id": 67,
+  "task_definition": "Write a function to find the number of ways to partition a set of bell numbers.",
+  "function_definition": "def bell_number(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert bell_number(10)==115975",
+    "assert bell_number(56)==6775685320645824322581483068371419745979053216268760300"
+  ]
+}

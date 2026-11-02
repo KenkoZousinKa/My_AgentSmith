@@ -1,0 +1,10 @@
+{
+  "task_id": 66,
+  "task_definition": "Write a python function to count positive numbers in a list.",
+  "function_definition": "def pos_count(list):",
+  "test_imports": [],
+  "test_list": [
+    "assert pos_count([3,4,5,-1]) == 3",
+    "assert pos_count([1,2,3,4]) == 4"
+  ]
+}

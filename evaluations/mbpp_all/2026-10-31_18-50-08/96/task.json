@@ -1,0 +1,10 @@
+{
+  "task_id": 96,
+  "task_definition": "Write a python function to find the number of divisors of a given integer.",
+  "function_definition": "def divisor(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert divisor(12) == 6",
+    "assert divisor(9) == 3"
+  ]
+}

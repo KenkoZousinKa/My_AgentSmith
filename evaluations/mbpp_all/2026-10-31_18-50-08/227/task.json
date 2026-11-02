@@ -1,0 +1,10 @@
+{
+  "task_id": 227,
+  "task_definition": "Write a function to find minimum of three numbers.",
+  "function_definition": "def min_of_three(a,b,c):",
+  "test_imports": [],
+  "test_list": [
+    "assert min_of_three(19,15,18)==15",
+    "assert min_of_three(-10,-20,-30)==-30"
+  ]
+}

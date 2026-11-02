@@ -1,0 +1,11 @@
+{
+  "task_id": 226,
+  "task_definition": "Write a python function to remove the characters which have odd index values of a given string.",
+  "function_definition": "def odd_values_string(str):",
+  "test_imports": [],
+  "test_list": [
+    "assert odd_values_string('python') == 'pto'",
+    "assert odd_values_string('data') == 'dt'",
+    "assert odd_values_string('lambs') == 'lms'"
+  ]
+}

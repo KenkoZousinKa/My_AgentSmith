@@ -1,0 +1,10 @@
+{
+  "task_id": 435,
+  "task_definition": "Write a python function to find the last digit of a given number.",
+  "function_definition": "def last_Digit(n) :",
+  "test_imports": [],
+  "test_list": [
+    "assert last_Digit(25) == 5",
+    "assert last_Digit(30) == 0"
+  ]
+}

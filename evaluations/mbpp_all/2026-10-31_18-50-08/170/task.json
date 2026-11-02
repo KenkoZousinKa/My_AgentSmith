@@ -1,0 +1,10 @@
+{
+  "task_id": 170,
+  "task_definition": "Write a function to find sum of the numbers in a list between the indices of a specified range.",
+  "function_definition": "def sum_range_list(list1, m, n):",
+  "test_imports": [],
+  "test_list": [
+    "assert sum_range_list([2,1,5,6,8,3,4,9,10,11,8,12], 5, 7) == 16",
+    "assert sum_range_list([2,1,5,6,8,3,4,9,10,11,8,12], 7, 10) == 38"
+  ]
+}

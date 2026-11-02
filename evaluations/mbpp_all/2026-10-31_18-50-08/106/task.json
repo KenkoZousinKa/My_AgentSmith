@@ -1,0 +1,10 @@
+{
+  "task_id": 106,
+  "task_definition": "Write a function to add the given list to the given tuples.",
+  "function_definition": "def add_lists(test_list, test_tup):",
+  "test_imports": [],
+  "test_list": [
+    "assert add_lists([6, 7, 8], (10, 11)) == (10, 11, 6, 7, 8)",
+    "assert add_lists([7, 8, 9], (11, 12)) == (11, 12, 7, 8, 9)"
+  ]
+}

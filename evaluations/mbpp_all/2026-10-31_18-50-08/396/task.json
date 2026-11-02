@@ -1,0 +1,10 @@
+{
+  "task_id": 396,
+  "task_definition": "Write a function to check whether the given string starts and ends with the same character or not using regex.",
+  "function_definition": "def check_char(string):",
+  "test_imports": [],
+  "test_list": [
+    "assert check_char(\"a\") == \"Valid\"",
+    "assert check_char(\"abcd\") == \"Invalid\""
+  ]
+}

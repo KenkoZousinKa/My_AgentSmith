@@ -1,0 +1,10 @@
+{
+  "task_id": 86,
+  "task_definition": "Write a function to find nth centered hexagonal number.",
+  "function_definition": "def centered_hexagonal_number(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert centered_hexagonal_number(2) == 7",
+    "assert centered_hexagonal_number(9) == 217"
+  ]
+}

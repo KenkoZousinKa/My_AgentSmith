@@ -1,0 +1,10 @@
+{
+  "task_id": 460,
+  "task_definition": "Write a python function to get the first element of each sublist.",
+  "function_definition": "def Extract(lst):",
+  "test_imports": [],
+  "test_list": [
+    "assert Extract([[1,2,3],[4, 5]]) == [1,4]",
+    "assert Extract([[9,8,1],[1,2]]) == [9,1]"
+  ]
+}

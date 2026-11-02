@@ -1,0 +1,10 @@
+{
+  "task_id": 448,
+  "task_definition": "Write a function to calculate the sum of perrin numbers.",
+  "function_definition": "def cal_sum(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert cal_sum(10) == 66",
+    "assert cal_sum(11) == 88"
+  ]
+}

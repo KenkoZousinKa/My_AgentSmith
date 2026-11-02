@@ -1,0 +1,10 @@
+{
+  "task_id": 222,
+  "task_definition": "Write a function to check if all the elements in tuple have same data type or not.",
+  "function_definition": "def check_type(test_tuple):",
+  "test_imports": [],
+  "test_list": [
+    "assert check_type((1, 2, \"4\") ) == False",
+    "assert check_type((3, 2, 1, 4, 5) ) == True"
+  ]
+}

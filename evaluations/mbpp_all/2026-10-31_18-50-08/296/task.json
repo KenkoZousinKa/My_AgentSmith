@@ -1,0 +1,10 @@
+{
+  "task_id": 296,
+  "task_definition": "Write a python function to count inversions in an array.",
+  "function_definition": "def get_Inv_Count(arr):",
+  "test_imports": [],
+  "test_list": [
+    "assert get_Inv_Count([1,2,1]) == 1",
+    "assert get_Inv_Count([1,2,5,6,1]) == 3"
+  ]
+}

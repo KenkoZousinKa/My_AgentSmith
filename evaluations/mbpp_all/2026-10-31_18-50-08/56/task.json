@@ -1,0 +1,10 @@
+{
+  "task_id": 56,
+  "task_definition": "Write a python function to check if a given number is one less than twice its reverse.",
+  "function_definition": "def check(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert check(23) == False",
+    "assert check(73) == True"
+  ]
+}

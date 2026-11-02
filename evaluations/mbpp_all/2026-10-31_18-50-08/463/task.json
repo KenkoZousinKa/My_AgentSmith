@@ -1,0 +1,10 @@
+{
+  "task_id": 463,
+  "task_definition": "Write a function to find the maximum product subarray of the given array.",
+  "function_definition": "def max_subarray_product(arr):",
+  "test_imports": [],
+  "test_list": [
+    "assert max_subarray_product([6, -3, -10, 0, 2]) == 180",
+    "assert max_subarray_product([-2, -40, 0, -2, -3]) == 80"
+  ]
+}

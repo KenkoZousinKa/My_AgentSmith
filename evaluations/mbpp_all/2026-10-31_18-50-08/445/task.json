@@ -1,0 +1,10 @@
+{
+  "task_id": 445,
+  "task_definition": "Write a function to perform index wise multiplication of tuple elements in the given two tuples.",
+  "function_definition": "def index_multiplication(test_tup1, test_tup2):",
+  "test_imports": [],
+  "test_list": [
+    "assert index_multiplication(((2, 4), (5, 6), (3, 10), (2, 11)),((7, 8), (4, 10), (2, 2), (8, 4)) ) == ((14, 32), (20, 60), (6, 20), (16, 44))",
+    "assert index_multiplication(((3, 5), (6, 7), (4, 11), (3, 12)),((8, 9), (5, 11), (3, 3), (9, 5)) ) == ((24, 45), (30, 77), (12, 33), (27, 60))"
+  ]
+}

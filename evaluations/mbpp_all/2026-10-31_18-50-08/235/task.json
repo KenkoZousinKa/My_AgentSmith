@@ -1,0 +1,10 @@
+{
+  "task_id": 235,
+  "task_definition": "Write a python function to set all even bits of a given number.",
+  "function_definition": "def even_bit_set_number(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert even_bit_set_number(20) == 30",
+    "assert even_bit_set_number(30) == 30"
+  ]
+}

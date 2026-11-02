@@ -1,0 +1,10 @@
+{
+  "task_id": 100,
+  "task_definition": "Write a function to find the next smallest palindrome of a specified number.",
+  "function_definition": "def next_smallest_palindrome(num):",
+  "test_imports": [],
+  "test_list": [
+    "assert next_smallest_palindrome(1221)==1331",
+    "assert next_smallest_palindrome(120)==121"
+  ]
+}

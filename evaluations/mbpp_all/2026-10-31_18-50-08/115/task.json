@@ -1,0 +1,10 @@
+{
+  "task_id": 115,
+  "task_definition": "Write a function to check whether all dictionaries in a list are empty or not.",
+  "function_definition": "def empty_dit(list1):",
+  "test_imports": [],
+  "test_list": [
+    "assert empty_dit([{1,2},{},{}])==False",
+    "assert empty_dit({})==True"
+  ]
+}

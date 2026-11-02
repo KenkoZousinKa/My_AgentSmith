@@ -1,0 +1,10 @@
+{
+  "task_id": 450,
+  "task_definition": "Write a function to extract specified size of strings from a give list of string values.",
+  "function_definition": "def extract_string(str, l):",
+  "test_imports": [],
+  "test_list": [
+    "assert extract_string(['Python', 'list', 'exercises', 'practice', 'solution'] ,6)==['Python']",
+    "assert extract_string(['Python', 'list', 'exercises', 'practice', 'solution'] ,9)==['exercises']"
+  ]
+}

@@ -1,0 +1,32 @@
+Agent finished in 6.0s
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: 311
+Benchmark: mbpp
+Success claimed: False
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Correctness check detail: Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+NameError: name 'set_left_most_unset_bit' is not defined
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 4 / 10 OK
+Input tokens: 5364 / 6000 OK
+Output tokens: 715 / 1500 OK
+Time: 5.7s / 120.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED

@@ -1,0 +1,10 @@
+{
+  "task_id": 272,
+  "task_definition": "Write a function to perfom the rear element extraction from list of tuples records.",
+  "function_definition": "def rear_extract(test_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert rear_extract([(1, 'Sai', 36), (2, 'Ayesha', 25), (3, 'Salman', 45)]) == [36, 25, 45]",
+    "assert rear_extract([(1, 'Sudeep', 14), (2, 'Vandana', 36), (3, 'Dawood', 56)]) == [14, 36, 56]"
+  ]
+}

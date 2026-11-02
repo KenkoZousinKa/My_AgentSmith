@@ -1,0 +1,10 @@
+{
+  "task_id": 425,
+  "task_definition": "Write a function to count the number of sublists containing a particular element.",
+  "function_definition": "def count_element_in_list(list1, x):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_element_in_list([['A', 'B'], ['A', 'C'], ['A', 'D', 'E'], ['B', 'C', 'D']],'A')==3",
+    "assert count_element_in_list([['A', 'B'], ['A', 'C'], ['A', 'D', 'E'], ['B', 'C', 'D']],'E')==1"
+  ]
+}

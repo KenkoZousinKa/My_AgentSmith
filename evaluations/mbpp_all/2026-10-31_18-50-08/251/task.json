@@ -1,0 +1,10 @@
+{
+  "task_id": 251,
+  "task_definition": "Write a function to insert an element before each element of a list.",
+  "function_definition": "def insert_element(list,element):",
+  "test_imports": [],
+  "test_list": [
+    "assert insert_element(['python', 'java'] ,'program')==['program', 'python', 'program', 'java']",
+    "assert insert_element(['happy', 'sad'] ,'laugh')==['laugh', 'happy', 'laugh', 'sad']"
+  ]
+}

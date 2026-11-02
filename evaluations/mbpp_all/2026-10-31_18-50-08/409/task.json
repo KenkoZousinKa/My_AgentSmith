@@ -1,0 +1,10 @@
+{
+  "task_id": 409,
+  "task_definition": "Write a function to find the minimum product from the pairs of tuples within a given list.",
+  "function_definition": "def min_product_tuple(list1):",
+  "test_imports": [],
+  "test_list": [
+    "assert min_product_tuple([(10,20), (15,2), (5,10)] )==30",
+    "assert min_product_tuple([(11,44), (10,15), (20,5), (12, 9)] )==100"
+  ]
+}

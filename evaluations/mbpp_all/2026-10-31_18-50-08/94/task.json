@@ -1,0 +1,10 @@
+{
+  "task_id": 94,
+  "task_definition": "Write a function to extract the index minimum value record from the given tuples.",
+  "function_definition": "def index_minimum(test_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert index_minimum([('Yash', 185), ('Dawood', 125), ('Sanya', 175)]) == 'Dawood'",
+    "assert index_minimum([('Sai', 345), ('Salman', 145), ('Ayesha', 96)]) == 'Ayesha'"
+  ]
+}

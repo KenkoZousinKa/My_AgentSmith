@@ -1,0 +1,10 @@
+{
+  "task_id": 14,
+  "task_definition": "Write a python function to find the volume of a triangular prism.",
+  "function_definition": "def find_Volume(l,b,h) :",
+  "test_imports": [],
+  "test_list": [
+    "assert find_Volume(3,2,2) == 6",
+    "assert find_Volume(1,2,1) == 1"
+  ]
+}

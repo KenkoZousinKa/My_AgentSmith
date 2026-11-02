@@ -1,0 +1,10 @@
+{
+  "task_id": 428,
+  "task_definition": "Write a function to sort the given array by using shell sort.",
+  "function_definition": "def shell_sort(my_list):",
+  "test_imports": [],
+  "test_list": [
+    "assert shell_sort([24, 22, 39, 34, 87, 73, 68]) == [22, 24, 34, 39, 68, 73, 87]",
+    "assert shell_sort([32, 30, 16, 96, 82, 83, 74]) == [16, 30, 32, 74, 82, 83, 96]"
+  ]
+}

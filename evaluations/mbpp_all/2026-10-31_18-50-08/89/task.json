@@ -1,0 +1,10 @@
+{
+  "task_id": 89,
+  "task_definition": "Write a function to find the closest smaller number than n.",
+  "function_definition": "def closest_num(N):",
+  "test_imports": [],
+  "test_list": [
+    "assert closest_num(7) == 6",
+    "assert closest_num(12) == 11"
+  ]
+}

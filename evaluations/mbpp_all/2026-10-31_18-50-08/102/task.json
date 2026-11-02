@@ -1,0 +1,10 @@
+{
+  "task_id": 102,
+  "task_definition": "Write a function to convert snake case string to camel case string.",
+  "function_definition": "def snake_to_camel(word):",
+  "test_imports": [],
+  "test_list": [
+    "assert snake_to_camel('python_language')==('PythonLanguage')",
+    "assert snake_to_camel('programming_language')==('ProgrammingLanguage')"
+  ]
+}

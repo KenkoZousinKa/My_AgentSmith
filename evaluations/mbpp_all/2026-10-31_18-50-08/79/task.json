@@ -1,0 +1,10 @@
+{
+  "task_id": 79,
+  "task_definition": "Write a python function to check whether the length of the word is odd or not.",
+  "function_definition": "def word_len(s):",
+  "test_imports": [],
+  "test_list": [
+    "assert word_len(\"great\") == True",
+    "assert word_len(\"structure\") == True"
+  ]
+}

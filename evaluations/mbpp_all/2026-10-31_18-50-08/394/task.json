@@ -1,0 +1,10 @@
+{
+  "task_id": 394,
+  "task_definition": "Write a function to check if given tuple is distinct or not.",
+  "function_definition": "def check_distinct(test_tup):",
+  "test_imports": [],
+  "test_list": [
+    "assert check_distinct((1, 4, 5, 6)) == True",
+    "assert check_distinct((2, 3, 4, 5, 6)) == True"
+  ]
+}

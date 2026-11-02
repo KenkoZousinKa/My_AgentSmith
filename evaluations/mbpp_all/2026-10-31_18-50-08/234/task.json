@@ -1,0 +1,10 @@
+{
+  "task_id": 234,
+  "task_definition": "Write a function to find the volume of a cube.",
+  "function_definition": "def volume_cube(l):",
+  "test_imports": [],
+  "test_list": [
+    "assert volume_cube(2)==8",
+    "assert volume_cube(5)==125"
+  ]
+}

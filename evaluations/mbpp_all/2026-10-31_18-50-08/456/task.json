@@ -1,0 +1,10 @@
+{
+  "task_id": 456,
+  "task_definition": "Write a function to reverse strings in a given list of string values.",
+  "function_definition": "def reverse_string_list(stringlist):",
+  "test_imports": [],
+  "test_list": [
+    "assert reverse_string_list(['john','amal','joel','george'])==['nhoj','lama','leoj','egroeg']",
+    "assert reverse_string_list(['jack','john','mary'])==['kcaj','nhoj','yram']"
+  ]
+}

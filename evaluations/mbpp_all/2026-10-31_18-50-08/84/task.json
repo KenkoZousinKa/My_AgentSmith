@@ -1,0 +1,10 @@
+{
+  "task_id": 84,
+  "task_definition": "Write a function to find the n-th number in newman conway sequence.",
+  "function_definition": "def sequence(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert sequence(2) == 1",
+    "assert sequence(3) == 2"
+  ]
+}

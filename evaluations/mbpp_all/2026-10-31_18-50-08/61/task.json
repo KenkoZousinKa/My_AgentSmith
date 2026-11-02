@@ -1,0 +1,10 @@
+{
+  "task_id": 61,
+  "task_definition": "Write a python function to count number of substrings with the sum of digits equal to their length.",
+  "function_definition": "def count_Substrings(s):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_Substrings('111') == 6",
+    "assert count_Substrings('1101112') == 12"
+  ]
+}

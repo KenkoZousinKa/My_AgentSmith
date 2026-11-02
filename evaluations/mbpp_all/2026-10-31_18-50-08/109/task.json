@@ -1,0 +1,10 @@
+{
+  "task_id": 109,
+  "task_definition": "Write a python function to find the count of rotations of a binary string with odd value.",
+  "function_definition": "def odd_Equivalent(s,n):",
+  "test_imports": [],
+  "test_list": [
+    "assert odd_Equivalent(\"11011\",5) == 4",
+    "assert odd_Equivalent(\"1010\",4) == 2"
+  ]
+}

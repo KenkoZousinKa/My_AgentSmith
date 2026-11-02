@@ -1,0 +1,10 @@
+{
+  "task_id": 242,
+  "task_definition": "Write a function to count total characters in a string.",
+  "function_definition": "def count_charac(str1):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_charac(\"language\")==8",
+    "assert count_charac(\"words\")==5"
+  ]
+}

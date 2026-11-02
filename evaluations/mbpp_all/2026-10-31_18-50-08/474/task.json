@@ -1,0 +1,10 @@
+{
+  "task_id": 474,
+  "task_definition": "Write a function to replace characters in a string.",
+  "function_definition": "def replace_char(str1,ch,newch):",
+  "test_imports": [],
+  "test_list": [
+    "assert replace_char(\"character\",'c','a')==(\"aharaater\")",
+    "assert replace_char(\"python\",'l','a')==(\"python\")"
+  ]
+}

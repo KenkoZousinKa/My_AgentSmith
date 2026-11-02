@@ -1,0 +1,10 @@
+{
+  "task_id": 19,
+  "task_definition": "Write a function to find whether a given array of integers contains any duplicate element.",
+  "function_definition": "def test_duplicate(arraynums):",
+  "test_imports": [],
+  "test_list": [
+    "assert test_duplicate(([1,2,3,4, 4]))==True",
+    "assert test_duplicate([1,1,2,2,3,3,4,4,5])==True"
+  ]
+}

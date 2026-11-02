@@ -1,0 +1,10 @@
+{
+  "task_id": 459,
+  "task_definition": "Write a function to remove uppercase substrings from a given string by using regex.",
+  "function_definition": "def remove_uppercase(str1):",
+  "test_imports": [],
+  "test_list": [
+    "assert remove_uppercase('wAtchTheinTernEtrAdIo') == 'wtchheinerntrdo'",
+    "assert remove_uppercase('VoicESeaRchAndreComMendaTionS') == 'oiceachndreomendaion'"
+  ]
+}

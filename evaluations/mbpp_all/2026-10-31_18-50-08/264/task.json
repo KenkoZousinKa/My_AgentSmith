@@ -1,0 +1,10 @@
+{
+  "task_id": 264,
+  "task_definition": "Write a function to calculate a dog's age in dog's years.",
+  "function_definition": "def dog_age(h_age):",
+  "test_imports": [],
+  "test_list": [
+    "assert dog_age(15)==73",
+    "assert dog_age(24)==109"
+  ]
+}

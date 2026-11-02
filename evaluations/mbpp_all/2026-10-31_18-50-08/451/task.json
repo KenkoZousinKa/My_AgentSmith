@@ -1,0 +1,10 @@
+{
+  "task_id": 451,
+  "task_definition": "Write a function to remove all whitespaces from the given string using regex.",
+  "function_definition": "def remove_whitespaces(text1):",
+  "test_imports": [],
+  "test_list": [
+    "assert remove_whitespaces(' Google    Dart ') == 'GoogleDart'",
+    "assert remove_whitespaces(' iOS    Swift ') == 'iOSSwift'"
+  ]
+}

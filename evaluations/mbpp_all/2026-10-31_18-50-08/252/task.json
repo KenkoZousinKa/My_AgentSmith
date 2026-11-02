@@ -1,0 +1,10 @@
+{
+  "task_id": 252,
+  "task_definition": "Write a python function to convert complex numbers to polar coordinates.",
+  "function_definition": "def convert(numbers):",
+  "test_imports": [],
+  "test_list": [
+    "assert convert(4) == (4.0,0.0)",
+    "assert convert(5) == (5.0,0.0)"
+  ]
+}

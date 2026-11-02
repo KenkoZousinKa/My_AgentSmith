@@ -1,0 +1,10 @@
+{
+  "task_id": 293,
+  "task_definition": "Write a function to find the third side of a right angled triangle.",
+  "function_definition": "def otherside_rightangle(w,h):",
+  "test_imports": [],
+  "test_list": [
+    "assert otherside_rightangle(3,4)==5",
+    "assert otherside_rightangle(7,15)==16.55294535724685"
+  ]
+}

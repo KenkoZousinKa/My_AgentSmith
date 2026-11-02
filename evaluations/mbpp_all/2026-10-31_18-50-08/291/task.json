@@ -1,0 +1,10 @@
+{
+  "task_id": 291,
+  "task_definition": "Write a function to find out the number of ways of painting the fence such that at most 2 adjacent posts have the same color for the given fence with n posts and k colors.",
+  "function_definition": "def count_no_of_ways(n, k):",
+  "test_imports": [],
+  "test_list": [
+    "assert count_no_of_ways(3, 2) == 6",
+    "assert count_no_of_ways(4, 4) == 228"
+  ]
+}

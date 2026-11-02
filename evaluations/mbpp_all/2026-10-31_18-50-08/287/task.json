@@ -1,0 +1,10 @@
+{
+  "task_id": 287,
+  "task_definition": "Write a python function to find the sum of squares of first n even natural numbers.",
+  "function_definition": "def square_Sum(n):",
+  "test_imports": [],
+  "test_list": [
+    "assert square_Sum(3) == 56",
+    "assert square_Sum(4) == 120"
+  ]
+}
