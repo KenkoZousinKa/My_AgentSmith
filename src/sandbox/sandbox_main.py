@@ -59,10 +59,6 @@ class Sandbox:
                     py_name(tool.name): MCPToolFunction(self.client, tool)
                     for tool in self.client.list_tools()
                 }
-                self._tool_params = {
-                    py_name(tool.name): _tool_params(tool)
-                    for tool in self.client.list_tools()
-                }
                 self.resources = self.client.list_resources()
                 self.prompts = self.client.list_prompts()
             except Exception:
@@ -70,12 +66,9 @@ class Sandbox:
                 self.client = None
                 raise
 
-        # agentから呼び出してself.client = Noneの時にtool_paramsが空になるため追加。
-        # 上の同じ処理の行とこのif not節を消して、どちらにしてもself.toolsから作成でも可。
-        if not self._tool_params:
-            self._tool_params = {
-                name: _tool_params(tool) for name, tool in self.tools.items()
-            }
+        self._tool_params = {
+            name: _tool_params(fn) for name, fn in self.tools.items()
+        }
 
         for d in self.config.allowed_directories:
             try:
@@ -321,7 +314,7 @@ class Sandbox:
             f"- Execution time limit: {self.config.max_execution_time_seconds}s "
             f"(tool calls are not counted against this limit).",
             f"- Memory limit: {self.config.max_memory_mb}MB.",
-            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)),
+            "- Unavailable: " + ", ".join(sorted(_BLOCKED)),
             "- Dunder attribute access (__class__, __globals__) is blocked.",
             "",
             "## final_answer",
@@ -331,7 +324,7 @@ class Sandbox:
             "",
             "## Tools",
             "",
-            "Call these as normal Python functions, keywords arguments only.",
+            "Call these as normal Python functions; keyword or positional arguments are accepted.",
             "",
         ]
         if not self.tools:
@@ -436,6 +429,9 @@ def _repl(sandbox: Sandbox) -> int:
             return 0
         if line.strip() in {"exit", "quit"}:
             return 0
+        if line.strip() in {".manual", ".tools"}:
+            print(sandbox.manual())
+            continue
         if not line.strip():
             continue
         buffer = [line]

@@ -312,6 +312,138 @@ flowchart TD
 ### 4-2. Sandbox
 <!-- TODO（Sandbox 担当）：隔離の方法、制限（メモリ・時間・ネットワーク）、REPL、MCP ツールの公開方法 -->
 
+#### Isolation
+
+The sandbox enforces three independent layers.
+
+1. Restricted namespace (First layer)
+	LLM code runs in a fresh namespace whose builtins have the dangerous ones removed and whose __import__ is guarded to the config's authorized_imports. A static AST pass rejects disallowed imports, dunder access, and 'module._private' access before anything runs. This layer is cheap but bypassable on its own, so it sits in front of the real boundary
+```python
+_BLOCKED = frozenset({
+    "eval", "exec", "compile", "__import__", "globals", "locals", "vars",
+    "getattr", "setattr", "breakpoint", "input", "exit", "quit",
+})
+```
+
+2. Runtime audit hook (The real boundary)
+	A PEP 578 audit hook watches operations, not names, so it catches an escape however it was reached (e.g. typing.sys.modules['os'].system). It denies process creation, ctypes, heap inspection, and network operations (socket.connect/bind/getaddrinfo), and confines file access to allowed_directories. Socket constructors are also neutered as a second layer.
+
+3. Process isolation
+	LLM code runs in a forked child. Memory is capped with RLIMIT_AS and time with an interval timer, both set in the child - they can only apply to a separate process, not the agent itself. The parent dispatches tool calls and acts as a watchdog, killing and restarting the worker if it goes unresponsive. the child's environment is scrubbed at startup so inherited API keys are not readable.
+
+	The execution timeout is paused during tool call, because tool runs outside the sandbox and its runtime must not count against the budget.
+
+The restricted namespace is a first filter and is bypassable on its own; the audit hook (operations) and process isolation (rlimits) are the real guarantees. a fully adversarial deployment would additionally run the child in a container. Security mechanisms use only the Python standard library; pydantic is used only for config.
+
+```mermaid
+flowchart TD
+  A[run code] --> B[check code]
+  B --> C{allowed?}
+  C -->|yes| D[send to child process]
+  C -->|no| E[return error]
+  D --> F[run code in sandbox]
+  F --> G{calls a tool?}
+  G -->|yes| H[parent runs MCP tool]
+  G -->|no| I[return result]
+  H --> D
+```
+
+#### final_answer
+A callable injected into the namespace for the LLM to call when it believes its solution is correct. It raises a FinalAnswer exception that inherits a BaseException, so generated code wrapping its work in 'try/except Exception' cannot swallow the task-complete signal.
+
+#### manual()
+Generates the text describing the sandbox to the LLM - The rules, final_answer usage, and the connected server's tools (and resources / prompts) - built from the live schema so it reflects whichever MCP server is connected. This text goes into the system prompt.
+
+#### repl
+
+```bash
+# test repl of sandbox
+uv run python -m src.sandbox.sandbox_main (config)
+
+# test with MCP server/stdio
+uv run python -m src.sandbox.sandbox_main (config) --mcp-stdio or --mcp-server (server/stdio)
+
+# 1 test of code
+uv run python -m src.sandbox.sandbox_main (config) -c "code"
+```bash
+sandbox - 'exit' or Ctrl-D to quit
+>>> def add(x, y):
+...     return x + y
+>>> print(add(1, 2))
+3
+>>> eval()
+use of 'eval' is not allowed
+>>> .tools
+# Sandbox
+
+Your code runs in a restricted Python namespace.
+State persists between steps: names you define stay defined.
+
+## Rules
+- Imports allowed: array, bisect, cmath, collections, collections.*, copy, datetime, datetime.*, functools, heapq, itertools, json, math, math.*, operator, random, re, string, typing, typing.*
+- File access limited to: /testbed, /tmp/agent
+- No network access.
+- Execution time limit: 30s (tool calls are not counted against this limit).
+- Memory limit: 512MB.
+- Unavailable: __import__, breakpoint, compile, eval, exec, exit, getattr, globals, input, locals, quit, setattr, vars
+- Dunder attribute access (__class__, __globals__) is blocked.
+
+## final_answer
+
+final_answer(value) ends the task. It is always available and
+is not an MCP tool. Call it once you have a verified answer.
+
+## Tools
+
+Call these as normal Python functions; keyword or positional arguments are accepted.
+
+run_tests(code: str, test_list: list)
+   Run candidate solution code against a list of assert statements.
+
+Returns a JSON string with "success" (True if all tests passed),
+"message" and "output" (stdout and stderr of the run).
+
+
+## Resources
+
+Read with read_resource(uri=...) Available:
+mbpp://guide/run_tests (run_tests_guide)
+  How to call run_tests and read its result.
+
+## Prompts
+
+Fetch with get_prompt(name=..., arguments={...}). Available:
+solve_task(task_definition, function_definition, tests)
+  Build the instruction for solving one MBPP task.
+```
+
+#### Config for sandbox
+
+Limits and permissions are pydantic 'SandboxConfig', loaded from a JSON file ('sandbox_template.json' at the repo root):
+
+| Field | Meaning | Default |
+|---|---|---|
+| `authorized_imports` | import allowlist (`x.*` permits submodules) | math, collections, … |
+| `allowed_directories` | where file I/O is permitted | /testbed, /tmp/agent |
+| `max_execution_time_seconds` | per-snippet timeout | 30 |
+| `max_memory_mb` | RLIMIT_AS cap | 512 |
+| `max_output_chars` | stdout/stderr truncation threshold | 8000 |
+
+precedence: code defaults -> JSON file. Blocked builtins are fixed in code ('_BLOCKED'), not config
+
+#### Security boundary - what the sandbox does and does not cover
+
+The sandbox confines the *snippet it executes*. Code the LLM passes as a *tool argument* (e.g. 'run_tests(code="...")') is NOT checked by the sandbox - it crosses the pipe as data and runs in the MCP server's environment (a Docker container for SWE-bench). These are two independent security domains: the sandbox guards the interpreter; the server's container guards the candidate code. Neither inspects the other.
+
+#### MCP integration
+
+Connects over stdio ('--mcp-stdio "cmd"') or streamable HTTP ('--mcp-server URL'). Tools, resources, and prompts are discovered at connect time and exposed dynamically, so an unknown server's tools appear automatically - the manual and the callable stubs are built from its live schema. Tools accept keyword *or* positional arguments (mapped by schema order).
+
+#### Feedback (ExecuteResult)
+
+Every run returns an 'ExecuteResult': 'stdout', 'stderr', 'value', 'error', 'timeout', 'truncated', 'final_answer', 'final_answer_bool'.
+The sandbox gives explicit feedback in each failure case - a denied operation returns a one-line reason, a timeout returns partial output with 'timeout=True', oversized output is cut with a marker and 'truncated=True', and an unknown tool name is reported with the closest match.
+
 ### 4-3. MCP
 
 MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアントの両方を標準ライブラリと pydantic で実装しました。
@@ -373,4 +505,4 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
   - **実装**：コードの提案を1行ずつの解説付きで受けた。それを読んで理解し自分で打ち込みテストした。
   - **テストと計測**：単体テストの設計と計測用のスクリプトに使った。失敗した回の `solution.json` を読んで原因を探すのにも使った。
   - **ドキュメント**：この README の Agent の節と `BENCHMARK_REPORT.md` の下書きに使った。数字はすべて実際の計測から取っている。
-- **joseo**：<!-- TODO -->
+- **joseo(Sandbox)**：Used AI for learning the way to implement a sandbox that is isolated. Used for debugging.
