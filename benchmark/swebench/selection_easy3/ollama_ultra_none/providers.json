@@ -1,0 +1,18 @@
+{
+ "providers": [
+  {
+   "name": "ollama",
+   "provider_url": "https://ollama.com/v1",
+   "models": [
+    "nemotron-3-ultra"
+   ],
+   "keys_env": "OLLAMA_API_KEY",
+   "priority": 1,
+   "model_params": {
+    "nemotron-3-ultra": {
+     "reasoning_effort": "none"
+    }
+   }
+  }
+ ]
+}

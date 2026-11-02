@@ -1,0 +1,14 @@
+{
+ "providers": [
+  {
+   "name": "cohere",
+   "provider_url": "https://api.cohere.ai/compatibility/v1",
+   "models": [
+    "command-a-reasoning-08-2025"
+   ],
+   "keys_env": "COHERE_API_KEY",
+   "priority": 1,
+   "model_params": {}
+  }
+ ]
+}

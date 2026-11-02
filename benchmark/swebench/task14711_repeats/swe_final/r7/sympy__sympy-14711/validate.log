@@ -1,0 +1,29 @@
+
+============================================================
+VALIDATING SOLUTION
+============================================================
+Task ID: sympy__sympy-14711
+Benchmark: swebench
+Success claimed: False
+
+============================================================
+STEP 1: CORRECTNESS VALIDATION
+============================================================
+Solution doesn't look like a git patch
+Correctness: FAILED
+
+============================================================
+STEP 2: METRICS VALIDATION
+============================================================
+Iterations: 23 / 30 OK
+Input tokens: 122015 / 300000 OK
+Output tokens: 10000 / 10000 OK
+Time: 84.7s / 900.0s OK
+Metrics: VALID
+
+============================================================
+FINAL RESULT
+============================================================
+Correctness: FAILED
+Metrics: VALID
+Overall: FAILED

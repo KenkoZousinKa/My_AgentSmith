@@ -1,0 +1,20 @@
+{
+ "providers": [
+  {
+   "name": "kilo",
+   "provider_url": "https://api.kilo.ai/api/gateway",
+   "models": [
+    "nvidia/nemotron-3-ultra-550b-a55b:free"
+   ],
+   "keys_env": "KILO_API_KEY",
+   "priority": 1,
+   "model_params": {
+    "nvidia/nemotron-3-ultra-550b-a55b:free": {
+     "reasoning": {
+      "enabled": true
+     }
+    }
+   }
+  }
+ ]
+}
