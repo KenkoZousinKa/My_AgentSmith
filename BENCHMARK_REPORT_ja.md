@@ -512,9 +512,9 @@ PASS\*について:
 
 | フォルダ | 中身 | この文書の節 |
 |---|---|---|
-| `selection_easy3/<設定>/r1/<タスク>/` | 簡単な3問 × 16設定 | §2〜§5.1 |
-| `task14711_repeats/<設定>/r<回>/sympy__sympy-14711/` | 14711 だけの追加の回（r2〜r9。本番の並びの案は r5〜r9） | §5.2b |
-| `top3_6tasks/<設定>/r<回>/<タスク>/` | 上位3モデル × 6問 × 3周 | §7 |
-| `production_codestral_first/swe_final/r<回>/<タスク>/` | codestral が1番手の並び × 6問 × 4周 | §5.2・§7 |
-| `production_cohere_first/swe_cohere/r<回>/<タスク>/` | cohere が1番手の並び × 6問 × 3周 | §5.2・§7 |
-| `production_final/swe_final2/r<回>/<タスク>/` | 最終の並び × 6問 × 2周 | §6・§7 |
+| `selection_easy3/<設定>/r1/<タスク>/` | 簡単な3問 × 16設定 | #2〜#5|
+| `task14711_repeats/<設定>/r<回>/sympy__sympy-14711/` | 14711 だけの追加の回（r2〜r9。本番の並びの案は r5〜r9） | #5 |
+| `top3_6tasks/<設定>/r<回>/<タスク>/` | 上位3モデル × 6問 × 3周 | #7 |
+| `production_codestral_first/swe_final/r<回>/<タスク>/` | codestral が1番手の並び × 6問 × 4周 | #7 |
+| `production_cohere_first/swe_cohere/r<回>/<タスク>/` | cohere が1番手の並び × 6問 × 3周 | #7 |
+| `production_final/swe_final2/r<回>/<タスク>/` | 最終の並び × 6問 × 2周 | #7 |
