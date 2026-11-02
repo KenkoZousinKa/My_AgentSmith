@@ -314,7 +314,7 @@ class Sandbox:
             f"- Execution time limit: {self.config.max_execution_time_seconds}s "
             f"(tool calls are not counted against this limit).",
             f"- Memory limit: {self.config.max_memory_mb}MB.",
-            "- Unavaiable: " + ", ".join(sorted(_BLOCKED)),
+            "- Unavailable: " + ", ".join(sorted(_BLOCKED)),
             "- Dunder attribute access (__class__, __globals__) is blocked.",
             "",
             "## final_answer",
@@ -324,7 +324,7 @@ class Sandbox:
             "",
             "## Tools",
             "",
-            "Call these as normal Python functions, keywords arguments only.",
+            "Call these as normal Python functions; keyword or positional arguments are accepted.",
             "",
         ]
         if not self.tools:
