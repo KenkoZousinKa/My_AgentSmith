@@ -207,7 +207,7 @@ def test_shipped_swebench_providers_parse() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     providers = load_providers(str(repo_root / "providers" / "providers_swebench.json"))
     names = [provider.name for provider in providers]
-    assert names[0] == "cohere"
+    assert names[0] == "ollama"
     assert "groq" not in names
 
 
