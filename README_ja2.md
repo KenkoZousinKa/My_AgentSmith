@@ -22,11 +22,9 @@
 2. [📁ファイル構成](#2-ファイル構成)
 3. [✅手順](#3-手順)
 4. [⛏追加要件](#4-追加要件)
-5. [📃入出力例](#5-入出力例)
-6. [🎁ボーナス](#6-ボーナス)
-7. [🌈リソース](#7-リソース)
-	1. [参考URL](#7-1-参考URL)
-	2. [AIの使用について](#7-2-AIの使用について)
+5. [🌈リソース](#7-リソース)
+	1. [参考URL](#5-1-参考URL)
+	2. [AIの使用について](#5-2-AIの使用について)
 
 
 ## 💡1. 概要
@@ -200,7 +198,36 @@ Agentは、LLMに「考え（Thought）→ コード（Code）→ 実行結果�
 MBPP と SWE-bench は同じループで動きます。2つの違いは、プロンプト・提出物の扱い・制限の値だけで、これをタスクごとの設定（`TaskProfile`）が持ちます。  
 
 #### 全体の流れ
+![alt text](.images/image.png)
+
 ```mermaid
+flowchart TD
+    START["agent_mbpp.py / agent_swebench.py<br>（引数: タスクのファイル・出力先）"] --> LOAD["task.json を読む<br>（MBPPTaskInput / SWEBenchTaskInput）"]
+    LOAD --> SETUP["config.json・providers*.json・.env を読み、<br>ResilientLLMClient を作る"]
+    SETUP --> MCP["MCPClient でツールのサーバーにつなぐ<br>（stdio / HTTP。SWE はタスクの Docker イメージを渡す）"]
+    MCP --> SANDBOX["Sandbox を開き、MCP のツールと<br>final_answer を名前空間に置く"]
+    SANDBOX --> CHECK
+
+    subgraph LOOP["Orchestrator.run()：Thought → Code → Observation をくり返す"]
+        CHECK{"上限を超えた？<br>反復・トークン・時間"}
+        CHECK -- まだ --> WINDOW["送る履歴を決める<br>（system・タスク文・直近 N 往復）"]
+        WINDOW --> LLM["LLM で生成する<br>（ResilientLLMClient が組を順に試す）"]
+        LLM --> EXTRACT["コードを取り出す<br>（CodeExtractor）"]
+        EXTRACT --> RUN["サンドボックスで実行する"]
+        RUN --> CALLED{"final_answer() が<br>呼ばれた？"}
+        CALLED -- いいえ --> OBSERVE["Observation を履歴に足す<br>（停滞していれば次のプロバイダへ回す）"]
+        CALLED -- はい --> REVIEW{"提出の検査に通る？"}
+        REVIEW -- いいえ（理由を付けて差し戻す） --> OBSERVE
+        OBSERVE --> CHECK
+    end
+
+    REVIEW -- はい --> OUTPUT["SolutionOutput を作る"]
+    CHECK -- 超えた --> BEST["手元の最善を提出物にする"]
+    LLM -- 全部の組が失敗（LLM_UNAVAILABLE） --> BEST
+    BEST --> OUTPUT
+    LOOP -. 想定外の例外・SIGTERM .-> ERROR["error を入れた SolutionOutput<br>（AGENT_CRASH / INTERRUPTED）"]
+    ERROR --> WRITE
+    OUTPUT --> WRITE["solution.json を書く"]
 ```
 - Orchestrator はインターフェース（`LLMGenerator`・`CodeExtractor`・`SandboxBase`・`TaskProfile`）にだけ依存します。そのため、プロバイダ・取り出しの形式・サンドボックス・ベンチマークを、ループに手を入れずに差し替えられます。
 
@@ -313,17 +340,9 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
 - **コンテナ廃棄**：SIGTERM を受けたとき、または標準入力が閉じたときにコンテナを止めて削除する。
 
 
-## 📃5. 入出力例
-<!-- TODO：MBPP と SWE-bench の task.json と solution.json の実例を1つずつ（`moulinette_eval display <solution.json> --full` の出力を使うと楽） -->
+## 🌈5. リソース
 
-
-## 🎁6. ボーナス
-<!-- TODO：実装した場合のみ -->
-
-
-## 🌈7. リソース
-
-### 7-1. 参考URL
+### 5-1. 参考URL
 - [Model Context Protocol 仕様](https://modelcontextprotocol.io/specification)
 - [JSON-RPC 2.0 仕様](https://www.jsonrpc.org/specification)
 - [MBPP](https://github.com/google-research/google-research/tree/master/mbpp)
@@ -333,10 +352,20 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
   - Yao et al., [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)（ICLR 2023）
   - Wang et al., [Executable Code Actions Elicit Better LLM Agents（CodeAct）](https://arxiv.org/abs/2402.01030)（ICML 2024）：ツールを JSON ではなくコードで呼ぶ考え方
   - Jimenez et al., [SWE-bench: Can Language Models Resolve Real-World GitHub Issues?](https://arxiv.org/abs/2310.06770)（ICLR 2024）
-  - 各プロバイダの OpenAI 互換 Chat Completions API のドキュメント（Mistral・Groq・Ollama Cloud・Cohere・Google AI Studio・NVIDIA NIM・Kilo Code・Cloudflare Workers AI）
+  - API
+  [mistral.ai](https://mistral.ai/products/studio/)  
+  [groq](https://console.groq.com/home)  
+  [ollama](https://signin.ollama.com/)  
+  [gemini](https://aistudio.google.com/prompts/)  
+  [kilo](https://app.kilo.ai/)  
+  [nvidia](https://build.nvidia.com/settings/api-keys)  
+  [cloudflare](https://dash.cloudflare.com/login)  
+  [cohere](https://dashboard.cohere.com/welcome/login)  
+  [openrouter](https://openrouter.ai/)
+
 <!-- TODO：各担当が参考にしたものを追加 -->
 
-### 7-2. AIの使用について
+### 5-2. AIの使用について
 <!-- 各自が「どの作業で、どの部分に」使ったかを書く -->
 - **ayhirose（MCP）**：MCP と HTTP・SSE の仕様の解説、設計の壁打ち、テストスクリプト（`test/mcp/`）の作成。SWE-bench のツールの一部は、生成させたコードを元に修正して取り込んだ。
 - **nsato（Agent）**：Claude Codeを疑問点の相談相手・分析役として使った。  
