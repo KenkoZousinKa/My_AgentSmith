@@ -469,19 +469,23 @@ def main() -> int:
         )
         if args.config else SandboxConfig()
     )
-
-    with Sandbox(
-        config=config,
-        mcp_stdio=args.mcp_stdio,
-        mcp_server=args.mcp_server
-    ) as sandbox:
-        if args.command is not None:
-            _show(sandbox.run(args.command))
-        elif args.file is not None:
-            _show(sandbox.run(Path(args.file).read_text(encoding="utf-8")))
-        else:
-            return _repl(sandbox)
-    return 0
+    # Need try/except for error when starting. Also for keyboard interupt
+    try:
+        with Sandbox(
+            config=config,
+            mcp_stdio=args.mcp_stdio,
+            mcp_server=args.mcp_server
+        ) as sandbox:
+            if args.command is not None:
+                _show(sandbox.run(args.command))
+            elif args.file is not None:
+                _show(sandbox.run(Path(args.file).read_text(encoding="utf-8")))
+            else:
+                return _repl(sandbox)
+        return 0
+    except BaseException as error:
+        print(error)
+        return 1
 
 
 if __name__ == "__main__":
