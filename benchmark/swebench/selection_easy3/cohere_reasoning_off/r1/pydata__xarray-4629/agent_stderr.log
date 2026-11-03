@@ -1,0 +1,7 @@
+warning: `VIRTUAL_ENV=/home/iroha/42Tokyo/cursus/Rank05/Agent_Smith_Project/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=cohere key#1 model=command-a-reasoning-08-2025 bad request; skip combo: ('LLM HTTP 422 (bad request): {"error_type":"NO_VALID_RESPONSE_GENERATED","id":"3c6b3bbb-f752-48cf-a6a1-f2bf7710b9f2","message":"No valid response generated. Try updating messages"}', 422, None).
+[Server] MCP_TOOLS_SWEBENCHを終了しました。

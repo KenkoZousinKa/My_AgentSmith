@@ -1,0 +1,23 @@
+warning: `VIRTUAL_ENV=/home/iroha/42Tokyo/cursus/Rank05/Agent_Smith_Project/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=nvidia key#1 model=nvidia/nemotron-3-super-120b-a12b bad request; skip combo: ('LLM HTTP 404 (bad request): {"status":404,"title":"Not Found","detail":"Function \'ac74040f-9fc9-4c5e-ac74-279ba5161d69\': Not found for account \'I17tC0NHzv64hfCQtw6azivve-VD8N9joLlAAoRuOvU\'"}', 404, None).
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 rate limited (retry_after=None); advance, no backoff.
+provider=cohere key#1 model=command-a-reasoning-08-2025 attempts=2 rate limited (retry_after=None); advance, no backoff.
+[Server] MCP_TOOLS_SWEBENCHを終了しました。

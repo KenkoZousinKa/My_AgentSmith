@@ -1,4 +1,3 @@
-from pydantic import BaseModel
 from typing import Protocol
 from src.models.output import ExecuteResult
 

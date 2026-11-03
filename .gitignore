@@ -1,6 +1,6 @@
 # Project specific (Mandatory rule)
 cache/
-scripts/
+script/
 # 評価用出力ツリー、実行時生成
 evaluations/
 
@@ -15,6 +15,7 @@ a.out
 # ----------
 *.py[cod]
 *$py.class
+dist/
 
 # ------------------------
 #  Virtual Environments  |

@@ -1,0 +1,8 @@
+warning: `VIRTUAL_ENV=/home/iroha/42Tokyo/cursus/Rank05/Agent_Smith_Project/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=cohere key#1 model=command-a-03-2025 attempts=1 TransportError; backoff 1.0s.
+provider=cohere key#1 model=command-a-03-2025 attempts=1 TransportError; backoff 1.0s.
+[Server] MCP_TOOLS_SWEBENCHを終了しました。

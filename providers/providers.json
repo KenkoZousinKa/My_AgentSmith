@@ -1,33 +1,110 @@
 {
     "providers": [
         {
-          "name": "groq",
-          "provider_url": "https://api.groq.com/openai/v1",
-          "models": [
-            "qwen/qwen3.8-27b",
-            "openai/gpt-oss-120b",
-            "openai/gpt-oss-20b",
-            "allam-2-7b"
-          ],
-          "keys_env": "GROQ_API_KEY",
-          "priority": 1
+            "name": "mistral",
+            "provider_url": "https://api.mistral.ai/v1",
+            "models": [
+                "codestral-latest",
+                "ministral-14b-latest"
+            ],
+            "keys_env": "MISTRAL_API_KEY",
+            "priority": 1
         },
         {
-            "name": "openrouter",
-            "provider_url": "https://openrouter.ai/api/v1",
+            "name": "groq",
+            "provider_url": "https://api.groq.com/openai/v1",
             "models": [
-                "cohere/north-mini-code:free",
-                "poolside/laguna-s-2.1:free",
-                "nvidia/nemotron-3-super-120b-a12b:free",
-                "google/gemma-4-31b-it:free",
-                "google/gemma-4-26b-a4b-it:free",
-                "nvidia/nemotron-3-ultra-550b-a55b:free",
-                "nvidia/nemotron-3.5-lightning:free",
-                "inclusionai/ling-3.1-flash",
-                "apodex/apodex-1.1-mini:free"
+                "qwen/qwen3.8-27b"
             ],
-            "keys_env": "OPENROUTER_API_KEY",
-            "priority": 2
+            "keys_env": "GROQ_API_KEY",
+            "priority": 2,
+            "model_params": {
+                "qwen/qwen3.8-27b": {
+                    "reasoning_effort": "none"
+                }
+            }
+        },
+        {
+            "name": "ollama",
+            "provider_url": "https://ollama.com/v1",
+            "models": [
+                "gpt-oss:120b",
+                "nemotron-3-ultra"
+            ],
+            "keys_env": "OLLAMA_API_KEY",
+            "priority": 3,
+            "model_params": {
+                "gpt-oss:120b": {
+                    "reasoning_effort": "low"
+                },
+                "nemotron-3-ultra": {
+                    "reasoning_effort": "none"
+                }
+            }
+        },
+        {
+            "name": "gemini",
+            "provider_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "models": [
+                "gemini-3.1-flash-lite",
+                "gemini-3.5-flash-lite"
+            ],
+            "keys_env": "GEMINI_API_KEY",
+            "priority": 4,
+            "model_params": {
+                "gemini-3.1-flash-lite": {
+                    "reasoning_effort": "minimal"
+                },
+                "gemini-3.5-flash-lite": {
+                    "reasoning_effort": "minimal"
+                }
+            }
+        },
+        {
+            "name": "kilo",
+            "provider_url": "https://api.kilo.ai/api/gateway",
+            "models": [
+                "nvidia/nemotron-3-ultra-550b-a55b:free"
+            ],
+            "keys_env": "KILO_API_KEY",
+            "priority": 5,
+            "model_params": {
+                "nvidia/nemotron-3-ultra-550b-a55b:free": {
+                    "reasoning": {
+                        "enabled": false
+                    }
+                }
+            }
+        },
+        {
+            "name": "nvidia",
+            "provider_url": "https://integrate.api.nvidia.com/v1",
+            "models": [
+                "nvidia/nemotron-3-ultra-550b-a55b"
+            ],
+            "keys_env": "NVIDIA_API_KEY",
+            "priority": 6,
+            "model_params": {
+                "nvidia/nemotron-3-ultra-550b-a55b": {
+                    "chat_template_kwargs": {
+                        "enable_thinking": false
+                    }
+                }
+            }
+        },
+        {
+            "name": "cloudflare",
+            "provider_url": "https://api.cloudflare.com/client/v4/accounts/045ea01f49c9d249f477e852c7f42a01/ai/v1",
+            "models": [
+                "@cf/openai/gpt-oss-120b"
+            ],
+            "keys_env": "CLOUDFLARE_API_KEY",
+            "priority": 7,
+            "model_params": {
+                "@cf/openai/gpt-oss-120b": {
+                    "reasoning_effort": "low"
+                }
+            }
         }
     ]
 }

@@ -1,0 +1,14 @@
+{
+ "providers": [
+  {
+   "name": "nvidia",
+   "provider_url": "https://integrate.api.nvidia.com/v1",
+   "models": [
+    "z-ai/glm-5.3-flash"
+   ],
+   "keys_env": "NVIDIA_API_KEY",
+   "priority": 1,
+   "model_params": {}
+  }
+ ]
+}

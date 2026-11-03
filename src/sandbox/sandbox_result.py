@@ -10,6 +10,7 @@ class FinalAnswer(BaseException):
     BaseException so generated code wrapping its work
     in try/except Exception cannot eat it.
     """
+
     def __init__(self, value: Any) -> None:
         """Init self with base exception inheritance."""
         super().__init__(value)

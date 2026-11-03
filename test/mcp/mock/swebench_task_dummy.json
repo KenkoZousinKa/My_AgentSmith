@@ -1,0 +1,8 @@
+{
+  "instance_id": "dummy__repo-1",
+  "problem_statement": "Dummy task for the mock agent. Nothing to fix.",
+  "docker_image": "python:3.11-slim",
+  "eval_script": "#!/bin/bash\necho dummy eval",
+  "hints_text": "",
+  "repo": "dummy/repo"
+}

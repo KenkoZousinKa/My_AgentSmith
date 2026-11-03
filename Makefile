@@ -78,7 +78,7 @@ lint-strict: ## より厳しいMypyチェックを実行
 	@echo "Running Linter (Strict)..."
 	-@$(UV) run flake8 $(SRC_DIR)
 	-@$(UV) run mypy --strict $(SRC_DIR)
-	-@$(UV) run ruff check $(SRC_DIR)
+#	-@$(UV) run ruff check $(SRC_DIR)
 # 	-@$(UV) run ty check $(SRC_DIR)
 	@echo "Strict Linting complete."
 

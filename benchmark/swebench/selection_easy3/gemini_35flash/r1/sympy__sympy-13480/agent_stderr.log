@@ -1,0 +1,9 @@
+warning: `VIRTUAL_ENV=/home/iroha/42Tokyo/cursus/Rank05/Agent_Smith_Project/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+provider=gemini key#1 model=gemini-3.5-flash attempts=1 rate limited (retry_after=None); advance, no backoff.
+all providers / keys / models exhausted after 1 attempt(s); waiting 8.0s for the rate limit to clear, then retrying once.
+provider=gemini key#1 model=gemini-3.5-flash attempts=2 rate limited (retry_after=None); advance, no backoff.
+[Server] MCP_TOOLS_SWEBENCHを終了しました。

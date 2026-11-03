@@ -2,10 +2,38 @@
 
 先頭にstatusラベル(全列挙)、1行要約、stdout, stderr / traceback, 任意でnoteを付与する。
 巨大なstdout /stderrのトークン切り詰めは履歴の構築側で行う。
+
+下記を提供
+- Status
+    Observationの先頭に付与するステータスラベルの列挙型。
+- collect_statuses()
+    ExecuteResultのフラグからObservationのステータスラベルを収集する。
+- build_observation()
+    ExecuteResultからLLMへ返すObservation文字列を構築する。
+- observation_no_code()
+    LLMに返すObservation文字列を構築する（コードがない場合）。
+- budget_note()
+    LLMのトークン使用量に関する注意を示す文を返す。
+- iteration_note()
+    LLMの反復回数に関する注意を示す文を返す。
+- malformed_code_note()
+    崩れたコードを救済実行したことをLLMへ明示する文を返す。
+- repeated_code_note()
+    以前と同じコードを実行したことをLLMへ明示する文を返す。
+- submission_rejected_note()
+    final_answer()の提出を差し戻したこととその理由をLLMへ伝える文を返す。
 """
 from enum import Enum
 
 from src.models.output import ExecuteResult
+from src.agent.extractor.python_extractor import (
+    SALVAGE_UNCLOSED_FENCE,
+    SALVAGE_UNFENCED,
+    SALVAGE_ESCAPED_QUOTES,
+    SALVAGE_JSON_WRAPPED,
+    SALVAGE_MULTIPLE_BLOCKS,
+    SALVAGE_UNMATCHED_CLOSERS
+)
 
 
 class Status(str, Enum):
@@ -31,7 +59,7 @@ _SUMMARY: dict[Status, str] = {
 _NOTE: dict[Status, str] = {
     Status.EXCEPTION: "Fix the error shown above, then re-run.",
     Status.TIMEOUT: "Add a termination condition and avoid unbounded loops.",
-    Status.TRUNCATED: "Reduce the amount you printi.",
+    Status.TRUNCATED: "Print less: show only the values you need.",
     Status.FINAL_ANSWER_INVALID: "Call final_answer() with the actual solution as its argument.",
     Status.NO_CODE: "Write exactly one ```python ... ``` code block."
 }
@@ -60,13 +88,21 @@ def collect_statuses(result: ExecuteResult) -> list[Status]:
     return statuses
 
 
-def _render_observation(statuses: list[Status], stdout: str, detail: str) -> str:
+def _render_observation(
+    statuses: list[Status],
+    stdout: str,
+    detail: str,
+    extra_note: str = "",
+    value: str | None = None
+) -> str:
     """ラベル、stdout、詳細からObservation文字列を構築する.
 
     Args:
         statuses (list[Status]): Observationに付与するステータスラベルのリスト。
         stdout (str): sandbox.run()の標準出力。(空ならno output)
         detail (str): sandbox.run()の標準エラーまたは例外トレースバック。
+        extra_note (str): ステータスごとの固定の助言の後ろに足す助言。
+        value (str | None): 最後の式の値(REPLの表示)。
 
     Returns:
         str: 構築したObservation文字列。
@@ -74,10 +110,16 @@ def _render_observation(statuses: list[Status], stdout: str, detail: str) -> str
     label_prefix = "".join(f"[{status.value}]" for status in statuses)
     summary = " ".join(_SUMMARY[status] for status in statuses)
     lines: list[str] = [f"{label_prefix} {summary}", "--- stdout ---", stdout if stdout else "(no output)"]
+
+    if value is not None:
+        lines.append("--- value of the last expression ---")
+        lines.append(value)
     if detail:
         lines.append("--- stderr / traceback ---")
         lines.append(detail)
     notes = [_NOTE[status] for status in statuses if status in _NOTE]
+    if extra_note:
+        notes.append(extra_note)
     if notes:
         lines.append("--- note ---")
         lines.append(" ".join(notes))
@@ -95,14 +137,144 @@ def build_observation(result: ExecuteResult) -> str:
             [LABELS] 1行要約 \n\n --- stdout --- \n\n (stderr / traceback) --- \n\n --- note ---
     """
     statuses = collect_statuses(result)
-    return _render_observation(statuses, stdout=result.stdout, detail=result.error or result.stderr)
+    return _render_observation(
+        statuses,
+        stdout=result.stdout,
+        detail=result.error or result.stderr,
+        value=result.value
+    )
 
 
-def observation_no_code() -> str:
-    """LLMに返すObservation文字列を構築する（コードがない場合）.
+_CUT_OFF_NOTE = (
+    "Your reply spent its whole {spent}-token allowance on prose and was cut off before any "
+    "```python fence, so nothing ran. Do NOT derive formulas or trace arithmetic in words: "
+    "write a candidate implementation in code and let run_tests tell you if it is right."
+)
+
+
+def observation_no_code(cut_off_at: int | None = None) -> str:
+    """LLMに返すObservation文字列を構築する(コードがない場合).
 
     Returns:
         str: LLMに返すObservation文字列。
             [NO_CODE] No executable Python code block was found in your message. \n\n --- note ---
     """
-    return _render_observation([Status.NO_CODE], stdout="", detail="")
+    extra_note = "" if cut_off_at is None else _CUT_OFF_NOTE.format(spent=cut_off_at)
+    return _render_observation(
+        [Status.NO_CODE],
+        stdout="",
+        detail="",
+        extra_note=extra_note
+    )
+
+
+def budget_note(remaining_output_tokens: int) -> str:
+    """出力トークンの残りが少ないことをLLMに伝え、提出を促す文を返す.
+
+    出力予算が切れて打ち切られると不合格が確定するので、残りで今の最善をて提出するように促す。
+
+    Args:
+        remaining_output_tokens (int): このタスク全体で残りの出力トークン数。
+
+    Returns:
+        str: Observationの末尾に付ける説明文。
+    """
+    return (
+        f"[BUDGET] Only {remaining_output_tokens} output tokens remain for this whole task. "
+        "Submit now: one short Thought line, then a code block that calls final_answer() with "
+        "your best implementation."
+    )
+
+
+def iteration_note(iterations_left: int, submit_hint: str) -> str:
+    """反復の回数が上限に近いことをLLMに伝え、提出を促す文を返す.
+
+    Args:
+        iterations_left (int): このタスクで残っている反復の回数。
+        submit_hint (str): 提出を促すメッセージ。
+
+    Returns:
+        str: Observationの末尾に付ける説明文。
+    """
+    plural = "iteration remains" if iterations_left == 1 else "iterations remain"
+    return f"[BUDGET] Only {iterations_left} {plural} for this task. {submit_hint}"
+
+
+# [MALFORMED_CODE]の種類ごとのLLMへの説明文
+_MALFORMED_NOTES: dict[str, str] = {
+    SALVAGE_UNCLOSED_FENCE: (
+        "[MALFORMED_CODE] Your ```python block was never closed, so your response was cut off "
+        "by the per-turn output limit. I executed everything after the opening fence anyway. "
+        "Write shorter turns so the block closes."
+    ),
+    SALVAGE_UNFENCED: (
+        "[MALFORMED_CODE] You wrote bare Python with no ```python fence. I detected it and "
+        "executed it anyway, but wrap your code in ```python ... ``` so it is read reliably."
+    ),
+    SALVAGE_ESCAPED_QUOTES: (
+        "[MALFORMED_CODE] You backslash-escaped quotes outside a string literal (for example "
+        'if report[\\"success\\"]: instead of if report["success"]:). That is a SyntaxError. '
+        "I unescaped the broken lines and ran your code. Write plain Python quotes: this is a "
+        "code block, not a JSON string."
+    ),
+    SALVAGE_JSON_WRAPPED: (
+        "[MALFORMED_CODE] Your ```python block contained a JSON object like {\"code\": \"...\"} "
+        "instead of Python. I took the string under \"code\" and executed it as Python. Write the "
+        "Python statements directly inside the block."
+    ),
+    SALVAGE_UNMATCHED_CLOSERS: (
+        "[MALFORMED_CODE] Your code had more closing brackets than opening ones (a SyntaxError: "
+        "unmatched ')'), usually from counting the brackets inside a string literal. I removed only "
+        "the extra closing brackets the Python parser reported and ran the code. Brackets inside "
+        "quotes do not need closing outside them."
+    ),
+    SALVAGE_MULTIPLE_BLOCKS: (
+        "[NOTE] Your message had several ```python blocks. I joined them in order and executed "
+        "them as one program. Prefer exactly one block per turn."
+    ),
+}
+
+
+def malformed_code_note(kind: str) -> str:
+    """崩れたコードを救済実行したことをLLMへ明示する文を返す.
+
+    崩れたコードブロックを解釈して実行したなら、それをLLMに説明することを明示。
+    黙って実行すると、LLMは自分の出力が崩れていたことに気付かず同じ失敗を繰り返す。
+
+    Args:
+        kind (str): 救済の種類(python_extractorのSALVAGE_*定数)。
+
+    Returns:
+        str: Observationの先頭に付ける説明文。未知の種類なら空文字。
+    """
+    return _MALFORMED_NOTES.get(kind, "")
+
+
+def repeated_code_note(first_step: int) -> str:
+    """以前と同じコードを実行したことをLLMへ明示する文を返す.
+
+    Args:
+        first_step (int): 以前の同じコードを最初に実行したstepの番号。
+
+    Returns:
+        str: Observationの先頭に付ける説明文。
+    """
+    return (
+        f"[REPEATED] This code is identical to what you ran in step {first_step}, so it fails the "
+        "same way. Do not resubmit it: re-read the failing values and change the logic."
+    )
+
+
+def submission_rejected_note(reason: str) -> str:
+    """final_answer()の提出を差し戻したこととその理由をLLMへ伝える文を返す.
+
+    差し戻した事実を伝えないとLLMは提出が受理されたと思い同じ提出を繰り返す、または止まる。
+
+    Args:
+        reason (str): 提出が受理されなかった理由。
+            TaskProfile.submission_rejection()またはsolution_verifier()の返す文字列。
+
+    Returns:
+        str: Observationの末尾に付ける説明文。
+    """
+    return f"--- submission rejected ---\n{reason}\nFix it and call final_answer() again."

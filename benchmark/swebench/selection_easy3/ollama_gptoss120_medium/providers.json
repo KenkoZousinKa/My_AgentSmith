@@ -1,0 +1,18 @@
+{
+ "providers": [
+  {
+   "name": "ollama",
+   "provider_url": "https://ollama.com/v1",
+   "models": [
+    "gpt-oss:120b"
+   ],
+   "keys_env": "OLLAMA_API_KEY",
+   "priority": 1,
+   "model_params": {
+    "gpt-oss:120b": {
+     "reasoning_effort": "medium"
+    }
+   }
+  }
+ ]
+}
