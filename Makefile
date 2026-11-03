@@ -33,9 +33,8 @@ install: ## 仮想環境を作成し、依存関係をインストールする
 # -------------
 run: ## メインプログラムを実行
 	@echo "Running $(MBPP_FILE)..."
-	@$(UV) run python3 -m $(SRC_DIR)
+	@$(UV) run python3 -m agent_mbpp ../cache/task.json ../cache/solution.json
 
-debug:
 debug: ## pdbデバッガを使って実行
 	@echo "Debugging $(MBPP_FILE)..."
 	@$(UV) run $(PYTHON) -m pdb $(SRC_DIR)
@@ -70,16 +69,12 @@ lint: ## Flake8 / Mypy / ruffによる静的解析を実行
 	@echo "flake8 complete."
 	-@$(UV) run mypy .
 	@echo "mypy complete."
-#	-@$(UV) run ruff check $(SRC_DIR)
-#	-@$(UV) run ty check $(SRC_DIR)
 	@echo "Linting complete."
 
 lint-strict: ## より厳しいMypyチェックを実行
 	@echo "Running Linter (Strict)..."
 	-@$(UV) run flake8 $(SRC_DIR)
 	-@$(UV) run mypy --strict $(SRC_DIR)
-#	-@$(UV) run ruff check $(SRC_DIR)
-# 	-@$(UV) run ty check $(SRC_DIR)
 	@echo "Strict Linting complete."
 
 # -----------
@@ -89,14 +84,6 @@ test: ## pytestを実行
 	@echo "Running Tests..."
 	@$(UV) run pytest $(TEST_DIR)
 	@echo "Testing complete."
-
-lint-test: ## Flake8 / Mypy / ruffによる静的解析をテストディレクトリに対して実行
-	@echo "Running Linter on Tests..."
-	-@$(UV) run flake8 $(TEST_DIR)
-	-@$(UV) run mypy $(TEST_DIR)
-	-@$(UV) run ruff check $(TEST_DIR)
-# 	-@$(UV) run ty check $(SRC_DIR)
-	@echo "Linting Tests complete."
 
 # -----------------------
 #  Additional Commands  |
