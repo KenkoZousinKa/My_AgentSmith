@@ -26,18 +26,14 @@ dev = [
     "flake8-pyproject",
     "mypy>=1.19.1",
     "pep8-naming>=0.15.1",
-    "ruff",
-    "ty",
     "pytest",
+	"flake8-docstrings",
 ]
-# "flake8-docstrings",
 
 [tool.mypy]
 exclude = [
     "^\\.venv/",
-	"^data/",
-	"test/",
-	"^script/"
+	"test/"
 ]
 
 # .関数はAnyで返せなくなる
@@ -65,11 +61,9 @@ exclude = [
     "venv",
     ".venv",
     "__init__.py",
-	"data",
 	"test",
 	"dist",
 	"build",
-	"script"
 ]
 max-line-length = 130
 
