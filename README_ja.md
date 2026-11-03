@@ -180,7 +180,6 @@ uv run moulinette_eval display ../cache/mbpp_solution.json --full
 ```
 - `moulinette_eval` を引数なしで実行すると、コマンドの一覧が表示されます。
 
-<!-- TODO：2. の run-agent のコマンドは、quickstart.sh の実際の実行場所に合わせて確認する -->
 
 ### 3-6. moulinette を使わずに実行する
 すでに task.json がある場合は、エージェントを直接実行できます。
@@ -202,8 +201,6 @@ uv run python3 -m agent_swebench \
 ```
 `--model-name` と `--provider-url` を省略すると、`providers/providers.json` の既定値を使います。
 
-<!-- TODO: Makefile の run を直したら、make run の使い方に合わせる -->
-
 ### 3-7. 評価の基準
 moulinette は、解答が正しいかに加えて、次の制限を守っているかも確認します。
 
@@ -221,7 +218,7 @@ moulinette は、解答が正しいかに加えて、次の制限を守ってい
 | `install` | 仮想環境の作成と依存関係のインストール |
 | `run` / `debug` | 実行 / pdb でのデバッグ実行 |
 | `lint` / `lint-strict` | flake8・mypy による静的解析 / より厳しい解析 |
-| `test` / `lint-test` | pytest の実行 / テストの静的解析 |
+| `test` | pytest の実行 |
 | `clean` / `fclean` / `re` | キャッシュの削除 / 仮想環境も削除 / 作り直し |
 
 
@@ -539,7 +536,6 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
   [cohere](https://dashboard.cohere.com/welcome/login)  
   [openrouter](https://openrouter.ai/)
 
-<!-- TODO：各担当が参考にしたものを追加 -->
 
 ### 5-2. AIの使用について
 <!-- 各自が「どの作業で、どの部分に」使ったかを書く -->

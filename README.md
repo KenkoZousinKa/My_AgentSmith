@@ -180,8 +180,6 @@ uv run moulinette_eval display ../cache/mbpp_solution.json --full
 ```
 - Running `moulinette_eval` with no arguments shows the list of commands.
 
-<!-- TODO: check that the run-agent command in step 2 matches the directory quickstart.sh actually runs from -->
-
 ### 3-6. Run without the moulinette
 If you already have a task.json, you can run the agent directly.
 
@@ -202,7 +200,6 @@ uv run python3 -m agent_swebench \
 ```
 If you leave out `--model-name` and `--provider-url`, the defaults in `providers/providers.json` are used.
 
-<!-- TODO: update this to the usage of make run once the run target in the Makefile is fixed -->
 
 ### 3-7. Evaluation criteria
 Besides checking that the solution is correct, the moulinette checks that it stays within these limits.
@@ -221,14 +218,13 @@ Besides checking that the solution is correct, the moulinette checks that it sta
 | `install` | Create the virtual environment and install the dependencies |
 | `run` / `debug` | Run / run under pdb for debugging |
 | `lint` / `lint-strict` | Static analysis with flake8 and mypy / a stricter version |
-| `test` / `lint-test` | Run pytest / static analysis of the tests |
+| `test` | Run pytest |
 | `clean` / `fclean` / `re` | Remove caches / also remove the virtual environment / rebuild |
 
 
 ## ⛏4. Additional Requirements
 
 ### 4-1. Agent
-<!-- TODO (Agent owner): loop design, prompts, answer extraction format, retries, limits, logs -->
 The agent is a loop that makes the LLM repeat "Thought → Code → Observation" (`src/agent/`).
 MBPP and SWE-bench run on the same loop. The only differences are the prompts, how the submission is handled, and the limit values; each benchmark keeps these in its own settings object (`TaskProfile`).
 
@@ -348,7 +344,6 @@ Even when the agent stops without submitting, it submits the best result it has.
 - The benchmark results for both MBPP and SWE-Bench, along with the corresponding analysis, are documented in [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md).
 
 ### 4-2. Sandbox
-<!-- TODO (Sandbox owner): isolation method, limits (memory, time, network), REPL, how MCP tools are exposed -->
 
 #### Isolation
 
@@ -537,7 +532,6 @@ The official `mcp` SDK is used only as the other end in tests that check the two
   [cohere](https://dashboard.cohere.com/welcome/login)  
   [openrouter](https://openrouter.ai/)
 
-<!-- TODO: each member adds what they referred to -->
 
 ### 5-2. AI Usage
 <!-- Each member writes for which tasks and which parts they used AI -->
