@@ -78,7 +78,7 @@ class Sandbox:
 
         self._spawn()
 
-    def __enter__(self) -> "Sandbox":
+    def __enter__(self) -> Sandbox:
         """Enter a context manager."""
         return self
 
@@ -148,15 +148,13 @@ class Sandbox:
 
         self._cmd_w = self._res_r = -1
 
-        for kill in (
-            lambda: os.killpg(pid, signal.SIGKILL),
-            lambda: os.kill(pid, signal.SIGKILL)
-        ):
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
             try:
-                kill()
-                break
+                os.kill(pid, signal.SIGKILL)
             except (ProcessLookupError, PermissionError):
-                continue
+                pass
         try:
             os.waitpid(pid, 0)
         except ChildProcessError:
