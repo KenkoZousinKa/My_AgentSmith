@@ -33,8 +33,8 @@ def agent_swebench(
     if extra_args:
         raise SystemExit(f"Unknown arguments: {list(extra_args)}")
     run_swe_agent(
-        task_file_path=task_file,
-        output_file_path=output,
+        task_file_path=str(task_file),
+        output_file_path=(output),
         model_name=model_name,
         provider_url=provider_url,
         providers_file_path=providers_file_path,

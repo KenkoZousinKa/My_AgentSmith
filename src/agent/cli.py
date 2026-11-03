@@ -337,7 +337,8 @@ def _run_safely(
 
         # 想定外の例外が起きた場合は、tracebackをstderrに出力し、SolutionOutputにAGENT_CRASHを書き込む。
         except Exception as error:
-            traceback.print_exc(file=sys.stderr)
+            # traceback.print_exc(file=sys.stderr)
+            print(error)
             solution_output = _failed_solution(
                 task_id=task_id,
                 benchmark=benchmark,
@@ -348,6 +349,7 @@ def _run_safely(
     # Ctrl+C / SIGTERMで中断された場合は、SolutionOutputにINTERRUPTEDを書き込む。
     except (KeyboardInterrupt, _Terminated) as error:
         interrupted = error
+        print(error)
         solution_output = _failed_solution(
             task_id=task_id,
             benchmark=benchmark,
