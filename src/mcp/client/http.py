@@ -1,3 +1,5 @@
+"""クライアントのhttp接続クラス."""
+
 import http.client
 import subprocess
 import shlex
@@ -13,6 +15,23 @@ from src.mcp.client.client import DEFAULT_URL
 
 
 class HttpClientTransport:
+    """MCPサーバーとのHTTP接続を管理するTransportクラス.
+
+    Attributes:
+        process (subprocess.Popen[bytes] | None): 規定サーバーを立ち上げた際のプロセスオブジェクト
+        url (str): 接続先URL
+        command (str | None): 規定サーバーを起動するコマンド
+        hostname (str): 接続先ホスト名
+        path (str): 接続先パス
+        port (int | None): 接続先ポート
+        session_id (str | None): セッションID(JSON-RPCのヘッダーで使用)
+        protocol_version (str | None): MCPプロトコルのバージョン
+        timeout (int): 接続タイムアウト時間
+        start_timeout (float): サーバー起動待ち時間
+        stream (http.client.HTTPResponse | None): SSEでサーバーと接続されているconnオブジェクト
+        inbox (deque[rpc.JSONRPCMessage]): Clientが処理すべきメッセージ
+    """
+
     def __init__(self, url: str = DEFAULT_URL, timeout: int = 130, command: str | None = None, start_timeout: float = 10) -> None:
         self.process: subprocess.Popen[bytes] | None = None  # 規定serverを立ち上げた際のプロセスオブジェクト
         self.url: str = url

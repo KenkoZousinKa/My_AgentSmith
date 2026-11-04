@@ -6,7 +6,10 @@ from src.mcp.models import jsonrpc as rpc
 
 class StdioServerTransport:
     def serve(self, handle: Callable[[str], rpc.JSONRPCResponse | rpc.JSONRPCError | None]) -> None:
-        """サーバーの受付(Stdio)を担当する."""
+        """サーバーの受付(Stdio)を担当する.
+
+        handle: クライアントからのリクエストを受け取り、レスポンスを返す関数
+        """
         # 1.stdinを受け取る
         for line in sys.stdin:  # EOFでループが終わる clientが異常終了した場合は子プロセスにEOFが届く
             if not line.strip():  # '\n'などのから文字を読み飛ばす

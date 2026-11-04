@@ -1,4 +1,4 @@
-"""mcp_tools_mbpp.py"""
+"""mcp_tools_mbpp.py."""
 
 import ast
 import sys
@@ -88,6 +88,7 @@ def solve_task(task_definition: str, function_definition: str, tests: str = "") 
 
 
 def main() -> None:
+    """LLMがMBPPテストに使用するツールを提供するサーバーを作成する."""
     parser = argparse.ArgumentParser(description="MBPP MCP Server")
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     parser.add_argument("--host", default="127.0.0.1")

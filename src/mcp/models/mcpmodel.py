@@ -1,4 +1,7 @@
-"""MCP プロトコルのモデル（JSON-RPC の封筒に入る中身）。"""
+"""MCPモデル定義.
+
+MCPクライアントとサーバー同士でやり取りするJSON-RPCのparam部定義とerror部定義をまとめたもの.
+"""
 
 from __future__ import annotations
 
@@ -11,11 +14,12 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 from enum import Enum
 
-
 MCP_VERSION: Final[Literal["2025-06-18"]] = "2025-06-18"
+"""MCPのバージョン文字列."""
 
 
 class Method(str, Enum):
+    """MCPが使用するJSON-RPCのメソッド部."""
     INITIALIZE = "initialize"
     INITIALIZED = "notifications/initialized"
     PING = "ping"
@@ -28,184 +32,282 @@ class Method(str, Enum):
 
 
 class MCPModel(BaseModel):
-    """すべての MCP モデルの基底クラス。
+    """MCPで使用するJSON-RPCのparam部やresult部のモデルの基底クラス.
 
-    Python 側ではスネークケース（protocol_version）で書き、
-    JSON に出し入れするときはキャメルケース（protocolVersion）に自動で変換する。
+    Attributes:
+        model_config (ConfigDict): Pydanticのモデル設定。
     """
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
-    #   alias 要素名をキャメル型に変換
-    #   populate 変換前の要素名でのインポートをエラーとしない
+    #   alias_generator: JSON項目名にする際に要素名をキャメル型に変換する。
+    #   populate_by_name: JSON項目名ではなくインスタンス時にキャメル型ではなく要素名で代入できる。
 
 
 # ===== initialize/ Class =====
 
-
 class Implementation(MCPModel):
-    """MCP 実装の名前とバージョン（`clientInfo` / `serverInfo` の中身）。"""
+    """InitalizeRequestParamsとInitializeResultのinfo部のモデル定義.
+
+    Attributes:
+        name (str): 実装の名前
+        version (str): 実装のバージョン
+    """
 
     name: str
     version: str
 
 
 class InitializeRequestParams(MCPModel):
-    """`initialize` リクエストのパラメータ（クライアント → サーバー）。"""
+    """クライアントがサーバーに送るJSON_RPC initializeリクエストのparam部.
+
+    Attributes:
+        protocol_version (str): クライアントが使うMCPのバージョン
+        capabilities (dict[str, Any]): クライアントが提供する機能（今回はない）
+        client_info (Implementation): クライアントの情報
+        meta (dict[str, Any] | None): クライアントがサーバーに提供する情報。省略可能。
+    """
 
     protocol_version: str
-    """クライアントが対応している中で最新の MCP バージョン（希望する版）。"""
     capabilities: dict[str, Any]
-    """クライアントが提供できる機能。"""
     client_info: Implementation
-    """クライアントの情報。"""
     meta: dict[str, Any] | None = Field(default=None, validation_alias="_meta", serialization_alias="_meta")
+#   jsonでは_metaで扱う。
 #   validation_alias：JSON から読むとき（model_validate）に "_meta" を受け付ける
-#   serialization_alias：by_alias=True で出すときに "_meta" という名前にする
-    """クライアントが渡すメタデータ。今回は環境変数を渡す。"""
+#   serialization_alias： jsonへの変換時は"_meta" という名前にする。
 
 
 class InitializeResult(MCPModel):
-    """`initialize` リクエストへの応答のresult（サーバー → クライアント）。"""
+    """サーバーがクライアントに返すJSON_RPC initializeリザルトのresult部.
+
+    Attributes:
+        protocol_version (str): サーバーが使うMCPのバージョン
+        capabilities (dict[str, Any]): サーバーが提供する機能（今回はない）
+        server_info (Implementation): サーバーの情報
+    """
 
     protocol_version: str
-    """サーバーが使うと決めた MCP バージョン。クライアントが対応していなければ、クライアント側が切断する（MUST）。"""
     capabilities: dict[str, Any]
-    """サーバーが提供する機能（tools / resources / prompts など）。"""
     server_info: Implementation
 
 
 # ===== tools/ Class =====
 
-
 class Tool(MCPModel):
-    """ツール一つ分のモデル定義"""
+    """サーバーから返されるlistToolsResultのtool部、ツール1つ分の情報.
+
+    Attributes:
+        name (str): ツールの名前(関数名)
+        description (str | None): ツールのDocString。省略可能。
+        input_schema (dict[str, Any]): ツールの入力パラメータの JSON Schema。ツールの引数の型を定義する。
+    """
     name: str
     description: str | None = None
     input_schema: dict[str, Any]
 
 
 class ListToolsResult(MCPModel):
-    """tools/list リクエストへの応答のresult"""
+    """tools/list リクエストからサーバーが返すresult部.
+
+    Attributes:
+        tools (list[Tool]): サーバーが提供するツールのリスト
+    """
     tools: list[Tool]
 
 
 class CallToolRequestParams(MCPModel):
-    """tools/call リクエストのパラメータ(クライアント -> サーバー)"""
+    """tools/call リクエストのparam部.
+
+    クライアントがサーバーに送るツール呼び出しのパラメータ.
+
+    Attributes:
+        name (str): 呼び出すツールの名前(関数名)
+        arguments (dict[str, Any] | None): ツールに渡す引数。省略可能。
+    """
     name: str
     arguments: dict[str, Any] | None = None
 
 
 class TextContent(MCPModel):
-    """CallToolResultの中で使われる 関数のテキスト結果."""
+    """CallToolResultの中で使われるcontent部のモデル定義.
+
+    例外も含めツールの実行結果がstrで記録される
+
+    Attributes:
+        type (Literal["text"]): contentの型。text固定。
+        text (str): contentの中のテキスト。
+    """
     type: Literal["text"] = "text"
     text: str
 
 
 class CallToolResult(MCPModel):
-    """tools/call リクエストへの応答のresult"""
+    """tools/call リクエストからサーバーが返すresult部.
+
+    ツールの実行結果を表す。
+    他MCPサーバーではcontentの中に画像や音声なども入るが、現状はtextのみ。
+    複数返ることもあるので、contentはリストになっている。自作サーバーは1つしか返さない
+
+    Attributes:
+        content (list[TextContent]): ツールの実行結果の中身。
+        is_error (bool): ツールの実行がエラーだったかどうか。
+    """
     content: list[TextContent]
     is_error: bool = False
 
     @property
     def text(self) -> str:
-        """content の中のテキストを、1つの文字列につなげて返す."""
+        """contentの中のテキストをまとめて返す.
+
+        Returns:
+            str: contentの中のテキストをまとめた文字列。
+        """
         return "\n".join(c.text for c in self.content)
 
 
 class EmptyResult(MCPModel):
-    """中身のない成功応答(ping)"""
+    """中身のない成功応答(ping)."""
 
 
 # ===== resources/ Class =====
 
-
 class Resource(MCPModel):
-    """resources/list で返される、資料1つ分の情報."""
+    """resources/list で返される、資料の1つ分の情報.
+
+    Attributes:
+        uri (str): 資料を指す名前。"file:///…"、"test://hello" など。
+        name (str): 資料の表示名。今回はDocString
+        description (str | None): 資料の説明。省略可能。
+        mime_type (str | None): 資料の MIME タイプ。"text/plain"、"application/json" など。省略可能
+    """
     uri: str
-    # ↑ 資料を指す名前。"file:///…"、"test://hello" など。サーバーが自由に決める
     name: str
     description: str | None = None
     mime_type: str | None = None
-    # ↑ JSON では "mimeType"。"text/plain"、"application/json" など
 
 
 class ListResourcesResult(MCPModel):
-    """resources/list リクエストへの応答の result."""
+    """resources/list リクエストからサーバーが返すresult部.
+
+    Attributes:
+        resources (list[Resource]): サーバーが提供する資料のリスト
+    """
     resources: list[Resource]
 
 
 class ReadResourceRequestParams(MCPModel):
-    """resources/read リクエストのパラメータ（クライアント → サーバー）."""
+    """resources/read リクエストのparam部.
+
+    Attributes:
+        uri (str): 資料の URI
+    """
     uri: str
 
 
 class ResourceContents(MCPModel):
-    """resources/read で返される、資料の中身1つ分."""
+    """resources/read で返される、資料の中身1つ分.
+
+    Attributes:
+        uri (str): 資料の URI
+        mime_type (str | None): 資料の MIME タイプ。"text/plain"、"application/json" など。省略可能
+        text (str | None): 文字の資料なら text に入る。省略可能
+        blob (str | None): 画像などのバイナリなら、base64 という形式の文字列で blob に入る（text と blob はどちらか一方）。省略可能
+    """
     uri: str
     mime_type: str | None = None
     text: str | None = None
-    # ↑ 文字の資料なら text に入る
     blob: str | None = None
-    # ↑ 画像などのバイナリなら、base64 という形式の文字列で blob に入る（text と blob はどちらか一方）
 
 
 class ReadResourceResult(MCPModel):
-    """resources/read リクエストへの応答の result."""
+    """resources/read リクエストから返すresult部.
+
+    Attributes:
+        contents (list[ResourceContents]): 資料の中身のリスト。ディレクトリの場合複数の中身が返る.
+    """
     contents: list[ResourceContents]
-    # ↑ 1つの URI に、中身が複数返ることもある（フォルダーを指す URI など）
 
 
 # ===== prompts/ Class =====
 
-
 class ContentBlock(MCPModel):
-    """メッセージの中身の1つ分（テキスト、画像、音声など）."""
+    """contentの中の1ブロック分。text、image、audio、resourceなどがあるが、現状はtextのみ.
+
+    Attributes:
+        type (str): contentの型。text、image、audio、resourceなど。
+        text (str | None): contentの中のテキスト。省略可能。
+    """
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="allow")
     # ↑ extra="allow"：知らない項目（画像の data や mimeType など）も捨てずに持っておく。
     #   未知のサーバーは、テキスト以外の中身を送ってくることがあるため。
-    #   model_config を書き直すと MCPModel の設定が上書きされるので、alias の設定も書き直している
     type: str
-    # ↑ "text"、"image"、"audio"、"resource" など。
     text: str | None = None
-    # ↑ type が "text" のときだけ入る。それ以外は None
 
 
 class PromptArgument(MCPModel):
-    """prompt が受け取る引数1つ分の説明."""
+    """prompts/list で返される、プロンプト引数の1つ分の情報.
+
+    Attributes:
+        name (str): 引数の名前
+        description (str | None): 引数の説明。省略可能。
+        required (bool): 引数が必須かどうか。
+    """
     name: str
     description: str | None = None
     required: bool = False
 
 
 class Prompt(MCPModel):
-    """prompts/list で返される、指示の1つ分の情報."""
+    """prompts/list で返される、プロンプト1つ分の情報.
+
+    Attributes:
+        name (str): プロンプトの名前（今回は関数名）
+        description (str | None): プロンプトの説明。省略可能。
+        arguments (list[PromptArgument]): プロンプトの引数のリスト。
+    """
     name: str
     description: str | None = None
     arguments: list[PromptArgument] = Field(default_factory=list)
 
 
 class ListPromptsResult(MCPModel):
-    """prompts/list リクエストへの応答の result."""
+    """prompts/list の result部.
+
+    Attributes:
+        prompts (list[Prompt]): サーバーが提供するプロンプトのリスト
+    """
     prompts: list[Prompt]
 
 
 class GetPromptRequestParams(MCPModel):
-    """prompts/get リクエストのパラメータ（クライアント → サーバー）."""
+    """prompts/get リクエストの param部.
+
+    Attributes:
+        name (str): プロンプトの名前（今回は関数名）
+        arguments (dict[str, str] | None): プロンプトに渡す引数。省略可能。
+    """
     name: str
     arguments: dict[str, str] | None = None
-    # ↑ 仕様で、prompt の引数の値は文字列だけと決まっている
 
 
 class PromptMessage(MCPModel):
-    """結果の、メッセージ1つ分."""
+    """プロンプトの中の1メッセージ分。text、image、audio、resourceなどがあるが、現状はtextのみ.
+
+    Attributes:
+        role (Literal["user", "assistant"]): メッセージの送信者
+        content (ContentBlock): メッセージの中身。text、image、audio、resourceなどがあるが、textのみ.
+    """
     role: Literal["user", "assistant"]
-    # ↑ LLM との会話の、誰の発言か。
     content: ContentBlock
 
 
 class GetPromptResult(MCPModel):
-    """prompts/get リクエストへの応答の result."""
-    description: str | None = None  # 完成したプロンプト全体の説明
+    """getPrompt リクエストから返す result部.
+
+    Attributes:
+        description (str | None): 完成したプロンプトの説明。省略可能。
+        messages (list[PromptMessage]): プロンプトのメッセージのリスト。
+    """
+    description: str | None = None
     messages: list[PromptMessage]
 
 
@@ -226,10 +328,7 @@ class MCPConnectionError(MCPClientError):
 
 
 class MCPProtocolError(MCPClientError):
-    """サーバーが MCP / JSON-RPC の形式に合わないメッセージを送ってきた.
-
-    サーバーが起因するエラー。It's MangoMan's fault.
-    """
+    """サーバーが MCP / JSON-RPC の形式に合わないメッセージを送ってきた."""
 
 
 class MCPError(MCPClientError):
@@ -237,12 +336,24 @@ class MCPError(MCPClientError):
 
     このエラーはサーバーサイドが起因ではないケースで使う。(LLMが構文を間違えているなど)
     ネストされたエラーオブジェクトも含めてLLMに渡すことを推奨。
+
+    Attributes:
+        code (int): JSON-RPC のエラーコード
+        message (str): JSON-RPC のエラーメッセージ
+        data (Any): JSON-RPC のエラー詳細情報
     """
+
     def __init__(self, code: int, message: str, data: Any) -> None:
+        """MCPErrorを初期化する."""
         super().__init__(code, message, data)
         self.code = code
         self.message = message
         self.data = data
 
     def __str__(self) -> str:
+        """MCPErrorの文字列表現を返す.
+
+        Returns:
+            str: MCPErrorの文字列表現。"[code] message" の形式。
+        """
         return f"[{self.code}] {self.message}"
