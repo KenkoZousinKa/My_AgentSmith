@@ -3,20 +3,19 @@
 タスクファイル読み込み -> 設定 / プロバイダ解決 ->
 Provider / Sandbox / Orchestrator 構築 ->
 実行 -> SolutionOutput 書き出し
+
 fireはagent_mbpp.py / agent_swebench.py から呼ばれ、
 検証済みの引数だけを受け取る関数郡
 
-run_mbpp / swe _agent -> run_safely -> _solve_mbpp / swebench -> solve -> _solve_mbpp / swebench
-
-- [ ] BaseAgentCliArgsモデルを作成して検証を拡充
+run_mbpp/swe_agent -> run_safely -> _solve_mbpp/swebench -> solve -> _solve_mbpp/swebench
 """
-import signal
 import sys
 import time
+import signal
 import traceback
 from pathlib import Path
 from types import FrameType
-from typing import TypeVar
+from typing import TypeVar, Callable, Any
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -32,10 +31,7 @@ from src.models.input import MBPPTaskInput, SWEBenchTaskInput
 from src.sandbox.sandbox_main import Sandbox
 from src.models.sandbox_config import SandboxConfig
 from src.models.sandbox_base import SandboxBase
-# from src.sandbox.mock import MockSandbox
 
-# ========= add MangoMan ==========
-from typing import Callable, Any
 from src.mcp.client.http import HttpClientTransport
 from src.mcp.models.client_transport import ClientTransport
 from src.mcp.client.stdio import StdioClientTransport
@@ -43,7 +39,6 @@ from src.mcp.client.client import MCPClient, DEFAULT_URL, SWE_SERVER_COMMAND, MB
 from src.mcp.client.mcp_tool_function import MCPToolFunction
 from src.models.output import SolutionOutput
 from mcp_tools_swebench import META_KEY
-# ========= add MangoMan ==========
 
 _Task = TypeVar("_Task", bound=BaseModel)
 

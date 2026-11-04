@@ -1,12 +1,11 @@
 """LLMプロバイダの抽象クラスと設定情報を定義するモジュール。
 
-1リクエストを送って結果 / 例外を返すだけ。
+LLMに1リクエストを送って結果 / 例外を返すだけ。
 generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
 プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。
 認証、リトライ、キーローテーション、フォールバックなどの機能はProvider / KeyManagerが担当。
 実際のHTTP送信は HTTPTransportが担当する。
 
-OpenRouterProvider / GroqProvider / TogetherProvider / FireWorksProvider / GeminiProvider 等
 具体的なプロバイダは、この抽象クラスを継承して実装する。
 プロバイダURL / モデル名 / キー郡などはJSONか.envで設定し、コードの変更なしでモデルを差し替えて
 ベンチマークを実行できるようにする。
@@ -16,21 +15,33 @@ ProviderConfig
 LLMResponse
 LLMError -> EmptyResponseError / LLMHTTPError
 LLMHTTPError -> RateLimitError / ServerError / AuthenticationError / BadRequestError
-def _parse_retry_after(header: dict[str, str]) -> float | None
-def _error_from_response(response: HttpResponse) -> LLMHTTPError
+
 LLMGenerator(Protocol)
-LLMProvider(ABC) def generate() / _build_request() / _parse_response()
+LLMProvider()
+    def generate()
+    def _build_request()
+    def _parse_response()
+def _parse_retry_after()
+def _error_from_response()
 """
 import time
-from typing import Any, Protocol
 from abc import ABC, abstractmethod
+from typing import Any, Protocol, TypeAlias
 from pydantic import BaseModel, ConfigDict
 
 from src.agent.llm.transport.transport import HttpTransport, HttpResponse
+from src.agent.type_aliases import ChatHistory, JsonObject
+
+# Jsonを読み込んだオブジェクト。
+JsonObject: TypeAlias = dict[str, Any]
+# LLMに送るメッセージ１件。{"role": "user", "content": "..."}
+ChatMessage: TypeAlias = dict[str, str]
+# LLMに送る会話の履歴(メッセージを古い順に並べたもの)
+ChatHistory: TypeAlias = list[ChatMessage]
 
 
 class ProviderConfig(BaseModel):
-    """LLMプロバイダ一件分の設定情報.(provider.jsonの1要素に相当)
+    """LLMプロバイダ一件分の設定情報(provider.jsonの1要素に相当).
 
     Attributes:
         name (str): プロバイダ名。openrouter / groq / together / fireworks / gemini など。
@@ -39,30 +50,30 @@ class ProviderConfig(BaseModel):
         keys_env (str): APIキーを格納した環境変数名。
         priority (int): プロバイダのフォールバック優先度。小さいほど優先度が高い。
         request_timeout_sec (float): HTTPリクエストのタイムアウト秒数。デフォルト60秒。MBPPの120秒にあわせる。
-        additional_params (dict[str, Any]): プロバイダ固有のbodyに足す追加パラメータ。必要に応じて使用する。
-        model_params (dict[str, dict[str, Any]]): モデル固有のパラメータ。必要に応じて使用する。
+        additional_params (JsonObject): プロバイダ固有のbodyに足す追加パラメータ。必要に応じて使用する。
+        model_params (dict[str, JsonObject]): モデル固有のパラメータ。必要に応じて使用する。
     """
     model_config = ConfigDict(extra="forbid")
 
     name: str
     provider_url: str
-    models: list[str]  # API body / provider.jsonのキーと同名
+    models: list[str]
     keys_env: str
     priority: int = 1
     request_timeout_sec: float = 60.0
-    additional_params: dict[str, Any] = {}
-    model_params: dict[str, dict[str, Any]] = {}
+    additional_params: JsonObject = {}
+    model_params: dict[str, JsonObject] = {}
 
 
 class LLMResponse(BaseModel):
-    """1回のLLM生成の結果。StepMetricsへ直結.
+    """1回のLLM生成の結果。StepMetricsへ直結する情報群.
 
     Attributes:
         text (str): コード抽出前の生のレスポンス文字列。LLMの出力をそのまま保持する。
         input_tokens (int): 入力、プロンプトのトークン数。usage.pyで集計する。
         output_tokens (int): 生成に使用されたトークン数。usage.pyで集計する。
         request_time_ms (float): APIリクエストの応答時間(秒)をミリ秒単位で保持する。LLMの応答時間を計測する。
-        api_url (str): "https://openrouter.ai/api/v1"
+        api_url (str): "https://openrouter.ai/api/v1"など
         model_name (str): 使用したモデル名
         retries (int): 成功までのリトライ回数(0なら初回で成功)
     """
@@ -215,7 +226,7 @@ class LLMGenerator(Protocol):
     """
     def generate(
         self,
-        messages: list[dict[str, str]],
+        messages: ChatHistory,
         stop_sequences: list[str],
         max_tokens: int
      ) -> LLMResponse:
@@ -234,7 +245,7 @@ class LLMProvider(ABC):
 
         Args:
             config (ProviderConfig): プロバイダの設定情報。
-            transport (HTTPTransport): HTTP POST で送信を担当するTransportクラス
+            transport (HttpTransport): HTTP POST で送信を担当するTransportクラス
             api_key (str): APIキー。key_managerがkeys_envから取得して渡す。
             model (str): 使用するモデル名。
         """
@@ -243,11 +254,16 @@ class LLMProvider(ABC):
         self.api_key = api_key
         self.model = model
 
-    def generate(self, messages: list[dict[str, str]], stop_sequences: list[str], max_tokens: int) -> LLMResponse:
+    def generate(
+        self,
+        messages: ChatHistory,
+        stop_sequences: list[str],
+        max_tokens: int
+    ) -> LLMResponse:
         """LLMに会話履歴を一回送って生成、リクエストを送信し、レスポンスを返す.
 
         Args:
-            messages (list[dict[str, str]]): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
+            messages (ChatHistory): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
             stop_sequences (list[str]): 生成を停止する文字列郡(既定は ["<end_code>"])
             max_tokens (int): 生成する最大トークン数
 
@@ -271,14 +287,14 @@ class LLMProvider(ABC):
     @abstractmethod
     def _build_request(
         self,
-        messages: list[dict[str, str]],
+        messages: ChatHistory,
         stop_sequences: list[str],
         max_tokens: int
     ) -> tuple[str, dict[str, str], str]:
         """(url, headers, body文字列)を組み立てて返す.
 
         Args:
-            messages (list[dict[str, str]]): LLMに送信するメッセージ。
+            messages (ChatHistory): LLMに送信するメッセージ。
             stop_sequences (list[str]): stop_sequences。
             max_tokens (int): 生成する最大トークン数
 
