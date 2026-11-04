@@ -30,7 +30,6 @@ from typing import Any, Protocol, TypeAlias
 from pydantic import BaseModel, ConfigDict
 
 from src.agent.llm.transport.transport import HttpTransport, HttpResponse
-from src.agent.type_aliases import ChatHistory, JsonObject
 
 # Jsonを読み込んだオブジェクト。
 JsonObject: TypeAlias = dict[str, Any]

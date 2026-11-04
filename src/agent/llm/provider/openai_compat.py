@@ -16,7 +16,6 @@ from typing import Any, TypeAlias
 
 from src.agent.llm.provider.provider import LLMProvider, LLMResponse, LLMError, EmptyResponseError
 from src.agent.llm.usage import extract_token_usage
-from src.agent.type_aliases import ChatHistory, JsonObject
 
 # Jsonを読み込んだオブジェクト。
 JsonObject: TypeAlias = dict[str, Any]
@@ -89,8 +88,8 @@ class OpenAICompatProvider(LLMProvider):
         # AttributeErrorは、messageがnullの場合に発生する可能性がある
         # choicesが空: IndexError choicesが存在しない: KeyError
         # choices[0]がnull: TypeError
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as e:
-            raise LLMError(f"Failed to parse response: {e}: {body[:500]}") from e
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as error:
+            raise LLMError(f"Failed to parse response: {error}: {body[:500]}") from error
 
         # レスポンスにtextが空の場合、reasoningやreasoning_contentを代替として使用する
         if not (isinstance(text, str) and text.strip()):
@@ -104,10 +103,10 @@ class OpenAICompatProvider(LLMProvider):
         # それでもtextが空の場合使えないので、消費したトークンを持たせたEmptyResponseErrorを発生させる
         # ResilientClientで捕まえて計上する。
         if not (isinstance(text, str) and text.strip()):
-            text = f"empty content from provider={self.config.name} model={self.model} {body[:300]}",
+            error_message = f"empty content from provider={self.config.name} model={self.model} {body[:300]}"
             wasted_input_tokens, wasted_output_tokens = extract_token_usage(data, "")
             raise EmptyResponseError(
-                message=text,
+                message=error_message,
                 input_tokens=wasted_input_tokens,
                 output_tokens=wasted_output_tokens,
             )
