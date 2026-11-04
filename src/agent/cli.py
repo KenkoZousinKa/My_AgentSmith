@@ -46,7 +46,7 @@ from mcp_tools_swebench import META_KEY
 ToolFunctions: TypeAlias = dict[str, Callable[..., Any]]
 # 提出物を受理する前に検証する関数の型。提出物を受け取り、合否 / 不合格の理由を返す。
 # SolutionVerifier = Callable[[str], tuple[bool, str]]
-# タスク入力のモデル{MBPPTaskInput / SWEBenchTaskInput}。_run_safetyを共通で使うための型。
+# タスク入力のモデル{MBPPTaskInput / SWEBenchTaskInput}。_run_safelyを共通で使うための型。
 _Task = TypeVar("_Task", bound=BaseModel)
 # MBPPの可視テストを置くサンドボックスの名前空間での変数名。
 _TASK_TESTS_NAME = "TASK_TESTS"
@@ -56,7 +56,7 @@ _VERIFY_DETAIL_CHARS = 300
 _HINTS_MAX_CHARS = 4000
 
 # この環境変数が1の時、AGENT_CRASHのtracebackを出す。
-_DEBUG_ENV_NAME = "AGENT_SMITH_DEBIG"
+_DEBUG_ENV_NAME = "AGENT_SMITH_DEBUG"
 # 終了コード。128 + シグナル番号で終了コードを返す。
 _EXIT_CODE_KEYBOARD_INTERRUPT = 130  # 128 + SIGINT(2)
 _EXIT_CODE_TERMINATED = 143  # 128 + SIGTERM(15)
@@ -78,7 +78,7 @@ def run_mbpp_agent(
 ) -> None:
     """MBPPタスクを1問解くエージェントを実行し、SolutionOutputを書き出す.
 
-    責任は制限時間を数え始める。solveを作って_run_safety()を実行する。
+    責任は制限時間を数え始める。solveを作って_run_safely()を実行する。
 
     Args:
         task_file_path (str): MBPPタスクファイルのパス
@@ -129,7 +129,7 @@ def run_swe_agent(
 ) -> None:
     """SWEタスクを1問解くエージェントを実行し、SolutionOutputを書き出す.
 
-    責任は制限時間を数え始める。solveを作って_run_safety()を実行する。
+    責任は制限時間を数え始める。solveを作って_run_safely()を実行する。
     Dockerコンテナの起動と片付けはMCPServer(mcp_tools_swebench)が担う。
     Agentはinit_metaでDockerイメージ名 / eval_script(評価スクリプト) / リポジトリの場所をMCPServerに渡す。
 
@@ -199,7 +199,7 @@ def _run_safely(
     # タスクファイルを読み込む前に失敗した場合のtask_id
     task_id = "unknown"
     interrupted: BaseException | None = None
-    # SIGTERMの既定の動作を無効化し、_raise_terminated()を呼ぶようにする。
+    # SIGTERMの既定の動作(即終了)を無効化し、_raise_terminated()を呼ぶようにする。
     previous_handler = signal.signal(signal.SIGTERM, _raise_terminated)
 
     # 外側のtry: Ctrl+C / SIGTERMでの中断を受け止める。内側の処理中に来てもここで受ける。
@@ -232,7 +232,7 @@ def _run_safely(
     except (KeyboardInterrupt, _Terminated) as error:
         interrupted = error
         error_type = type(error).__name__
-        print(f"Interrupted: {error_type}, file=sys.stderr")
+        print(f"Interrupted: {error_type}", file=sys.stderr)
         solution_output = _failed_solution(
             task_id=task_id,
             benchmark=benchmark,
@@ -240,7 +240,7 @@ def _run_safely(
             error=f"INTERRUPTED: {error_type}"
         )
 
-    # ここで元に戻すのはなんでだ？逆になんでここまで変えてた？
+    #  変更したシグナルを元に戻す。
     finally:
         signal.signal(signal.SIGTERM, previous_handler)
 
@@ -296,7 +296,7 @@ def _write_solution(output_file_path: str, solution_output: SolutionOutput) -> N
         )
     except OSError as error:
         print(f"Error: cannot write the solution to {output_file_path}: {error}", file=sys.stderr)
-        # なんでNone?
+        # OSErrorは処理済みのためfrom Noneで投げなおす。
         raise SystemExit(_EXIT_CODE_WRITE_FAILED) from None
 
 
@@ -640,15 +640,15 @@ def _build_client(
         ResilientLLMClient: 構築されたResilientLLMClient
 
     Raises:
-        ValueError: 指定されたmodel_name / provider_urlがproviders.jsonにない場合
-        FileNotFoundError: 指定されたmodel_name / provider_urlがproviders.jsonにない場合。
+        ValueError: 指定されたmodel_name / provider_urlがproviders.jsonにない場合。
+        FileNotFoundError: provider_file_pathのファイルがない、または空の場合。
     """
     # ================== プロバイダ解決 ==================
     original_providers = load_providers(providers_file_path)
     # CLIで指定されたmodel_name / provider_urlを先頭にし、残りはproviders.jsonのpriority順に並べる
     # providers.jsonにないモデル / URLは、ValueErrorで止める。
     providers = order_providers(original_providers, model_name, provider_url)
-    # raise ValueErrorが登ってくるのをrun_safety()で捕まえてSolutionOutputに書き出す。
+    # raise ValueErrorが登ってくるのをrun_safely()で捕まえてSolutionOutputに書き出す。
 
     # 時間制限を使い果たさないようにデッドラインを計算
     # バックオフ待機はこの残予算にクランプされる
