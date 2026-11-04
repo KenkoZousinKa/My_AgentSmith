@@ -26,13 +26,13 @@ def agent_mbpp(
     Args:
         task_file (str): MBPPタスクファイルのパス
         output (str): SolutionOutputを書き出すJSONファイルのパス
-        model_name (str): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用
-        provider_url (str): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用
+        model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用
+        provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用
         providers_file_path (str): プロバイダの設定ファイルのパス。
         transport (str): 使用するMCPサーバーとの通信方法。"stdio"か"http"
         url (str | None): httpの時のMCPサーバーのURL。
         command (str | None):stdioの時にMCPサーバーを起動するコマンド。
-        **extra_args: object: fireが解釈できなかった余分な引数。存在する場合はエラーを発生させる。
+        **extra_args (object): fireが解釈できなかった余分な引数。存在する場合はエラーを発生させる。
 
     Raises:
         SystemExit: 知らない引数が渡された場合
