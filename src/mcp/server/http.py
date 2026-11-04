@@ -1,3 +1,5 @@
+"""Server側のhttp接続クラス."""
+
 import socket
 import http
 import uuid

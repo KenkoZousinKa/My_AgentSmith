@@ -274,6 +274,10 @@ def main() -> None:
             server.run(HttpServerTransport(host=args.host, port=args.port))
         else:
             server.run()
+    except Exception as e:
+        print(f"[Server] Error: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("[Server] Interrupted by user.", file=sys.stderr)
     finally:
         executor.close()
         print("[Server] MCP_TOOLS_SWEBENCHを終了しました。", file=sys.stderr)

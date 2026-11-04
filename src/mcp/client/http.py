@@ -1,4 +1,4 @@
-"""クライアントのhttp接続クラス."""
+"""Client側のhttp接続クラス."""
 
 import http.client
 import subprocess
@@ -33,11 +33,19 @@ class HttpClientTransport:
     """
 
     def __init__(self, url: str = DEFAULT_URL, timeout: int = 130, command: str | None = None, start_timeout: float = 10) -> None:
+        """HttpClientTransportの初期化.
+
+        Args:
+            url (str): 接続先URL
+            timeout (int): 接続タイムアウト時間
+            command (str | None): 規定サーバーを起動するコマンド
+            start_timeout (float): サーバー起動待ち時間
+        """
         self.process: subprocess.Popen[bytes] | None = None  # 規定serverを立ち上げた際のプロセスオブジェクト
         self.url: str = url
         self.command: str | None = command
 
-        # urlから接続パーツを作成
+        # urlからhost, path, portを取得
         parts: SplitResult = urlsplit(url)
         if parts.scheme != "http" or parts.hostname is None:
             raise ValueError(f"http://ホスト:ポート/パス の形で指定してください: {url!r}")
@@ -54,43 +62,65 @@ class HttpClientTransport:
         self.inbox: deque[rpc.JSONRPCMessage] = deque()  # Clientが処理すべきメッセージ
 
     def open(self) -> None:
-        """サーバーが起動しているか確かめて、接続が確立されなければ規定サーバーを起動する."""
+        """サーバーとの接続を行う.
+
+        接続がされないかつ規定サーバーの起動コマンドが指定されていれば、規定サーバーを起動する.
+        """
+        # すでに接続可能であれば何もしない
         if self._is_connect():
             return
 
+        # デフォルトサーバーへのURLではない または 規定サーバーの起動コマンドが指定されていなければ接続できない
         if self.url != DEFAULT_URL or self.command is None:
             raise mcp.MCPConnectionError(f"サーバーに繋がりません  URL: {self.url}")
 
-        print("サーバーが見つからないため指定サーバーを立ち上げます", file=sys.stderr)
+        print(f"サーバーが見つからないため指定されたサーバーを立ち上げます。 command: {self.command}", file=sys.stderr)
         try:
+            # 規定サーバーを起動する
             self.process = subprocess.Popen(args=shlex.split(self.command))
         except OSError as e:
+            # コマンドが存在しない場合など
             raise mcp.MCPConnectionError(f"提供サーバーを起動できませんでした。 {self.command} {e}") from e
+
+        # 設定したstar_timeoutの時間まで0.1秒ごとに接続を試みる
         deadline = time.monotonic() + self.start_timeout
         while not self._is_connect():
             if self.process.poll() is not None:
                 raise mcp.MCPConnectionError(f"提供サーバーが起動直後に終了しました: {self.command}")
+            # deadlineを過ぎたらサーバーを閉じてerrorを吐く
             if time.monotonic() > deadline:
                 self.close()
                 raise mcp.MCPConnectionError(f"提供サーバーが {self.start_timeout} 秒以内に待ち受けを始めませんでした: {self.command}")
             time.sleep(0.1)
 
     def _is_connect(self) -> bool:
-        """短い待ち時間でつないでみて、待ち受けているか確かめる."""
+        """指定のhost, portに接続できる場合はTrueを返す.出来ない場合はFalseを返す."""
+        # 接続先を設定したconnオブジェクトを作成する
         conn = http.client.HTTPConnection(self.hostname, self.port, timeout=1)
         try:
+            # 接続を試みる。host, portに接続できない、1秒以内に応答がない等はOSErrorが発生する
             conn.connect()
             return True
         except OSError:
             return False
+        # テストだけのため閉じる
         finally:
             conn.close()
 
     def _new_connection(self) -> http.client.HTTPConnection:
+        """新しいHTTPConnectionオブジェクトを作成して返す.
+
+        Returns:
+            http.client.HTTPConnection: 新しいHTTPConnectionオブジェクト
+        """
         return http.client.HTTPConnection(self.hostname, self.port, timeout=self.timeout)
 
     def send(self, message: rpc.JSONRPCMessage) -> None:
-        """メッセージを POST し、返事を待ち行列か self.stream に入れる."""
+        """JSON-RPCメッセージをPOSTし、返事を待ち行列か self.stream に入れる.
+
+        Args:
+            message (rpc.JSONRPCMessage): 送信するJSON-RPCメッセージ
+        """
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",

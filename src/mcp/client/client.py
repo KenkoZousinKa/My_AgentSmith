@@ -132,7 +132,7 @@ class MCPClient:
             mcp.MCPProtocolError: サーバーから不正なメッセージを受信した場合
             mcp.MCPError: サーバーからエラー応答が返ってきた場合
         """
-        # JSON-RPCリクエストを作成
+        # JSON-RPCリクエストを作成。idはuuidで作成される
         request = rpc.JSONRPCRequest(jsonrpc=rpc.JSONRPC_VERSION, id=uuid.uuid4().hex,
                                      method=method)
         # paramsをjsonに変換してリクエストに入れる

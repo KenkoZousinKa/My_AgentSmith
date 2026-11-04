@@ -96,11 +96,17 @@ def main() -> None:
     args = parser.parse_args()
 
     print("[Server] MCP_TOOLS_MBPPを起動します。", file=sys.stderr)
-    if args.transport == "http":
-        server.run(HttpServerTransport(host=args.host, port=args.port))
-    else:
-        server.run()
-    print("[Server] MCP_TOOLS_MBPPを終了しました。", file=sys.stderr)
+    try:
+        if args.transport == "http":
+            server.run(HttpServerTransport(host=args.host, port=args.port))
+        else:
+            server.run()
+    except Exception as e:
+        print(f"[Server] Error: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("[Server] Interrupted by user.", file=sys.stderr)
+    finally:
+        print("[Server] MCP_TOOLS_MBPPを終了しました。", file=sys.stderr)
 
 
 if __name__ == "__main__":

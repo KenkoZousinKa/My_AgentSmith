@@ -1,4 +1,4 @@
-"""MCPClientの標準入出力を使ったTransportクラス."""
+"""Client側のstdio接続クラス."""
 import time
 import shlex
 import subprocess
