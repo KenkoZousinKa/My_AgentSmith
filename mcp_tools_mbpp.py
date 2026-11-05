@@ -40,12 +40,12 @@ def run_tests(code: str, test_list: list[str]) -> str:
     except Exception as e:
         return json.dumps({"success": False, "message": type(e).__name__, "output": str(e)})
 
-    # 3. json形式のstrにして返す。
+    # 3. 成功したらjson形式のstrにして返す。
     return json.dumps({"success": True, "message": "passed", "output": result.stdout + result.stderr})
 
 
 def _enrich(stmt: str) -> str:
-    """'assert A == B' に失敗時の値表示（got / expected）を付ける."""
+    """Assert文を編集して、失敗時に got / expected を表示する形式にする."""
     try:
         node = ast.parse(stmt).body[0]
         # Assert文であり、比較されているか
