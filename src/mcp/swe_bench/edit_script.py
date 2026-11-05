@@ -1,8 +1,8 @@
 """edit_file がコンテナの中で実行する Python スクリプト.
 
-使い方: python3 -c EDIT_SCRIPT <filepath> <old_strのbase64> <new_strのbase64>
-    3つの引数はすべて shlex.quote する（new_str が空のとき base64 も空になり、quote しないと引数が消える）
-exit code: 0 成功 / 1 失敗（どちらも理由は stdout に1行）
+    例. python3 -c EDIT_SCRIPT <filepath> <old_strのbase64> <new_strのbase64>
+    3つの引数はすべてshlex.quoteで囲んで渡す。
+exit code: 0 成功 / 1 失敗（詳細をstdoutに1行出力する）
 """
 
 EDIT_SCRIPT = r'''
