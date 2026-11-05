@@ -153,7 +153,7 @@ class MCPClient:
             # errorかつ自分が送ったリクエストのIDと一致する場合
             if isinstance(msg, rpc.JSONRPCError) and msg.id == request.id:
                 raise mcp.MCPError(msg.error.code, msg.error.message, msg.error.data)
-            # サーバーからのリクエストに応答
+            # サーバーからのリクエストに応答(debug用)
             if isinstance(msg, rpc.JSONRPCRequest):
                 self._answer_server_request(msg)
             # それ以外（通知、他の id の応答）は読み飛ばす

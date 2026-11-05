@@ -7,7 +7,7 @@ from src.mcp.models import jsonrpc as rpc
 
 
 class StdioServerTransport:
-    """clientとの接続を標準入出力で行うTransportクラス."""
+    """Clientとの接続を標準入出力で行うTransportクラス."""
     def serve(self, handle: Callable[[str], rpc.JSONRPCResponse | rpc.JSONRPCError | None]) -> None:
         """標準入力からリクエストを受け取り、標準出力へレスポンスを返すループを開始する.
 

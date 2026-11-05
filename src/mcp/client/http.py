@@ -121,6 +121,7 @@ class HttpClientTransport:
         Args:
             message (rpc.JSONRPCMessage): 送信するJSON-RPCメッセージ
         """
+        # HTTPリクエストのヘッダーを作成する。JSONとSSEに対応するためのヘッダー
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
@@ -129,24 +130,35 @@ class HttpClientTransport:
             headers["Mcp-Session-Id"] = self.session_id
         if self.protocol_version is not None:
             headers["MCP-Protocol-Version"] = self.protocol_version
+
+        # HTTPリクエストのボディを作成する
         body = message.model_dump_json(by_alias=True, exclude_unset=True).encode("utf-8")
 
         conn = self._new_connection()
         try:
+            # HTTPリクエストを送信する。POSTメソッドでBodyにJSON-RPCを含める
             conn.request("POST", self.path, body=body, headers=headers)
-            resp = conn.getresponse()
+            resp = conn.getresponse()  # timeoutまで応答を待つ
             self._handle_response(resp)
         except (OSError, http.client.HTTPException) as e:
             conn.close()
             raise mcp.MCPConnectionError(f"{self.url} と通信できません: {e}") from e
 
     def _handle_response(self, resp: http.client.HTTPResponse) -> None:
-        """ステータスと Content-Type を見て、メッセージを待ち行列か self.stream に入れる."""
+        """ステータスと Content-Type を見て、メッセージを待ち行列か self.stream に入れる.
+
+        Content-Typeが application/json の場合はJSON-RPCメッセージをself.inboxに入れ、
+        text/event-stream の場合は self.stream にセットする。
+
+        Args:
+            resp (http.client.HTTPResponse): サーバからのHTTPレスポンス
+        """
+        # セッションIDはサーバーが発行する
         session_id = resp.getheader("Mcp-Session-Id")
         if session_id is not None:
             self.session_id = session_id
 
-        # 202
+        # 202 受理したが返す応答はない場合(通知など)
         if resp.status == http.HTTPStatus.ACCEPTED:
             resp.read()  # 読み残しを防ぐ
             resp.close()  # socketを閉じる
@@ -154,60 +166,88 @@ class HttpClientTransport:
 
         # not 200
         if resp.status != http.HTTPStatus.OK:
-            body = resp.read().decode("utf-8", errors="replace")  # replace文字化けを防ぐ
+            body = resp.read().decode("utf-8", errors="replace")  # replace: 文字化けを防ぐ
             resp.close()
+            # 404
             if resp.status == http.HTTPStatus.NOT_FOUND and self.session_id is not None:  # SessionIDが違っていた
                 self.session_id = None
                 raise mcp.MCPConnectionError("サーバーがセッションを知りません（404）。サーバーが再起動した可能性があります")
-            raise mcp.MCPConnectionError(f"予期しない返事です。Code: {resp.status} Body: {body[:200]!r}")  # bodyが長すぎでもカットする
+            raise mcp.MCPConnectionError(f"予期しない返事です。Code: {resp.status} Body: {body[:200]!r}")  # bodyは長すぎてもカットする
 
         # 200
-        content_type = (resp.getheader("Content-Type") or "").split(";")[0].strip().lower()  # 追加のパラメータ(;)を外す
+        # エンコード方式などの情報を捨てる
+        content_type = (resp.getheader("Content-Type") or "").split(";")[0].strip().lower()
+        # JSON (JSON-RPC)
         if content_type == "application/json":
             body = resp.read().decode("utf-8")
             resp.close()
-            self.inbox.append(self._parse(body))
+            self.inbox.append(self._parse(body))  # JSON-RPC メッセージを待ち行列に追加
+        # SSE (Server-Sent Events)
         elif content_type == "text/event-stream":
-            if self.stream is not None:  # 読みかけのstreamを消す
+            if self.stream is not None:  # 読みかけのrespを消す
                 self.stream.close()
-            self.stream = resp  # SSEなので後で_respが読む
+            self.stream = resp  # 後で読むようにレスポンスオブジェクトを保存
+        # 非対応のContent-Type
         else:
             resp.close()
-            raise mcp.MCPProtocolError(f"想定外の Content-Type です: {content_type!r}")
+            raise mcp.MCPProtocolError(f"非対応の Content-Type です: {content_type!r}")
 
     def _parse(self, text: str) -> rpc.JSONRPCMessage:
-        """JSON の文字列を JSON-RPC のメッセージに変換する."""
+        """JSON の文字列をJSON-RPCメッセージオブジェクトに変換する.
+
+        Args:
+            text: JSON の文字列
+
+        Returns:
+            JSON-RPC メッセージオブジェクト
+        """
         try:
             return rpc.jsonrpc_message_adapter.validate_json(text)
         except ValidationError as e:
             raise mcp.MCPProtocolError(f"サーバから不正なメッセージを受信しました。{text!r}") from e
 
     def receive(self) -> rpc.JSONRPCMessage:
-        """次のメッセージを1件返す。待ち行列が空なら、読みかけの SSE から1件読む."""
+        """次のメッセージを1件返す。待ち行列が空なら、読みかけの SSE から1件読む.
+
+        完結しているのでJSON-RPCを優先的に返す。
+        SSEのメッセージもデコード後はJSON-RPC形式のメッセージになる。
+
+        Returns:
+            JSON-RPC メッセージオブジェクト
+        """
+        # JSON-RPC メッセージがあれば返す
         if self.inbox:
             return self.inbox.popleft()
+        # SSE からのメッセージがあれば返す
         if self.stream is not None:
             try:
                 data = self._read_event(self.stream)
             except (OSError, http.client.HTTPException) as e:
                 self._close_stream()
                 raise mcp.MCPConnectionError(f"SSE の受信中に接続が切れました: {e}") from e
+            # SSE から読み取ったデータがあれば返す
             if data is not None:
                 return self._parse(data)
             self._close_stream()                           # SSE が終わった
         raise mcp.MCPConnectionError("サーバーから、待っているメッセージが届いていません")
 
     def _read_event(self, stream: http.client.HTTPResponse) -> str | None:
-        """SSE から次のイベントの data を1件分読む。本文が終わったら None."""
+        """SSE から次のイベントのdataを1件返す本文が終わったら Noneを返す.
+
+        Args:
+            stream: HTTPResponse オブジェクト
+        Returns:
+            SSE の次のイベントの data 部分の文字列。本文が終わったら None。
+        """
         data_lines: list[str] = []
         while True:
-            raw = stream.readline()  # OSから1行だけ受け取る
+            raw = stream.readline()  # OSから1行だけ受け取る。終了時は空が返る
             if not raw:                                   # 本文の終わり
                 return "\n".join(data_lines) if data_lines else None
-            line = raw.decode("utf-8").rstrip("\r\n")
+            line = raw.decode("utf-8").rstrip("\r\n")     # １行は"\r'n"で囲われている
             if line == "":                                # 空行 = イベントの終わり
                 if data_lines:
-                    return "\n".join(data_lines)
+                    return "\n".join(data_lines)          # イベントの data 部分を返す
                 continue                                  # data の無いイベント（コメントだけなど）は飛ばす
             if line.startswith("data:"):
                 value = line[len("data:"):]
