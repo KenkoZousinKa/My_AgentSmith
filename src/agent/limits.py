@@ -1,14 +1,28 @@
 """反復回数 / トークン / 時間 などのハード制限を監視するモジュール.
 
 ループの先頭のガードで反復数、累積入出力トークン、経過時間、1反復のマージンを判定。
-超過、または超過しそうならStopReasonを返しOrchestraterにループを終了させる。
+超過、または超過しそうならStopReasonを返しOrchestratorにループを終了させる。
 各LLM呼び出しのあとはrecord_usageで累積カウンタを更新するだけで判定はしない。
-トークン制限は1タスクの全反復で累積(reasoning込)、時間経過はSIGKILLで全損するので事前ガード
+トークン制限は1タスクの全反復で累積(reasoning込)、
+時間切れはSIGKILLで全損するのでmergin分を事前ガード、
 max_tokensクランプ用にremaining_output_tokensを返す。
+- 下記を提供
+StopReason
+LimitTracker
+    def start_iteration()
+        ループの先頭で制限チェック
+    def elapsed_seconds()
+        タスク開始からの経過時間を返す
+    def cancel_iteration()
+        進めた反復カウンタを1戻す
+    def record_usage()
+        LLM呼び出し後、累積トークン数を更新する
+    def remaining_output_tokens()
+        この反復で使用可能な残り出力トークン数を返す
 """
 import time
-from enum import Enum
 from collections.abc import Callable
+from enum import Enum
 
 from src.config.settings import Limits
 
@@ -25,25 +39,26 @@ class StopReason(str, Enum):
 
 
 class LimitTracker:
-    """1タスク分のハード制限カウンタを保持し、ループの先頭で判定する。
+    """1タスク分のハード制限カウンタを保持し、ループの先頭で判定する.
 
     Attributes:
-        iterations (int): 現在の反復回数.
-        total_input_tokens (int): 現在の累積入力トークン数.
-        total_output_tokens (int): 現在の累積出力トークン数
+        iterations (int): 現在の反復回数。
+        total_input_tokens (int): 現在の累積入力トークン数。
+        total_output_tokens (int): 現在の累積出力トークン数。
     """
 
     def __init__(
-        self, limits: Limits,
+        self,
+        limits: Limits,
         now: Callable[[], float] = time.monotonic,
         start_time: float | None = None
     ) -> None:
         """トラッカーを初期化し、開始時刻を記録する.
 
         Args:
-            limits (Limits): 注入するハード制限値.
-            now (Callable[[], float], optional): 現在時刻を返す関数. デフォルトはtime.monotonic.
-            start_time (float | None, optional): 開始時刻. デフォルトはNoneで、now()を呼び出して取得する.
+            limits (Limits): 注入するハード制限値。
+            now (Callable[[], float], optional): 現在時刻を返す関数。デフォルトはtime.monotonic。
+            start_time (float | None, optional): 開始時刻. デフォルトはNoneで、now()を呼び出して取得する。
         """
         self._limits = limits
         self._now = now
@@ -52,23 +67,17 @@ class LimitTracker:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
 
-    def elapsed_seconds(self) -> float:
-        """タスク開始からの経過時間を秒単位で返す.
-
-        Returns:
-            float: 経過時間（秒）.
-        """
-        return self._now() - self._start_time
-
     def start_iteration(self) -> StopReason | None:
         """次の生成の前にループの先頭で呼び出し、ハード制限を判定する.
 
-        反復数、累積トークンは既に制限異常かどうか
-        時間は経過時間 + time_margin_secondsがtotal_time_limit_secondsを超えるかどうかで判定する。
-        (時間は1反復のmarginを考慮して、超過しそうなら止める)
-        続行時は反復カウンタを1進める。
         判定順は
-        iterations > total_input_tokens > total_output_tokens > elapsed_secondsの順で、最初に超過したものを返す。
+            反復(iterations) -> 入力(total_input_tokens) ->
+            出力(total_output_tokens) -> 時間(elapsed_seconds)
+        の順で最初に超過したものを返す。
+        反復数や累積トークンは既に上限以上かどうか
+        時間は経過時間 + time_margin_secがtotal_time_limit_secを超えるかどうかで判定する。
+        (1反復のmarginを考慮して、超過しそうなら止める)
+        続行時は反復カウンタを1進める。
 
         Returns:
             StopReason | None: 超過していればStopReasonを返す。超過していなければNoneを返す。
@@ -84,10 +93,21 @@ class LimitTracker:
         self.iterations += 1
         return None
 
+    def elapsed_seconds(self) -> float:
+        """タスク開始からの経過時間を秒単位で返す.
+
+        Returns:
+            float: 経過時間(秒)。
+        """
+        return self._now() - self._start_time
+
     def cancel_iteration(self) -> None:
         """start_iteration()で進めた反復カウンタを1戻す.
 
-        LLMの応答が得られなかった反復(全プロバイダで失敗)はstepも反復にも数えない。
+        LLMの応答が得られなかった反復
+            全プロバイダで失敗
+            送る前に入力の上限で止めた
+        はstepも反復にも数えない。
         """
         if self.iterations > 0:
             self.iterations -= 1
@@ -105,11 +125,11 @@ class LimitTracker:
     def remaining_output_tokens(self) -> int:
         """この反復で使用可能な残り出力トークン数を返す.
 
-        orchestraterがmax_tokensをmin(設定上限、この値)にクランプするために使用する。
+        Orchestratorが入力上限をmin(設定上限、この値)にクランプするために使用する。
         累積出力がmax_output_tokensを超えないようにするための値。
         負にならないように0で下限を設定。
 
         Returns:
-            int: 残り出力トークン数.
+            int: 残り出力トークン数。
         """
         return max(0, self._limits.max_output_tokens - self.total_output_tokens)

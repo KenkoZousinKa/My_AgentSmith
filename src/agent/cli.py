@@ -21,7 +21,7 @@ from typing import Any, TypeAlias, TypeVar
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from src.agent.orchestrator import Orchestrator, SolutionVerifier
+from src.agent.orchestrator import Orchestrator, SolutionVerifier, VerificationResult
 from src.agent.llm.resilient_client import ResilientLLMClient
 from src.agent.llm.transport.requests_transport import RequestsTransport
 from src.agent.extractor.composite_extractor import CompositeCodeExtractor
@@ -45,7 +45,9 @@ from mcp_tools_swebench import META_KEY
 # サンドボックスの名前空間に置くツール{ツール名: 呼び出せる関数}。
 ToolFunctions: TypeAlias = dict[str, Callable[..., Any]]
 # 提出物を受理する前に検証する関数の型。提出物を受け取り、合否 / 不合格の理由を返す。
-# SolutionVerifier = Callable[[str], tuple[bool, str]]
+# SolutionVerifier = Callable[[str], VerificationResult]
+# 提出物を検証した結果。合否 / 不合格の理由
+# VerificationResult(NamedTuple): passed: bool reason: str
 # タスク入力のモデル{MBPPTaskInput / SWEBenchTaskInput}。_run_safelyを共通で使うための型。
 _Task = TypeVar("_Task", bound=BaseModel)
 # MBPPの可視テストを置くサンドボックスの名前空間での変数名。
@@ -579,7 +581,7 @@ def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> SolutionVe
     Returns:
         SolutionVerifier: 提出物を検証する関数。
     """
-    def verify(solution: str) -> tuple[bool, str]:
+    def verify(solution: str) -> VerificationResult:
         """提出物をrun_tests()で検証し(合否、不合格の理由)を返す.
 
         Args:
@@ -589,15 +591,18 @@ def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> SolutionVe
             tuple[bool, str]: (合格かどうか、不合格の理由。合格なら空文字列)
         """
         if not test_list:
-            return True, ""
+            return VerificationResult(passed=True, reason="")
 
         # 可視テストの答えを直書きした提出は可視テストを通っても受理しない。
         hardcoded = hardcoded_answers(solution, test_list)
         if hardcoded:
-            return False, (
-                f"it returns the visible tests' expected values as literals ({', '.join(hardcoded)}). "
-                "The grader calls it with other inputs: implement the general rule instead of "
-                "special-casing the examples"
+            return VerificationResult(
+                passed=False,
+                reason=(
+                    f"it returns the visible tests' expected values as literals ({', '.join(hardcoded)}). "
+                    "The grader calls it with other inputs: implement the general rule instead of "
+                    "special-casing the examples"
+                )
             )
 
         # 名前空間のTASK_TESTSはLLMが書き換えられるのでテストはリテラルで渡す。
@@ -611,9 +616,12 @@ def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> SolutionVe
         )
         stdout = (sandbox.run(snippet).stdout or "").strip()
         if "VERIFY_FAIL" in stdout:
-            return False, stdout.split("VERIFY_FAIL", 1)[1].strip()[-_VERIFY_DETAIL_CHARS:]
+            return VerificationResult(
+                passed=False,
+                reason=stdout.split("VERIFY_FAIL", 1)[1].strip()[-_VERIFY_DETAIL_CHARS:]
+            )
 
-        return True, ""
+        return VerificationResult(passed=True, reason="")
 
     return verify
 
