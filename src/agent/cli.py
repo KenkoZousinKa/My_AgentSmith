@@ -588,7 +588,7 @@ def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> SolutionVe
             solution (str): LLMがfinal_answer()で出力した提出物。
 
         Returns:
-            tuple[bool, str]: (合格かどうか、不合格の理由。合格なら空文字列)
+            VerificationResult: (合格かどうか、不合格の理由。合格なら空文字列)
         """
         if not test_list:
             return VerificationResult(passed=True, reason="")

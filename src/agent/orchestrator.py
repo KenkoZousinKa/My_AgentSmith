@@ -31,15 +31,6 @@ from src.config.settings import Limits
 from src.models.output import ExecuteResult, StepMetrics, SolutionOutput
 from src.models.sandbox_base import SandboxBase
 
-# LLMに送るメッセージ１件。{"role": "system / user / assistant", "content": "..."}
-ChatMessage: TypeAlias = dict[str, str]
-# LLMに送る会話の履歴(メッセージを古い順に並べたもの)
-ChatHistory: TypeAlias = list[ChatMessage]
-# 提出物を受理する前に検証する関数の型。提出物を受け取り、合否 / 不合格の理由を返す。
-SolutionVerifier: TypeAlias = Callable[[str], VerificationResult]
-
-_DEFAULT_STOP_SEQUENCES = ["<end_code>"]
-
 
 class VerificationResult(NamedTuple):
     """提出物を検証した結果.
@@ -52,6 +43,16 @@ class VerificationResult(NamedTuple):
     reason: str
 
 
+# 提出物を受理する前に検証する関数の型。提出物を受け取り、合否 / 不合格の理由を返す。
+SolutionVerifier: TypeAlias = Callable[[str], VerificationResult]
+# LLMに送るメッセージ１件。{"role": "system / user / assistant", "content": "..."}
+ChatMessage: TypeAlias = dict[str, str]
+# LLMに送る会話の履歴(メッセージを古い順に並べたもの)
+ChatHistory: TypeAlias = list[ChatMessage]
+
+_DEFAULT_STOP_SEQUENCES = ["<end_code>"]
+
+
 class Orchestrator:
     """1タスク分の Thought -> Code -> Observationのループを制御するOrchestratorクラス."""
     # 入力トークンの見積もりの係数の初期値。超えないために小さめに取る。
@@ -61,9 +62,8 @@ class Orchestrator:
     # メッセージ1件ごとに足すrole / contentのトークン数。
     _TOKENS_PER_MESSAGE = 4
     # 出力の残りが1反復の上限 * この倍率以下になったら提出を促す文をObservationの末尾に追加する。
-    # 2にすると本番だと1反復目の直後に出てしまうので1.0にする。
+    # 2にすると1反復目の直後に出てしまうので1にする。* 1 ならなくても同じでは？
     _BUDGET_WARN_FACTOR = 1
-
 
     def __init__(
         self,
@@ -109,7 +109,7 @@ class Orchestrator:
         - 反復、入力、出力、時間のどれかが上限。
             ループの先頭で止める。errorにStopReason。提出物はbest_solutionか回収したもの。
         - 履歴が長く入力トークンの残りに入らない。
-            往復を1つづつ減らし、長い発話は中央を省く。0往復でも入らなければ送らずにMAX_INPUT_TOKENS。
+            往復を1つずつ減らし、長い発話は中央を省く。0往復でも入らなければ送らずにMAX_INPUT_TOKENS。
             (_fit_window, _window_messages)
         - 入力トークンの見積もりがズレる。
             実際の文字数 / 入力トークンを見て係数を直す。
@@ -119,7 +119,7 @@ class Orchestrator:
         - 全部のプロバイダ、キーで失敗。
             ResilientLLMClientがAllProvidersExhaustedを投げ、LLM_UNAVAILABLE。
         - 提出したコードがない。
-            [NO_CODE]で知らせる。extractorがコードを見つけられない。MBPPは2回続いたら別のプロバイダへ。
+            [NO_CODE]で知らせる。extractorがコードを見つけられない。
         - 提出したコードが崩れてる。
             [MALFORMED_CODE]で知らせる。extractorがコードを直して実行。
         - 提出したコードが同じを繰り返す。
@@ -129,12 +129,13 @@ class Orchestrator:
         - 提出が空、形式違い、検査に落ちる。
             整形 -> 検査 -> 検証し、落ちたら理由付きで知らせる。そのまま出せる形ならbest_solutionに残す。
             (sanitize_submission, submission_rejection, solution_verifier)
-        - トークンの残りが少ない
+        - 出力トークン / 反復回数の残りが少ない
             [BUDGET]で知らせる。今の最善を提出させる。
+        - 提出に至らない反復が続く。
+            コードなし、差し戻し、試しただけのどれでもMBPPは2回続いたら別のプロバイダへ。
         - 提出物がないまま打ち切られた。
             空の提出をなるべく避けるために回収する。SWE-Benchは編集済みのパッチ。回収で例外が出たら空にする。
             (profile.fallback_solution)
-
 
         Args:
             task_id (str): タスク識別子(MBPPのtask_idまたはSWE-benchのinstance_id)
@@ -157,7 +158,7 @@ class Orchestrator:
         # LimitTrackerを初期化し、ステップのメトリクスを保持するリストを作る。
         tracker = LimitTracker(self.limits, start_time=self.start_time)
         steps: list[StepMetrics] = []
-        # 打ち切り時に提出するコードの補を保持する変数。Observationが生成されるたびに更新される。
+        # 打ち切り時に提出するコードの候補を保持する変数。Observationが生成されるたびに更新される。
         # TaskProfileがそのまま提出できると判断したものを入れる。
         best_solution: str = ""
         # {実行したコードの文字列: 実行したstepの番号}。同じコードの再実行指摘用。
@@ -503,7 +504,7 @@ class Orchestrator:
             return f"{observation}\n{budget_note(remaining)}"
 
         # 反復回数のチェック
-        # profole.iteration_warn_at -> MBPP 1 / SWE-Bench 4
+        # profile.iteration_warn_at -> MBPP 1 / SWE-Bench 4
         iterations_left = self.limits.max_iterations - tracker.iterations
         if 0 < iterations_left <= self.profile.iteration_warn_at:
             return f"{observation}\n{iteration_note(iterations_left, self.profile.submit_hint())}"
@@ -597,7 +598,7 @@ class Orchestrator:
         3000文字送って1200トークン使ったと返ってきたら 2.5文字/トークン で今の3.0より小さいので係数を2.5に下げる。
 
         Args:
-            sent (History): このリクエストで送ったメッセージ列
+            sent (ChatHistory): このリクエストで送ったメッセージ列
             response (LLMResponse): このリクエストの応答。報告されたinput tokensとリトライの回数を使う。
         """
         if response.retries or response.input_tokens <= 0:

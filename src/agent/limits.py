@@ -4,7 +4,7 @@
 超過、または超過しそうならStopReasonを返しOrchestratorにループを終了させる。
 各LLM呼び出しのあとはrecord_usageで累積カウンタを更新するだけで判定はしない。
 トークン制限は1タスクの全反復で累積(reasoning込)、
-時間切れはSIGKILLで全損するのでmergin分を事前ガード、
+時間切れはSIGKILLで全損するのでmarginで取った分を事前ガード、
 max_tokensクランプ用にremaining_output_tokensを返す。
 - 下記を提供
 StopReason
@@ -58,7 +58,7 @@ class LimitTracker:
         Args:
             limits (Limits): 注入するハード制限値。
             now (Callable[[], float], optional): 現在時刻を返す関数。デフォルトはtime.monotonic。
-            start_time (float | None, optional): 開始時刻. デフォルトはNoneで、now()を呼び出して取得する。
+            start_time (float | None, optional): 開始時刻。デフォルトはNoneで、now()を呼び出して取得する。
         """
         self._limits = limits
         self._now = now
@@ -116,8 +116,8 @@ class LimitTracker:
         """LLM呼び出し後に累積トークン数を更新する.
 
         Args:
-            input_tokens (int): 直前のLLM呼び出しで使用した入力トークン数.
-            output_tokens (int): 直前のLLM呼び出しで使用した出力トークン数.
+            input_tokens (int): 直前のLLM呼び出しで使用した入力トークン数。
+            output_tokens (int): 直前のLLM呼び出しで使用した出力トークン数。
         """
         self.total_input_tokens += input_tokens
         self.total_output_tokens += output_tokens
@@ -125,7 +125,7 @@ class LimitTracker:
     def remaining_output_tokens(self) -> int:
         """この反復で使用可能な残り出力トークン数を返す.
 
-        Orchestratorが入力上限をmin(設定上限、この値)にクランプするために使用する。
+        Orchestratorが出力上限をmin(設定上限、この値)にクランプするために使用する。
         累積出力がmax_output_tokensを超えないようにするための値。
         負にならないように0で下限を設定。
 
