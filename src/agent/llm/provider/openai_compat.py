@@ -1,4 +1,4 @@
-"""OpenAI互換のAPIを提供するプロバイダを統一的に扱うためのモジュール。
+"""OpenAI互換のAPIを提供するプロバイダを統一的に扱うためのモジュール.
 
 OpenRouter / Groq / Google / NVIDIA / Mistral / cohere / ollama など。
 chat / completions エンドポイントに投げ、choices[0].message.contentとusageを共通のLLMResponseに整形して返す。
@@ -46,7 +46,6 @@ class OpenAICompatProvider(LLMProvider):
             stop_sequences (list[str]): 生成を停止する文字列郡(既定は ["<end_code>"])
             max_tokens (int): 生成する最大トークン数
         """
-
         url = f"{self.config.provider_url.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",

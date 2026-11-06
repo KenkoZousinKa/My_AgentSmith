@@ -134,7 +134,7 @@ def build_observation(result: ExecuteResult) -> str:
 
     Returns:
         str: LLMに返すObservation文字列。
-            [LABELS] 1行要約 \n\n --- stdout --- \n\n (stderr / traceback) --- \n\n --- note ---
+            [LABELS] 1行要約 nn --- stdout --- nn (stderr / traceback) --- nn --- note ---
     """
     statuses = collect_statuses(result)
     return _render_observation(
@@ -157,7 +157,7 @@ def observation_no_code(cut_off_at: int | None = None) -> str:
 
     Returns:
         str: LLMに返すObservation文字列。
-            [NO_CODE] No executable Python code block was found in your message. \n\n --- note ---
+            [NO_CODE] No executable Python code block was found in your message. nn --- note ---
     """
     extra_note = "" if cut_off_at is None else _CUT_OFF_NOTE.format(spent=cut_off_at)
     return _render_observation(

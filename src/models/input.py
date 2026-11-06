@@ -1,3 +1,4 @@
+"""Models for the input of the agent and sandbox."""
 from pydantic import BaseModel, Field
 
 

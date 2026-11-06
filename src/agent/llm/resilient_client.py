@@ -1,4 +1,4 @@
-"""複数プロバイダ、複数キーを束ね、冗長性と耐障害性を提供するLLMクライアント
+"""複数プロバイダ、複数キーを束ね、冗長性と耐障害性を提供するLLMクライアント.
 
 provider(1キーで1リクエスト)の上位レイヤ。
 priorityに応じてprovider内で複数のキーを回し、型付きエラーに応じて
@@ -85,6 +85,7 @@ class AllProvidersExhausted(LLMError):
         input_tokens: int = 0,
         output_tokens: int = 0
     ) -> None:
+        """全プロバイダ・全キーを試しても成功しなかったことを表す例外クラス."""
         super().__init__(message, attempts, retry_after, input_tokens, output_tokens)
         self.attempts = attempts
         self.retry_after = retry_after
@@ -92,7 +93,7 @@ class AllProvidersExhausted(LLMError):
         self.output_tokens = output_tokens
 
     def __str__(self) -> str:
-        """ログを見やすくするためにメッセージのみを返す。"""
+        """ログを見やすくするためにメッセージのみを返す."""
         return str(self.args[0])
 
 
@@ -112,7 +113,7 @@ class ResilientLLMClient:
         time_remaining: Callable[[], float] | None = None,
         logger: logging.Logger | None = None
     ) -> None:
-        """依存を注入して初期化。
+        """依存を注入して初期化.
 
         Args:
             providers (list[ProviderConfig]): プロバイダ設定のリスト。優先度順に並べる。
@@ -314,7 +315,7 @@ class ResilientLLMClient:
         ) from last_error
 
     def _candidates(self) -> list[_Candidate]:
-        """この周回で試す組み合わせのリストを優先度順に返す。
+        """この周回で試す組み合わせのリストを優先度順に返す.
 
         停滞で後回しにしたプロバイダ(rotate())はその後ろに後回しにした古い順で並べる。
         一過性でない失敗を起こした時は、捨てずに最後に回す。
