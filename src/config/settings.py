@@ -89,7 +89,7 @@ class LoggingSettings(BaseModel):
 
 
 class ManualSettings(BaseModel):
-    """ツールマニュアルの詳細度"""
+    """ツールマニュアルの詳細度."""
     model_config = ConfigDict(extra="forbid")
 
     verbosity: str = "concise"

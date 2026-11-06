@@ -35,7 +35,6 @@ class XMLCodeExtractor(CodeExtractor):
         Returns:
             str | None: 変換されたPythonコード。XML呼び出しがなければNone。
         """
-
         lines: list[str] = []
         for tool_name, inner_xml in _INVOKE_PATTERN.findall(llm_output):
             # 関数名として呼び出せない名前(空白入り、予約語など)は無視する。

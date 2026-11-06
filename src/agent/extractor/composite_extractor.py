@@ -13,11 +13,11 @@ class CompositeCodeExtractor(CodeExtractor):
     def __init__(self, extractors: list[CodeExtractor] | None = None) -> None:
         """抽出器の優先順を決めて初期化する.
 
-            Args:
-                extractors (list[CodeExtractor] | None): 試す抽出器のリスト。
-                NoneならPython -> JSON/Hermes -> XML -> ReActの 順に試す。
-                Pythonブロックが主系なので最優先
-            """
+        Args:
+            extractors (list[CodeExtractor] | None): 試す抽出器のリスト。
+            NoneならPython -> JSON/Hermes -> XML -> ReActの 順に試す。
+            Pythonブロックが主系なので最優先
+        """
         self.extractors: list[CodeExtractor] = extractors if extractors is not None else [
                     PythonCodeExtractor(),
                     JSONHermesCodeExtractor(),

@@ -1,4 +1,4 @@
-"""LLMプロバイダの抽象クラスと設定情報を定義するモジュール。
+"""LLMプロバイダの抽象クラスと設定情報を定義するモジュール.
 
 LLMに1リクエストを送って結果 / 例外を返すだけ。
 generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
@@ -114,7 +114,7 @@ class EmptyResponseError(LLMError):
         self.output_tokens = output_tokens
 
     def __str__(self) -> str:
-        """ログを見やすくするためにメッセージのみを返す。"""
+        """ログを見やすくするためにメッセージのみを返す."""
         return str(self.args[0])
 
 
@@ -229,11 +229,12 @@ class LLMGenerator(Protocol):
         stop_sequences: list[str],
         max_tokens: int
      ) -> LLMResponse:
+        """LLMに会話履歴を一回送って生成、リクエストを送信し、レスポンスを返す."""
         ...
 
 
 class LLMProvider(ABC):
-    """LLMプロバイダの抽象クラス。
+    """LLMプロバイダの抽象クラス.
 
     generate()にリクエスト組み立て -> 送信 -> 計測 -> レスポンス整形の共通フローを実装し、
     プロバイダの固有差分を _build_request() / _parse_response()のフックに実装する。

@@ -13,11 +13,13 @@ class UrllibTransport(HttpTransport):
 
     def post(self, url: str, headers: dict[str, str], data: str, timeout: float = 60.0) -> HttpResponse:
         """HTTP POSTリクエストを送信する.
+
         Args:
             url (str): リクエスト先URL
             headers (dict[str, str]): リクエストヘッダ
             data (str): リクエストボディ
             timeout (float): タイムアウト秒数
+
         Returns:
             HttpResponse: timeout / 接続断など、応答そのものがない場合。
         """

@@ -229,7 +229,7 @@ class MBPPProfile(TaskProfile):
         return strip_code_fences(raw)
 
     def submission_rejection(self, candidate: str) -> str | None:
-        """採点側の実行方式で例外を投げない関数のソースか検査する。
+        """採点側の実行方式で例外を投げない関数のソースか検査する.
 
         Args:
             candidate (str): 提出物の文字列。
@@ -240,7 +240,7 @@ class MBPPProfile(TaskProfile):
         return mbpp_rejection(candidate)
 
     def is_fallback_candidate(self, code: str) -> bool:
-        """そのまま提出できる形のコードかを返す。
+        """そのまま提出できる形のコードかを返す.
 
         Args:
             code (str): 今の反復で実行したコード、または差し戻した提出物。
