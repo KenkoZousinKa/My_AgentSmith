@@ -217,8 +217,8 @@ class Sandbox:
             if not ready:
                 self.reset()
                 return ExecuteResult(
-                    error="timed out and the worker was restarted: all"
-                          "Names from previous steps are gone - redefine "
+                    error="timed out and the worker was restarted: all "
+                          "names from previous steps are gone - redefine "
                           "anything you still need.",
                     timeout=True
                 )
@@ -361,16 +361,7 @@ class Sandbox:
             reply["error"] = f"unknown tool {name!r}"
         else:
             try:
-                # sympy-18189: config.max_output_charsを超える出力は切り詰められてるので、
-                # get_patch()の戻り値をそのまま提出させるためにツールの戻り値をそのまま返すようにする。
                 reply["result"] = handler(**(message.get("arguments") or {}))
-                # raw = handler(**(message.get("arguments") or {}))
-                # if isinstance(raw, str):
-                #     raw, was_cut = _truncate(
-                #         raw, self.config.max_output_chars
-                #     )
-                #     self._tool_truncated = self._tool_truncated or was_cut
-                # reply["result"] = raw
             except Exception as exc:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
         try:

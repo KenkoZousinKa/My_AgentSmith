@@ -54,7 +54,7 @@ def tool_proxy(
 
 
 def scrub_environment() -> None:
-    """Drop every inhgerited envrionment variable in the child.
+    """Drop every inherited envrionment variable in the child.
 
     Scrubs the .env from the namespace created from the agent process.
     """
@@ -230,7 +230,7 @@ def truncate(text: str, limit: int) -> tuple[str, bool]:
 def send(fd: int, message: dict[str, Any]) -> None:
     """Write one length-prefixed JSON message.
 
-    fd is the legnth of the message.
+    fd is the length of the message.
     """
     payload = json.dumps(message).encode("utf-8")
     data = memoryview(struct.pack("!I", len(payload)) + payload)
@@ -258,7 +258,7 @@ def recv(fd: int) -> dict[str, Any]:
 
 
 def py_name(name: str) -> str:
-    """Check if name is a callable MCP tool."""
+    """Sanitize name."""
     cleaned = re.sub(r"\W", "_", name)
     return f"tool_{cleaned}" if cleaned[:1].isdigit() else cleaned
 

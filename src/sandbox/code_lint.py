@@ -30,7 +30,7 @@ def strip_provided_imports(
 ) -> tuple[str, list[str]]:
     """Drop 'import <name>' for names already live in the sandbox.
 
-    Modles traineed on other frameworks write 'import json, run_tests'.
+    Models trained on other frameworks write 'import json, run_tests'.
     Tools (and final_answer) are not modules, so the import raises and
     kills the whole snippet. Remove only the provided names from plain
     'import' statements, keep the rest of the same statement, and never
@@ -77,7 +77,7 @@ class _Checker(ast.NodeVisitor):
         authorized: frozenset[str],
         tool_names: frozenset[str] = frozenset()
     ) -> None:
-        """Record the allowlist, the tool nams, and any rejections."""
+        """Record the allowlist, the tool names, and any rejections."""
         self.authorized: frozenset[str] = authorized
         self.tool_names = tool_names
         self.errors: list[str] = []
@@ -130,7 +130,7 @@ class _Checker(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:  # noqa: N802
-        """Check names, letting injectted tools shadow blocked bultins.
+        """Check names, letting injected tools shadow blocked bultins.
 
         An unknown MCP server may expose a tools that aren't allowed.
         """
