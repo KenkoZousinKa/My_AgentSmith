@@ -1,4 +1,4 @@
-"""mcp_tools_mbpp.py"""
+"""mcp_tools_mbpp.py."""
 
 import ast
 import sys
@@ -40,12 +40,12 @@ def run_tests(code: str, test_list: list[str]) -> str:
     except Exception as e:
         return json.dumps({"success": False, "message": type(e).__name__, "output": str(e)})
 
-    # 3. json形式のstrにして返す。
+    # 3. 成功したらjson形式のstrにして返す。
     return json.dumps({"success": True, "message": "passed", "output": result.stdout + result.stderr})
 
 
 def _enrich(stmt: str) -> str:
-    """'assert A == B' に失敗時の値表示（got / expected）を付ける."""
+    """Assert文を編集して、失敗時に got / expected を表示する形式にする."""
     try:
         node = ast.parse(stmt).body[0]
         # Assert文であり、比較されているか
@@ -88,6 +88,7 @@ def solve_task(task_definition: str, function_definition: str, tests: str = "") 
 
 
 def main() -> None:
+    """LLMがMBPPテストに使用するツールを提供するサーバーを作成する."""
     parser = argparse.ArgumentParser(description="MBPP MCP Server")
     parser.add_argument("--transport", choices=["stdio", "http"], default="stdio")
     parser.add_argument("--host", default="127.0.0.1")
@@ -95,11 +96,17 @@ def main() -> None:
     args = parser.parse_args()
 
     print("[Server] MCP_TOOLS_MBPPを起動します。", file=sys.stderr)
-    if args.transport == "http":
-        server.run(HttpServerTransport(host=args.host, port=args.port))
-    else:
-        server.run()
-    print("[Server] MCP_TOOLS_MBPPを終了しました。", file=sys.stderr)
+    try:
+        if args.transport == "http":
+            server.run(HttpServerTransport(host=args.host, port=args.port))
+        else:
+            server.run()
+    except Exception as e:
+        print(f"[Server] Error: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("[Server] Interrupted by user.", file=sys.stderr)
+    finally:
+        print("[Server] MCP_TOOLS_MBPPを終了しました。", file=sys.stderr)
 
 
 if __name__ == "__main__":
