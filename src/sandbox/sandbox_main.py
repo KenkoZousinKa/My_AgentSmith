@@ -469,7 +469,6 @@ def main() -> int:
         )
         if args.config else SandboxConfig()
     )
-    # Need try/except for error when starting. Also for keyboard interupt
     try:
         with Sandbox(
             config=config,
@@ -483,8 +482,14 @@ def main() -> int:
             else:
                 return _repl(sandbox)
         return 0
-    except BaseException as error:
-        print(error)
+    except KeyboardInterrupt:
+        print("\nKeyboardInterrupt", file=sys.stderr)
+        return 130
+    except SystemExit as exc:
+        print(f"snippet exited with code {exc.code}", file=sys.stderr)
+        return 1
+    except Exception as error:
+        print(f"{type(error).__name__}: {error}", file=sys.stderr)
         return 1
 
 
