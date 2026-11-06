@@ -1,192 +1,71 @@
-"""MBPP / SWE-Benchエージェントの組み立て、実行を担う配線.
+"""MBPP / SWE-Benchエージェントの組み立て、実行を担う.
 
+agent_mbpp.py / agent_swebench.py から呼ばれ、
+検証済みの引数だけを受け取る関数群
+
+run_mbpp/swe_agent -> run_safely -> solve -> _solve_mbpp/swebench
 タスクファイル読み込み -> 設定 / プロバイダ解決 ->
 Provider / Sandbox / Orchestrator 構築 ->
 実行 -> SolutionOutput 書き出し
-fireはagent_mbpp.py / agent_swebench.py から呼ばれ、
-検証済みの引数だけを受け取る関数郡
-
-run_mbpp / swe _agent -> run_safely -> _solve_mbpp / swebench -> solve -> _solve_mbpp / swebench
-
-- [ ] BaseAgentCliArgsモデルを作成して検証を拡充
 """
+import os
 import signal
 import sys
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 from types import FrameType
-from typing import TypeVar
+from typing import Any, TypeAlias, TypeVar
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from src.agent.extractor.composite_extractor import CompositeCodeExtractor
+from src.agent.orchestrator import Orchestrator, SolutionVerifier, VerificationResult
 from src.agent.llm.resilient_client import ResilientLLMClient
 from src.agent.llm.transport.requests_transport import RequestsTransport
-from src.agent.orchestrator import Orchestrator
+from src.agent.extractor.composite_extractor import CompositeCodeExtractor
 from src.agent.prompt.task_profile.mbpp_profile import MBPPProfile, hardcoded_answers
 from src.agent.prompt.task_profile.swebench_profile import SWEBenchProfile
+
 from src.config.settings import load_providers, load_settings, order_providers, Settings, Limits
 from src.models.input import MBPPTaskInput, SWEBenchTaskInput
-from src.sandbox.sandbox_main import Sandbox
+from src.models.output import SolutionOutput
 from src.models.sandbox_config import SandboxConfig
 from src.models.sandbox_base import SandboxBase
-# from src.sandbox.mock import MockSandbox
+from src.sandbox.sandbox_main import Sandbox
 
-# ========= add MangoMan ==========
-from typing import Callable, Any
-from src.mcp.client.http import HttpClientTransport
-from src.mcp.models.client_transport import ClientTransport
-from src.mcp.client.stdio import StdioClientTransport
 from src.mcp.client.client import MCPClient, DEFAULT_URL, SWE_SERVER_COMMAND, MBPP_SERVER_COMMAND
+from src.mcp.client.stdio import StdioClientTransport
+from src.mcp.client.http import HttpClientTransport
 from src.mcp.client.mcp_tool_function import MCPToolFunction
-from src.models.output import SolutionOutput
+from src.mcp.models.client_transport import ClientTransport
 from mcp_tools_swebench import META_KEY
-# ========= add MangoMan ==========
 
+# サンドボックスの名前空間に置くツール{ツール名: 呼び出せる関数}。
+ToolFunctions: TypeAlias = dict[str, Callable[..., Any]]
+# 提出物を受理する前に検証する関数の型。提出物を受け取り、合否 / 不合格の理由を返す。
+# SolutionVerifier = Callable[[str], VerificationResult]
+# 提出物を検証した結果。合否 / 不合格の理由
+# VerificationResult(NamedTuple): passed: bool reason: str
+# タスク入力のモデル{MBPPTaskInput / SWEBenchTaskInput}。_run_safelyを共通で使うための型。
 _Task = TypeVar("_Task", bound=BaseModel)
-
-# 終了コード。128 + シグナル番号で終了コードを返す。
-_EXIT_CODE_KEYBOARD_INTERRUPT = 130  # 128 + SIGINT(2)
-_EXIT_CODE_TERMINATED = 143  # 128 + SIGTERM(15)
-# solution.jsonのerror欄に入れる例外メッセージの最大文字数。
-_ERROR_MAX_CHARS = 500
-
-
-class _Terminated(BaseException):
-    """採点側のSIGTERMで止められたことを表す例外クラス.
-
-    BaseExceptionを継承し途中のexcept Exceptionで拾われないようにする。
-    """
-
-
-def _raise_terminated(signum: int, frame: FrameType | None) -> None:
-    """SIGTERMを受けたら_Terminated例外を投げるシグナルハンドラ.
-
-    Args:
-        signum (int): 受け取ったシグナル番号
-        frame (FrameType | None): 現在のフレーム情報。Noneの場合もある。
-
-    Raises:
-        _Terminated: SIGTERMを受けたことを表す例外
-    """
-    raise _Terminated(f"Received signal ({signum})")
-
-
+# MBPPの可視テストを置くサンドボックスの名前空間での変数名。
 _TASK_TESTS_NAME = "TASK_TESTS"
+# 可視テストに落ちた理由としてOrchestratorに返す文字数(run_testsの出力の末尾)。
 _VERIFY_DETAIL_CHARS = 300
-
-
-def format_mbpp_task(task_input: MBPPTaskInput) -> str:
-    """MBPPTaskInputのタスク入力をLLMに渡すuser messages文字列に整形する.
-
-    Args:
-        task_input (MBPPTaskInput): タスクファイルから読み込んだMBPPTaskInputオブジェクト
-
-    Returns:
-        str: LLMに渡す問題分、関数シグネチャ、テストコードを含む文字列
-    """
-    lines = [
-        f"Problem:\n{task_input.task_definition}\n",
-        f"Function signature:\n{task_input.function_definition}\n",
-    ]
-    # テストは解答 + test_imports + test_list の順に連結して行われるため形式を揃える。
-    if task_input.test_imports:
-        lines.append("\nThe tests run after these imports:\n")
-        lines.extend(task_input.test_imports)
-
-    if task_input.test_list:
-        lines.append("\nYour solution must pass these tests:\n")
-        lines.extend(task_input.test_list)
-
-        lines.append(
-            f"\nThese lines are predefined in your namespace as the list {_TASK_TESTS_NAME}: "
-            f"call run_tests(code=solution, test_list={_TASK_TESTS_NAME}) instead of retyping them."
-        )
-
-    return "\n".join(lines)
-
-
 # SWE-Benchのissueにつくヒントの最大文字数。長いと毎反復のinput_tokenを圧迫するので制限する。
 _HINTS_MAX_CHARS = 4000
 
-
-def format_swebench_task(task_input: SWEBenchTaskInput) -> str:
-    """SWEBenchTaskInputのタスク入力をLLMに渡すuser messages文字列に整形する.
-
-    issueの本文、タスクファイルに含まれるヒント(issueのコメント)を渡す。
-    ヒントはタスク入力の一部なので外部から回答を持ってくることはしない。
-
-    Args:
-        task_input (SWETaskInput): タスクファイルから読み込んだSWETaskInputオブジェクト
-
-    Returns:
-        str: LLMに渡す問題分、関数シグネチャ、テストコードを含む文字列
-    """
-    # repoは任意(既定で空)なのでなければinstance_idを使う。
-    lines = [
-        f"Repository: {task_input.repo or task_input.instance_id} (checked out at /testbed)\n",
-        "Issue:",
-        task_input.problem_statement.strip()
-    ]
-    hints = task_input.hints_text.strip()
-
-    if hints:
-        if len(hints) > _HINTS_MAX_CHARS:
-            hints = hints[:_HINTS_MAX_CHARS] + "\n...[hints truncated]"
-        lines += ["", "Hints from the issue discussion:", hints]
-
-    return "\n".join(lines)
-
-
-def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> Callable[[str], tuple[bool, str]]:
-    """提出物を受理する前に可視テストで検証する関数を作る。
-
-    提出のたびにrun_tests()で同じ形の検証を行い、可視テストに落ちる提出は受理しないでOrchestratorが理由付きで返す.
-
-    Args:
-        sandbox (SandboxBase): run_testsツールを名前空間に置いたサンドボックス。
-        test_list (list[str]): MBPPタスクの可視テスト
-
-    Returns:
-        Callable[[str], tuple[bool, str]]: 提出物を検証する関数。
-    """
-    def verify(solution: str) -> tuple[bool, str]:
-        """提出物をrun_test()で検証し(合否、不合格の理由)を返す.
-
-        Args:
-            solution (str): LLMがfinal_answer()で出力した提出物。
-
-        Returns:
-            tuple[bool, str]: (合格かどうか, 標準出力)
-        """
-        if not test_list:
-            return True, ""
-        # 可視テストの答えを直書きした提出は可視テストを通っても受理しない。
-        hardcoded = hardcoded_answers(solution, test_list)
-        if hardcoded:
-            return False, (
-                    f"it returns the visible tests' expected values as literals ({', '.join(hardcoded)}). "
-                    "The grader calls it with other inputs: implement the general rule instead of "
-                    "special-casing the examples"
-            )
-        # 名前空間のTASK_TESTSはLLMが書き換えられるのでテストはリテラルで返す。
-        # run_testsの失敗の出力は、トレースバックの最後の行に「AssertionError: got ..., expected ...」が付くので、
-        # 先頭ではなく末尾を残す(長いassertだと、先頭の300字はassertの行だけで埋まる)。
-        snippet = (
-            "import json\n"
-            f"_report = json.loads(run_tests(code={solution!r}, test_list={list(test_list)!r}))\n"
-            "print('VERIFY_OK' if _report['success'] else "
-            f"'VERIFY_FAIL ' + str(_report.get('output', '')).strip()[-{_VERIFY_DETAIL_CHARS}:])\n"
-        )
-        stdout = (sandbox.run(snippet).stdout or "").strip()
-        if "VERIFY_FAIL" in stdout:
-            return False, stdout.split("VERIFY_FAIL", 1)[1].strip()[-_VERIFY_DETAIL_CHARS:]
-
-        return True, ""
-
-    return verify
+# この環境変数が1の時、AGENT_CRASHのtracebackを出す。
+_DEBUG_ENV_NAME = "AGENT_SMITH_DEBUG"
+# 終了コード。128 + シグナル番号で終了コードを返す。
+_EXIT_CODE_KEYBOARD_INTERRUPT = 130  # 128 + SIGINT(2)
+_EXIT_CODE_TERMINATED = 143  # 128 + SIGTERM(15)
+# solution.jsonを書けなかった時。
+_EXIT_CODE_WRITE_FAILED = 1
+# solution.jsonのerror欄に入れる例外メッセージの最大文字数。
+_ERROR_MAX_CHARS = 500
 
 
 def run_mbpp_agent(
@@ -201,12 +80,14 @@ def run_mbpp_agent(
 ) -> None:
     """MBPPタスクを1問解くエージェントを実行し、SolutionOutputを書き出す.
 
+    責任は制限時間を数え始める。solveを作って_run_safely()を実行する。
+
     Args:
         task_file_path (str): MBPPタスクファイルのパス
         output_file_path (str): SolutionOutputを書き出すJSONファイルのパス
         model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用
         provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用
-        providers_file_path (str): プロバイダーファイルのパス。デフォルトは"providers/providers.json"
+        providers_file_path (str): プロバイダの設定ファイルのパス。デフォルトは"providers/providers.json"
         transport (str): MCPServerとの通信方法。stdioかhttpを指定。デフォルトはstdio
         url (str | None): http通信時のMCPServerのURL。NoneならデフォルトURLを使用
         command (str | None): stdio通信時のMCPServerのコマンド。Noneならデフォルトコマンドを使用
@@ -250,6 +131,7 @@ def run_swe_agent(
 ) -> None:
     """SWEタスクを1問解くエージェントを実行し、SolutionOutputを書き出す.
 
+    責任は制限時間を数え始める。solveを作って_run_safely()を実行する。
     Dockerコンテナの起動と片付けはMCPServer(mcp_tools_swebench)が担う。
     Agentはinit_metaでDockerイメージ名 / eval_script(評価スクリプト) / リポジトリの場所をMCPServerに渡す。
 
@@ -258,7 +140,7 @@ def run_swe_agent(
         output_file_path (str): SolutionOutputを書き出すJSONファイルのパス。
         model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用。
         provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用。
-        providers_file_path (str): プロバイダーファイルのパス。デフォルトは"providers/providers_swebench.json"
+        providers_file_path (str): プロバイダの設定ファイルのパス。デフォルトは"providers/providers_swebench.json"
         transport (str): MCPServerとの通信方法。stdioかhttpを指定。デフォルトはstdio
         url (str | None): http通信時のMCPServerのURL。NoneならデフォルトURLを使用。
         command (str | None): stdio通信時のMCPServerのコマンド。Noneならデフォルトコマンドを使用。
@@ -301,8 +183,8 @@ def _run_safely(
 ) -> None:
     """タスクを解く処理を安全に実行し、例外が起きてもSolutionOutputを書き出す.
 
-    - 想定外の例外
-        success=False, error=AGENT_CRASH を書いて正常終了する。
+    - タスクファイル、プロバイダファイル、MCPサーバー、ループ内の想定外の例外
+        success=False, error=AGENT_CRASH を書いて正常終了する。0で終了。
     - Ctrl+C / SIGTERM
         success=False, error=INTERRUPTED を書いて130 / 143で終了する。
     MCPServer / Sandbox の後片付けは solve()の中の with で行い、例外が _run_safely() に届く前に終了するようにする。
@@ -319,7 +201,7 @@ def _run_safely(
     # タスクファイルを読み込む前に失敗した場合のtask_id
     task_id = "unknown"
     interrupted: BaseException | None = None
-    # SIGTERMの既定の動作を無効化し、_raise_terminated()を呼ぶようにする。
+    # SIGTERMの既定の動作(即終了)を無効化し、_raise_terminated()を呼ぶようにする。
     previous_handler = signal.signal(signal.SIGTERM, _raise_terminated)
 
     # 外側のtry: Ctrl+C / SIGTERMでの中断を受け止める。内側の処理中に来てもここで受ける。
@@ -335,41 +217,89 @@ def _run_safely(
             task_id = task_id_of(task_input)
             solution_output = solve(task_input)
 
-        # 想定外の例外が起きた場合は、tracebackをstderrに出力し、SolutionOutputにAGENT_CRASHを書き込む。
+        # stderr + SolutionOutputにAGENT_CRASHを書き込む。
         except Exception as error:
-            # traceback.print_exc(file=sys.stderr)
-            print(error)
+            if os.environ.get(_DEBUG_ENV_NAME) == "1":
+                traceback.print_exc(file=sys.stderr)
+            error_summary = f"{type(error).__name__}: {error}"
+            print(f"Error: {error_summary}", file=sys.stderr)
             solution_output = _failed_solution(
                 task_id=task_id,
                 benchmark=benchmark,
                 start_time=start_time,
-                error=f"AGENT_CRASH: {type(error).__name__}: {error}"
+                error=f"AGENT_CRASH: {error_summary}"
             )
 
     # Ctrl+C / SIGTERMで中断された場合は、SolutionOutputにINTERRUPTEDを書き込む。
     except (KeyboardInterrupt, _Terminated) as error:
         interrupted = error
-        print(error)
+        error_type = type(error).__name__
+        print(f"Interrupted: {error_type}", file=sys.stderr)
         solution_output = _failed_solution(
             task_id=task_id,
             benchmark=benchmark,
             start_time=start_time,
-            error=f"INTERRUPTED: {type(error).__name__}"
+            error=f"INTERRUPTED: {error_type}"
         )
 
+    #  変更したシグナルを元に戻す。
     finally:
         signal.signal(signal.SIGTERM, previous_handler)
 
     # ================== SolutionOutput書き出し ==================
-    solution_output_path = Path(output_file_path)
-    solution_output_path.parent.mkdir(parents=True, exist_ok=True)
-    solution_output_path.write_text(solution_output.model_dump_json(indent=2), encoding="utf-8")
+    _write_solution(output_file_path, solution_output)
 
     # Ctrl+C / SIGTERMで中断された場合は、終了コードを130 / 143で返す。
     if interrupted is not None:
         if isinstance(interrupted, KeyboardInterrupt):
             raise SystemExit(_EXIT_CODE_KEYBOARD_INTERRUPT)
         raise SystemExit(_EXIT_CODE_TERMINATED)
+
+
+class _Terminated(BaseException):
+    """採点側のSIGTERMで止められたことを表す例外クラス.
+
+    BaseExceptionを継承し途中のexcept Exceptionで拾われないようにする。
+    """
+
+
+def _raise_terminated(signum: int, frame: FrameType | None) -> None:
+    """SIGTERMを受けたら_Terminated例外を投げるシグナルハンドラ.
+
+    Args:
+        signum (int): 受け取ったシグナル番号
+        frame (FrameType | None): 現在のフレーム情報。Noneの場合もある。
+
+    Raises:
+        _Terminated: SIGTERMを受けたことを表す例外
+    """
+    raise _Terminated(f"Received signal ({signum})")
+
+
+def _write_solution(output_file_path: str, solution_output: SolutionOutput) -> None:
+    """SolutionOutputをJsonファイルに書き出す.
+
+    親がファイル、ディレクトリを指定、権限がない、容量不足などは
+    標準エラーに出し1で終了。
+
+    Args:
+        output_file_path (str): 書き出すJsonファイルのパス。
+        solution_output (SolutionOutput): 書き出す結果。
+
+    Raises:
+        SystemExit: 出力先に書けなかった場合(終了コード1)。
+    """
+    solution_output_path = Path(output_file_path)
+    try:
+        solution_output_path.parent.mkdir(parents=True, exist_ok=True)
+        solution_output_path.write_text(
+            solution_output.model_dump_json(indent=2),
+            encoding="utf-8"
+        )
+    except OSError as error:
+        print(f"Error: cannot write the solution to {output_file_path}: {error}", file=sys.stderr)
+        # OSErrorは処理済みのためfrom Noneで投げなおす。
+        raise SystemExit(_EXIT_CODE_WRITE_FAILED) from None
 
 
 def _failed_solution(
@@ -420,7 +350,7 @@ def _solve_mbpp(
         start_time (float): プロセス起動直後の time.monotonic() の値。経過時間の計算に使う。
         model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用。
         provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用。
-        providers_file_path (str): プロバイダーファイルのパス。
+        providers_file_path (str): プロバイダの設定ファイルのパス。
         transport (str): MCPServerとの通信方法。stdioかhttpを指定。
         url (str | None): http通信時のMCPServerのURL。NoneならデフォルトURLを使用。
         command (str | None): stdio通信時のMCPServerのコマンド。Noneならデフォルトコマンドを使用。
@@ -428,7 +358,7 @@ def _solve_mbpp(
     Returns:
         SolutionOutput: タスクの解決結果。
     """
-    # 設定読み込み
+    # ================== 設定読み込み ==================
     settings = load_settings()
     # .envから環境変数を読み込む
     load_dotenv()
@@ -453,11 +383,11 @@ def _solve_mbpp(
         command=command,
         server_command=MBPP_SERVER_COMMAND
     )
-    with MCPClient(client_transport) as c:
+    with MCPClient(client_transport) as mcp_client:
         # MCPServerから使えるツールを取得し、呼びだせる形にする
-        tools: dict[str, Callable[..., Any]] = {
-            tool.name: MCPToolFunction(c, tool)
-            for tool in c.list_tools()
+        tools: ToolFunctions = {
+            tool.name: MCPToolFunction(mcp_client, tool)
+            for tool in mcp_client.list_tools()
         }
 
         # ================== Sandbox構築 ==================
@@ -466,12 +396,13 @@ def _solve_mbpp(
             tools=tools
         ) as sandbox:
 
+            visible_tests = [*task_input.test_imports, *task_input.test_list]
+
             # 可視テスト(test_imports + test_list)を名前空間に置く。
             # {[...]!r}はリストのreprでPythonのリテラルとして読める文字列。
-            # assertの中に引用符がいてもエスケープする。
-            # モデルが値を見なくなれば外す。
+            # assertの中に引用符があってもエスケープする。
             sandbox.run(
-                f"{_TASK_TESTS_NAME} = {[*task_input.test_imports, *task_input.test_list]!r}"
+                f"{_TASK_TESTS_NAME} = {visible_tests!r}"
             )
 
             # ================= Orchestrator 構築 =================
@@ -481,7 +412,7 @@ def _solve_mbpp(
                 sandbox=sandbox,
                 profile=MBPPProfile(),
                 limits=settings.limits,
-                solution_verifier=make_mbpp_verifier(sandbox, [*task_input.test_imports, *task_input.test_list]),
+                solution_verifier=make_mbpp_verifier(sandbox, visible_tests),
                 start_time=start_time
             )
 
@@ -508,7 +439,7 @@ def _solve_swebench(
         start_time (float): プロセス起動直後の time.monotonic() の値。経過時間の計算に使う。
         model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用。
         provider_url (str | None): 使用するLLMプロバイダのURL。 Noneなら設定ファイルのデフォルトを使用。
-        providers_file_path (str): プロバイダーファイルのパス。
+        providers_file_path (str): プロバイダの設定ファイルのパス。
         transport (str): MCPServerとの通信方法。stdioかhttpを指定。
         url (str | None): http通信時のMCPServerのURL。NoneならデフォルトURLを使用。
         command (str | None): stdio通信時のMCPServerのコマンド。Noneならデフォルトコマンドを使用。
@@ -537,25 +468,25 @@ def _solve_swebench(
     sandbox_config = _build_sandbox(settings)
 
     # ===================== MCPClient構築 =====================
-    # サーバーにコンテナの起動に必要な情報を渡すためのinit_meta
     client_transport = _build_transport(
         transport=transport,
         url=url,
         command=command,
         server_command=SWE_SERVER_COMMAND
     )
+    # サーバーにコンテナの起動に必要な情報を渡すためのinit_meta
     init_meta = {META_KEY: {"docker_image": task_input.docker_image,
                             "eval_script": task_input.eval_script,
                             "testbed_path": "/testbed"}}  # debug等で指定したPATHからToolsを動かしたい場合のみ使用
     with MCPClient(
         transport=client_transport,
         init_meta=init_meta
-    ) as c:
+    ) as mcp_client:
 
         # MCPServerから使えるツールを取得し、呼びだせる形にする
-        tools: dict[str, Callable[..., Any]] = {
-            tool.name: MCPToolFunction(c, tool)
-            for tool in c.list_tools()
+        tools: ToolFunctions = {
+            tool.name: MCPToolFunction(mcp_client, tool)
+            for tool in mcp_client.list_tools()
         }
 
         # ================== Sandbox構築 ==================
@@ -580,6 +511,121 @@ def _solve_swebench(
             )
 
 
+def format_mbpp_task(task_input: MBPPTaskInput) -> str:
+    """MBPPTaskInputのタスク入力をLLMに渡すuser messages文字列に整形する.
+
+    Args:
+        task_input (MBPPTaskInput): タスクファイルから読み込んだMBPPTaskInputオブジェクト
+
+    Returns:
+        str: LLMに渡す問題文、関数シグネチャ、テストコードを含む文字列
+    """
+    lines = [
+        f"Problem:\n{task_input.task_definition}\n",
+        f"Function signature:\n{task_input.function_definition}\n",
+    ]
+    # テストは解答 + test_imports + test_list の順に連結して行われるため形式を揃える。
+    if task_input.test_imports:
+        lines.append("\nThe tests run after these imports:\n")
+        lines.extend(task_input.test_imports)
+
+    if task_input.test_list:
+        lines.append("\nYour solution must pass these tests:\n")
+        lines.extend(task_input.test_list)
+
+        lines.append(
+            f"\nThese lines are predefined in your namespace as the list {_TASK_TESTS_NAME}: "
+            f"call run_tests(code=solution, test_list={_TASK_TESTS_NAME}) instead of retyping them."
+        )
+
+    return "\n".join(lines)
+
+
+def format_swebench_task(task_input: SWEBenchTaskInput) -> str:
+    """SWEBenchTaskInputのタスク入力をLLMに渡すuser messages文字列に整形する.
+
+    issueの本文、タスクファイルに含まれるヒント(issueのコメント)を渡す。
+    ヒントはタスク入力の一部なので外部から回答を持ってくることはしない。
+
+    Args:
+        task_input (SWEBenchTaskInput): タスクファイルから読み込んだSWEBenchTaskInputオブジェクト
+
+    Returns:
+        str: LLMに渡すリポジトリ名、issueの本文、ヒントを含む文字列。
+    """
+    # repoは任意(既定で空)なのでなければinstance_idを使う。
+    lines = [
+        f"Repository: {task_input.repo or task_input.instance_id} (checked out at /testbed)\n",
+        "Issue:",
+        task_input.problem_statement.strip()
+    ]
+    hints = task_input.hints_text.strip()
+
+    if hints:
+        if len(hints) > _HINTS_MAX_CHARS:
+            hints = hints[:_HINTS_MAX_CHARS] + "\n...[hints truncated]"
+        lines += ["", "Hints from the issue discussion:", hints]
+
+    return "\n".join(lines)
+
+
+def make_mbpp_verifier(sandbox: SandboxBase, test_list: list[str]) -> SolutionVerifier:
+    """提出物を受理する前に可視テストで検証する関数を作る.
+
+    提出のたびにrun_tests()で同じ形の検証を行い、可視テストに落ちる提出は受理しないでOrchestratorが理由付きで返す.
+
+    Args:
+        sandbox (SandboxBase): run_testsツールを名前空間に置いたサンドボックス。
+        test_list (list[str]): MBPPタスクの可視テスト
+
+    Returns:
+        SolutionVerifier: 提出物を検証する関数。
+    """
+    def verify(solution: str) -> VerificationResult:
+        """提出物をrun_tests()で検証し(合否、不合格の理由)を返す.
+
+        Args:
+            solution (str): LLMがfinal_answer()で出力した提出物。
+
+        Returns:
+            VerificationResult: (合格かどうか、不合格の理由。合格なら空文字列)
+        """
+        if not test_list:
+            return VerificationResult(passed=True, reason="")
+
+        # 可視テストの答えを直書きした提出は可視テストを通っても受理しない。
+        hardcoded = hardcoded_answers(solution, test_list)
+        if hardcoded:
+            return VerificationResult(
+                passed=False,
+                reason=(
+                    f"it returns the visible tests' expected values as literals ({', '.join(hardcoded)}). "
+                    "The grader calls it with other inputs: implement the general rule instead of "
+                    "special-casing the examples"
+                )
+            )
+
+        # 名前空間のTASK_TESTSはLLMが書き換えられるのでテストはリテラルで渡す。
+        # run_testsの失敗の出力は、トレースバックの最後の行に「AssertionError: got ..., expected ...」が付くので、
+        # 先頭ではなく末尾を残す(長いassertだと、先頭の300字はassertの行だけで埋まる)。
+        snippet = (
+            "import json\n"
+            f"_report = json.loads(run_tests(code={solution!r}, test_list={list(test_list)!r}))\n"
+            "print('VERIFY_OK' if _report['success'] else "
+            f"'VERIFY_FAIL ' + str(_report.get('output', '')).strip()[-{_VERIFY_DETAIL_CHARS}:])\n"
+        )
+        stdout = (sandbox.run(snippet).stdout or "").strip()
+        if "VERIFY_FAIL" in stdout:
+            return VerificationResult(
+                passed=False,
+                reason=stdout.split("VERIFY_FAIL", 1)[1].strip()[-_VERIFY_DETAIL_CHARS:]
+            )
+
+        return VerificationResult(passed=True, reason="")
+
+    return verify
+
+
 def _build_client(
     settings: Settings,
     limits: Limits,
@@ -596,13 +642,14 @@ def _build_client(
         start_time (float): プロセス起動直後の time.monotonic() の値。
         model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用。
         provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用。
-        providers_file_path (str): プロバイダーファイルのパス。
+        providers_file_path (str): プロバイダの設定ファイルのパス。
 
     Returns:
         ResilientLLMClient: 構築されたResilientLLMClient
 
     Raises:
-        ValueError: 指定されたmodel_name / provider_urlがproviders.jsonにない場合
+        ValueError: 指定されたmodel_name / provider_urlがproviders.jsonにない場合。
+        FileNotFoundError: provider_file_pathのファイルがない、または空の場合。
     """
     # ================== プロバイダ解決 ==================
     original_providers = load_providers(providers_file_path)
@@ -613,13 +660,13 @@ def _build_client(
 
     # 時間制限を使い果たさないようにデッドラインを計算
     # バックオフ待機はこの残予算にクランプされる
-    dead_line = start_time + limits.total_time_sec - limits.time_margin_sec
+    deadline = start_time + limits.total_time_sec - limits.time_margin_sec
     # ============= Provider(ResilientLLMClient)構築 =============
     return ResilientLLMClient(
         providers=providers,
         transport=RequestsTransport(),
         retry=settings.retry,
-        time_remaining=lambda: max(0, dead_line - time.monotonic()),
+        time_remaining=lambda: max(0, deadline - time.monotonic()),
     )
 
 
@@ -658,9 +705,10 @@ def _build_transport(
     Raises:
         ValueError: transportが"stdio"でも"http"でもない場合
     """
-    # httpならurlを取得。なければデフォルトで。サーバーがいなければ既定のサーバーを起動する。
+    # --commandがあれば取得、なければこのベンチマーク既定のサーバーを起動。
     if transport == "stdio":
         return StdioClientTransport(command=command or server_command)
+    # --urlがあれば取得。なければデフォルトのURL。サーバーがいなければ既定のサーバーを起動。
     if transport == "http":
         return HttpClientTransport(url=url or DEFAULT_URL, command=server_command + " --transport http")
 

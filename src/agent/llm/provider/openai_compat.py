@@ -7,13 +7,22 @@ tokensはusage.pyで集計する、なければ概算。
 リトライ、キー選択はkey_manager.pyに任せる。
 
 - 下記を提供
-OpenAICompatProvider(LLMProvider) def _build_request() / _parse_response()
+OpenAICompatProvider()
+    def _build_request()
+    def _parse_response()
 """
 import json
-from typing import Any
+from typing import Any, TypeAlias
 
 from src.agent.llm.provider.provider import LLMProvider, LLMResponse, LLMError, EmptyResponseError
 from src.agent.llm.usage import extract_token_usage
+
+# Jsonを読み込んだオブジェクト。
+JsonObject: TypeAlias = dict[str, Any]
+# LLMに送るメッセージ１件。{"role": "user", "content": "..."}
+ChatMessage: TypeAlias = dict[str, str]
+# LLMに送る会話の履歴(メッセージを古い順に並べたもの)
+ChatHistory: TypeAlias = list[ChatMessage]
 
 
 class OpenAICompatProvider(LLMProvider):
@@ -21,7 +30,7 @@ class OpenAICompatProvider(LLMProvider):
 
     def _build_request(
         self,
-        messages: list[dict[str, str]],
+        messages: ChatHistory,
         stop_sequences: list[str],
         max_tokens: int
     ) -> tuple[str, dict[str, str], str]:
@@ -33,7 +42,7 @@ class OpenAICompatProvider(LLMProvider):
         bodyにはmodel, messages, max_tokens, stop_sequencesを含むJSON文字列。
 
         Args:
-            messages (list[dict[str, str]]): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
+            messages (ChatHistory): LLMに送信するメッセージ。OpenAI互換の形式で、roleとcontentを持つ辞書のリスト。
             stop_sequences (list[str]): 生成を停止する文字列郡(既定は ["<end_code>"])
             max_tokens (int): 生成する最大トークン数
         """
@@ -43,7 +52,7 @@ class OpenAICompatProvider(LLMProvider):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        payload: dict[str, Any] = {
+        payload: JsonObject = {
             "model": self.model,
             "messages": messages,
             "max_tokens": max_tokens,
@@ -73,15 +82,14 @@ class OpenAICompatProvider(LLMProvider):
         """
         # レスポンスをJSONとして解釈し、choices[0].message.contentを抽出する
         try:
-            data: dict[str, Any] = json.loads(body)
-            message: dict[str, Any] = data["choices"][0]["message"]
+            data: JsonObject = json.loads(body)
+            message: JsonObject = data["choices"][0]["message"]
             text = message.get("content")
         # AttributeErrorは、messageがnullの場合に発生する可能性がある
-        # choicesが空の場合、IndexError
-        # choicesが存在しない場合、KeyError
-        # choices[0]がnullの場合、TypeError
-        except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as e:
-            raise LLMError(f"Failed to parse response: {e}: {body[:500]}") from e
+        # choicesが空: IndexError choicesが存在しない: KeyError
+        # choices[0]がnull: TypeError
+        except (json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as error:
+            raise LLMError(f"Failed to parse response: {error}: {body[:500]}") from error
 
         # レスポンスにtextが空の場合、reasoningやreasoning_contentを代替として使用する
         if not (isinstance(text, str) and text.strip()):
@@ -95,9 +103,10 @@ class OpenAICompatProvider(LLMProvider):
         # それでもtextが空の場合使えないので、消費したトークンを持たせたEmptyResponseErrorを発生させる
         # ResilientClientで捕まえて計上する。
         if not (isinstance(text, str) and text.strip()):
+            error_message = f"empty content from provider={self.config.name} model={self.model} {body[:300]}"
             wasted_input_tokens, wasted_output_tokens = extract_token_usage(data, "")
             raise EmptyResponseError(
-                f"empty content from provider={self.config.name} model={self.model} {body[:300]}",
+                message=error_message,
                 input_tokens=wasted_input_tokens,
                 output_tokens=wasted_output_tokens,
             )

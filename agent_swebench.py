@@ -24,17 +24,24 @@ def agent_swebench(
     """SWE-bench用のエントリーポイント関数.
 
     Args:
-        task_file (str): SWEタスクファイルのパス
-        output (str): SolutionOutputを書き出すJSONファイルのパス
-        model_name (str): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用
-        provider_url (str): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用
-        **extra_args: object: fireが解釈できなかった余分な引数。存在する場合はエラーを発生させる。
+        task_file (str): SWEタスクファイルのパス。
+        output (str): SolutionOutputを書き出すJSONファイルのパス。
+        model_name (str | None): 使用するLLMモデル名。Noneなら設定ファイルのデフォルトを使用
+        provider_url (str | None): 使用するLLMプロバイダのURL。Noneなら設定ファイルのデフォルトを使用
+        providers_file_path (str): プロバイダの設定ファイルのパス。
+        transport (str): 使用するMCPサーバーとの通信方法。"stdio"か"http"
+        url (str | None): httpの時のMCPサーバーのURL。
+        command (str | None):stdioの時にMCPサーバーを起動するコマンド。
+        **extra_args (object): fireが解釈できなかった余分な引数。存在する場合はエラーを発生させる。
+
+    Raises:
+        SystemExit: 知らない引数が渡された場合
     """
     if extra_args:
         raise SystemExit(f"Unknown arguments: {list(extra_args)}")
     run_swe_agent(
         task_file_path=str(task_file),
-        output_file_path=(output),
+        output_file_path=str(output),
         model_name=model_name,
         provider_url=provider_url,
         providers_file_path=providers_file_path,
