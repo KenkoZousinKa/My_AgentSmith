@@ -37,14 +37,14 @@ def read_file(filepath: str, start_line: int | None = None, end_line: int | None
     """
     # 引数のバリデーションを行う。負の値やstart_lineがend_lineを超える場合はエラーを返す。
     if (start_line is not None and start_line < 0) or (end_line is not None and end_line < 0):
-        return f"負の値が入力されました。 start_line: {start_line} end_line: {end_line}"
+        return f"Negative values were given. start_line: {start_line} end_line: {end_line}"
     if start_line is not None and end_line is not None and end_line < start_line:
-        return f"start_lineがend_lineを超えています。 start_line: {start_line} end_line: {end_line}"
+        return f"start_line is greater than end_line. start_line: {start_line} end_line: {end_line}"
 
     # ファイルの内容を取得して行ごとに分割する。
     r = executor.run(f"cat -n {shlex.quote(filepath)}", testbed_path, COMMAND_TIMEOUT)
     if r.exit_code != 0:
-        return f"ファイル読み込みに失敗しました。 {r.stderr}"
+        return f"Failed to read the file. {r.stderr}"
 
     # 空行を取り除く。
     all_lines = r.stdout.split("\n")
@@ -58,7 +58,7 @@ def read_file(filepath: str, start_line: int | None = None, end_line: int | None
     # start_line/end_lineが指定されている場合はその範囲の行を抽出する。
     lines = all_lines[start_line - 1 if start_line else start_line:end_line]
     if "\n".join(lines) == "":
-        return f"ファイルは{len(all_lines)}行です。"
+        return f"The file has {len(all_lines)} lines."
 
     return "\n".join(_format_line(line) for line in lines)
 
@@ -109,7 +109,7 @@ def list_files(directory: str = ".", pattern: str = "*") -> str:
     files = r.stdout.splitlines()
     # 一部のサブフォルダが読めないだけならエラーにはしない
     if r.exit_code != 0 and not files:
-        return f"ファイル一覧の取得に失敗しました。 {r.stderr.strip()}"
+        return f"Failed to list files. {r.stderr.strip()}"
     if not files:
         return f"No files matched '{pattern}' under {base}"
     return "\n".join(files)
@@ -130,7 +130,7 @@ def search_function_or_class_definition_in_code(name: str) -> str:
     """Find where a function or class is defined (e.g. "Add" or "Add._eval_is_zero")."""
     name = name.rsplit(".", 1)[-1]  # "Class.method" -> "method"
     if not name.isidentifier():  # Pythonの名前として正しいか
-        return f"'{name}' は Python の名前として不正です。"
+        return f"'{name}' is not a valid Python name."
     # 関数やクラスの定義を検索するための正規表現を作成する。
     regex = rf"^[[:space:]]*(async[[:space:]]+)?(def|class)[[:space:]]+{name}\b"
     # ^[[:space:]]*         行の先頭（^）から、スペースやタブ（[[:space:]]*）が0文字以上続く状態。-> インデント
@@ -146,7 +146,7 @@ def find_references(name: str, filepath: str | None = None, line: int | None = N
     """Find all usages of a function or class name in *.py files (word match, includes the definition)."""
     name = name.rsplit(".", 1)[-1]  # "Class.method" → "method"
     if not name.isidentifier():
-        return f"'{name}' は Python の名前として不正です。"
+        return f"'{name}' is not a valid Python name."
     # 指定された名前を単語単位で検索する正規表現を作成してgrepする。
     # \b：単語の境界。"Add" で "AddSubContext" や "_Add" に一致しない
     return _grep(rf"\b{name}\b", "*.py")
@@ -176,7 +176,7 @@ def _grep(regex: str, file_pattern: str | None) -> str:
 
     # タプルのリストをパスと行番号でソートする。
     if r.exit_code == 2 and not hits:
-        return f"検索に失敗しました。 {r.stderr.strip()}"  # 0 = 見つかった / 1 = 0件 / 2 = エラー（正規表現の誤り、パスが無いなど）
+        return f"Search failed. {r.stderr.strip()}"  # 0 = 見つかった / 1 = 0件 / 2 = エラー（正規表現の誤り、パスが無いなど）
     # grepがエラーを返した場合の処理（exit_code == 2 は正規表現の誤りやパスが無いなど）
     if not hits:
         return f"No matches for '{regex}' (file_path: {file_pattern})"
@@ -198,7 +198,7 @@ TEST_START, TEST_END = ">>>>> Start Test Output", ">>>>> End Test Output"  # テ
 def run_tests() -> str:
     """Run the task's evaluation script and return its test output."""
     if not eval_script:
-        return "eval_script が設定されていません。"
+        return "eval_script is not set."
 
     # 評価スクリプトを一時ファイルに書き込み、そこから実行するコマンドを組み立てる。 -> 引数のバイト上限
     command = f"cat > {EVAL_PATH} && bash {EVAL_PATH} 2>&1"
@@ -234,7 +234,7 @@ def get_patch() -> str:
     # core.fileMode=false：パーミッションだけの変更を無視する
     r = executor.run(command, testbed_path, COMMAND_TIMEOUT)
     if r.exit_code != 0:
-        return f"パッチの取得に失敗しました。 {r.stderr.strip()}"
+        return f"Failed to get the patch. {r.stderr.strip()}"
     return r.stdout  # 変更なしなら ""（final_answer にそのまま渡すので、メッセージは混ぜない）
 
 
