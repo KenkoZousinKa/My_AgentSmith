@@ -73,8 +73,10 @@ lint: ## Flake8 / Mypy / ruffによる静的解析を実行
 
 lint-strict: ## より厳しいMypyチェックを実行
 	@echo "Running Linter (Strict)..."
-	-@$(UV) run flake8 $(SRC_DIR)
-	-@$(UV) run mypy --strict $(SRC_DIR)
+	-@$(UV) run flake8 .
+	@echo "flake8 complete."
+	-@$(UV) run mypy --strict .
+	@echo "mypy complete."
 	@echo "Strict Linting complete."
 
 # -----------
