@@ -442,6 +442,24 @@ def _repl(sandbox: Sandbox) -> int:
             print("\n[interrupted]")
 
 
+def _run_script(sandbox: Sandbox, source: str) -> int:
+    """Run piped-in code one top-level statement at a time."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        # If the whole file has a syntax error, run nothing and report it
+        print(f"SyntaxError: {exc}")
+        return 1
+    lines = source.splitlines()
+    for node in tree.body:
+        # For a decorated def or class, start at the decorator (node.lineno points at the def line)
+        decorators = getattr(node, "decorator_list", None)
+        start = decorators[0].lineno if decorators else node.lineno
+        # lineno and end_lineno are 1-based and end_lineno is inclusive, so slice [start - 1:end]
+        _show(sandbox.run("\n".join(lines[start - 1:node.end_lineno])))
+    return 0
+
+
 def main() -> int:
     """Parse arguments and run a snippet, a file, or the REPL."""
     parser = argparse.ArgumentParser(prog="sandbox")
@@ -470,8 +488,12 @@ def main() -> int:
                 _show(sandbox.run(args.command))
             elif args.file is not None:
                 _show(sandbox.run(Path(args.file).read_text(encoding="utf-8")))
+            elif not sys.stdin.isatty():
+                # Code was piped in (cat file | sandbox), not typed at a terminal
+                return _run_script(sandbox, sys.stdin.read())
             else:
                 return _repl(sandbox)
+
         return 0
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt", file=sys.stderr)
