@@ -25,17 +25,18 @@ testbed_path: str = "/testbed"
 eval_script: str | None = None
 # on_initializeで環境変数から動的に代入される
 
-LOGICAL_ROOT = "/testbed"  # エージェントやテストから見えるリポジトリの場所（本番の Docker と同じ）
+LOGICAL_ROOT = "/testbed"  # エージェントやテストから見えるリポジトリの場所
 
 
 def _resolve(path: str) -> str:
     """/testbed 始まりのパスを、実際の testbed_path の下のパスに読み替える."""
-    # 相対パスは /testbed からの相対とみなす。"../" も normpath で解決される
+    # normpathはパスを整理、pathが絶対パスならLOGICAL_ROOTは捨てられる。相対なら後ろに繋げる
     norm = posixpath.normpath(posixpath.join(LOGICAL_ROOT, path))
-    # "/testbed" そのもの、または "/testbed/…" だけを置き換える（"/testbed2" などは対象外）
+    # "/testbed"そのもの or ”testbed/”より下層をpathが指定していた場合
     if norm == LOGICAL_ROOT or norm.startswith(LOGICAL_ROOT + "/"):
+        # "/testbed"に、関数に渡されたpathのうち"/testbed"以降を繋げて返す
         return testbed_path + norm[len(LOGICAL_ROOT):]
-    return norm  # /testbed の外を指すパスは、そのまま返す
+    return norm  # "/testbed"までのパスも一緒に返す
 
 
 # ====== File System Tools ======
