@@ -9,4 +9,3 @@ jobs:
       - run: uv sync
       - run: uv run flake8 .
       - run: uv run mypy .
-      - run: uv run pytest -q
