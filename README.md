@@ -4,7 +4,7 @@
 	<thead>
     	<tr>
       		<th style="text-align:center">English</th>
-      		<th style="text-align:center"><a href="README_ja2.md">Japanese</a></th>
+      		<th style="text-align:center"><a href="README_ja.md">Japanese</a></th>
     	</tr>
   	</thead>
 </table>
@@ -218,7 +218,6 @@ Besides checking that the solution is correct, the moulinette checks that it sta
 | `install` | Create the virtual environment and install the dependencies |
 | `run` / `debug` | Run / run under pdb for debugging |
 | `lint` / `lint-strict` | Static analysis with flake8 and mypy / a stricter version |
-| `test` | Run pytest |
 | `clean` / `fclean` / `re` | Remove caches / also remove the virtual environment / rebuild |
 
 
@@ -522,14 +521,14 @@ The official `mcp` SDK is used only as the other end in tests that check the two
   - Wang et al., [Executable Code Actions Elicit Better LLM Agents (CodeAct)](https://arxiv.org/abs/2402.01030) (ICML 2024): the idea of calling tools with code instead of JSON
   - Jimenez et al., [SWE-bench: Can Language Models Resolve Real-World GitHub Issues?](https://arxiv.org/abs/2310.06770) (ICLR 2024)
   - APIs:
-  [mistral.ai](https://mistral.ai/products/studio/)  
-  [groq](https://console.groq.com/home)  
-  [ollama](https://signin.ollama.com/)  
-  [gemini](https://aistudio.google.com/prompts/)  
-  [kilo](https://app.kilo.ai/)  
-  [nvidia](https://build.nvidia.com/settings/api-keys)  
-  [cloudflare](https://dash.cloudflare.com/login)  
-  [cohere](https://dashboard.cohere.com/welcome/login)  
+  [mistral.ai](https://mistral.ai/products/studio/)
+  [groq](https://console.groq.com/home)
+  [ollama](https://signin.ollama.com/)
+  [gemini](https://aistudio.google.com/prompts/)
+  [kilo](https://app.kilo.ai/)
+  [nvidia](https://build.nvidia.com/settings/api-keys)
+  [cloudflare](https://dash.cloudflare.com/login)
+  [cohere](https://dashboard.cohere.com/welcome/login)
   [openrouter](https://openrouter.ai/)
 
 

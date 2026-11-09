@@ -218,15 +218,14 @@ moulinette は、解答が正しいかに加えて、次の制限を守ってい
 | `install` | 仮想環境の作成と依存関係のインストール |
 | `run` / `debug` | 実行 / pdb でのデバッグ実行 |
 | `lint` / `lint-strict` | flake8・mypy による静的解析 / より厳しい解析 |
-| `test` | pytest の実行 |
 | `clean` / `fclean` / `re` | キャッシュの削除 / 仮想環境も削除 / 作り直し |
 
 
 ## ⛏4. 追加要件
 
 ### 4-1. Agent
-Agentは、LLMに「考え（Thought）→ コード（Code）→ 実行結果（Observation）」をくり返させるループです（`src/agent/`）。  
-MBPP と SWE-bench は同じループで動きます。2つの違いは、プロンプト・提出物の扱い・制限の値だけで、これをタスクごとの設定（`TaskProfile`）が持ちます。  
+Agentは、LLMに「考え（Thought）→ コード（Code）→ 実行結果（Observation）」をくり返させるループです（`src/agent/`）。
+MBPP と SWE-bench は同じループで動きます。2つの違いは、プロンプト・提出物の扱い・制限の値だけで、これをタスクごとの設定（`TaskProfile`）が持ちます。
 
 #### 全体の流れ
 ![alt text](.images/image.png)
@@ -526,21 +525,21 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
   - Wang et al., [Executable Code Actions Elicit Better LLM Agents（CodeAct）](https://arxiv.org/abs/2402.01030)（ICML 2024）：ツールを JSON ではなくコードで呼ぶ考え方
   - Jimenez et al., [SWE-bench: Can Language Models Resolve Real-World GitHub Issues?](https://arxiv.org/abs/2310.06770)（ICLR 2024）
   - API
-  [mistral.ai](https://mistral.ai/products/studio/)  
-  [groq](https://console.groq.com/home)  
-  [ollama](https://signin.ollama.com/)  
-  [gemini](https://aistudio.google.com/prompts/)  
-  [kilo](https://app.kilo.ai/)  
-  [nvidia](https://build.nvidia.com/settings/api-keys)  
-  [cloudflare](https://dash.cloudflare.com/login)  
-  [cohere](https://dashboard.cohere.com/welcome/login)  
+  [mistral.ai](https://mistral.ai/products/studio/)
+  [groq](https://console.groq.com/home)
+  [ollama](https://signin.ollama.com/)
+  [gemini](https://aistudio.google.com/prompts/)
+  [kilo](https://app.kilo.ai/)
+  [nvidia](https://build.nvidia.com/settings/api-keys)
+  [cloudflare](https://dash.cloudflare.com/login)
+  [cohere](https://dashboard.cohere.com/welcome/login)
   [openrouter](https://openrouter.ai/)
 
 
 ### 5-2. AIの使用について
 <!-- 各自が「どの作業で、どの部分に」使ったかを書く -->
 - **ayhirose（MCP）**：MCP と HTTP・SSE の仕様の解説、設計の壁打ち、テストスクリプト（`test/mcp/`）の作成。SWE-bench のツールの一部は、生成させたコードを元に修正して取り込んだ。
-- **nsato（Agent）**：Claude Codeを疑問点の相談相手・分析役として使った。  
+- **nsato（Agent）**：Claude Codeを疑問点の相談相手・分析役として使った。
   - **設計**：エージェントループ、プロバイダの切り替え、制限の扱いの壁打ち。どの案を採るかは自分（チーム）で決めた。
   - **実装**：コードの提案を1行ずつの解説付きで受けた。それを読んで理解し自分で打ち込みテストした。
   - **テストと計測**：単体テストの設計と計測用のスクリプトに使った。失敗した回の `solution.json` を読んで原因を探すのにも使った。

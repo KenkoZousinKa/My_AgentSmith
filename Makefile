@@ -79,14 +79,6 @@ lint-strict: ## より厳しいMypyチェックを実行
 	@echo "mypy complete."
 	@echo "Strict Linting complete."
 
-# -----------
-#  Testing  |
-# -----------
-test: ## pytestを実行
-	@echo "Running Tests..."
-	@$(UV) run pytest $(TEST_DIR)
-	@echo "Testing complete."
-
 # -----------------------
 #  Additional Commands  |
 # -----------------------
