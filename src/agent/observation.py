@@ -32,7 +32,8 @@ from src.agent.extractor.python_extractor import (
     SALVAGE_ESCAPED_QUOTES,
     SALVAGE_JSON_WRAPPED,
     SALVAGE_MULTIPLE_BLOCKS,
-    SALVAGE_UNMATCHED_CLOSERS
+    SALVAGE_UNMATCHED_CLOSERS,
+    SALVAGE_GLUED_FENCES
 )
 
 
@@ -227,6 +228,13 @@ _MALFORMED_NOTES: dict[str, str] = {
         "unmatched ')'), usually from counting the brackets inside a string literal. I removed only "
         "the extra closing brackets the Python parser reported and ran the code. Brackets inside "
         "quotes do not need closing outside them."
+    ),
+    SALVAGE_GLUED_FENCES: (
+        "[MALFORMED_CODE] Your fences were glued together (``` directly followed by ```python or by "
+        "text on the same line), and you wrote several steps ahead without seeing any result. "
+        "I executed only the FIRST block; the later blocks were NOT run. Read the output below, "
+        "then write exactly ONE ```python block per turn, with the closing ``` on its own line, "
+        "and end with <end_code>."
     ),
     SALVAGE_MULTIPLE_BLOCKS: (
         "[NOTE] Your message had several ```python blocks. I joined them in order and executed "
