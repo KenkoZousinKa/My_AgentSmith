@@ -27,7 +27,8 @@ dev = [
     "mypy>=1.19.1",
     "pep8-naming>=0.15.1",
     "pytest",
-	"flake8-docstrings",
+    "flake8-docstrings",
+    "mcp>=1.22,<2",
 ]
 
 [tool.mypy]

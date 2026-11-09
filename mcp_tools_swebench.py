@@ -25,6 +25,19 @@ testbed_path: str = "/testbed"
 eval_script: str | None = None
 # on_initializeで環境変数から動的に代入される
 
+LOGICAL_ROOT = "/testbed"  # エージェントやテストから見えるリポジトリの場所
+
+
+def _resolve(path: str) -> str:
+    """/testbed 始まりのパスを、実際の testbed_path の下のパスに読み替える."""
+    # normpathはパスを整理、pathが絶対パスならLOGICAL_ROOTは捨てられる。相対なら後ろに繋げる
+    norm = posixpath.normpath(posixpath.join(LOGICAL_ROOT, path))
+    # "/testbed"そのもの or ”testbed/”より下層をpathが指定していた場合
+    if norm == LOGICAL_ROOT or norm.startswith(LOGICAL_ROOT + "/"):
+        # "/testbed"に、関数に渡されたpathのうち"/testbed"以降を繋げて返す
+        return testbed_path + norm[len(LOGICAL_ROOT):]
+    return norm  # "/testbed"までのパスも一緒に返す
+
 
 # ====== File System Tools ======
 
@@ -42,7 +55,7 @@ def read_file(filepath: str, start_line: int | None = None, end_line: int | None
         return f"start_line is greater than end_line. start_line: {start_line} end_line: {end_line}"
 
     # ファイルの内容を取得して行ごとに分割する。
-    r = executor.run(f"cat -n {shlex.quote(filepath)}", testbed_path, COMMAND_TIMEOUT)
+    r = executor.run(f"cat -n {shlex.quote(_resolve(filepath))}", testbed_path, COMMAND_TIMEOUT)
     if r.exit_code != 0:
         return f"Failed to read the file. {r.stderr}"
 
@@ -80,7 +93,7 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
     new_b64 = base64.b64encode(new_str.encode("utf-8")).decode("ascii")
 
     # ファイル内の文字列を置換するためのコマンドを組み立てる。
-    args = " ".join(shlex.quote(a) for a in [EDIT_SCRIPT, filepath, old_b64, new_b64])
+    args = " ".join(shlex.quote(a) for a in [EDIT_SCRIPT, _resolve(filepath), old_b64, new_b64])
     command = f"python3 -c {args}"
 
     # コマンドを実行してファイルを編集。
@@ -94,7 +107,7 @@ def edit_file(filepath: str, old_str: str, new_str: str) -> str:
 def list_files(directory: str = ".", pattern: str = "*") -> str:
     """List files under a directory whose name matches a glob pattern (e.g. "*.py")."""
     # ディレクトリのパスを正規化して取得。 "/testbed/." → "/testbed"
-    base = posixpath.normpath(posixpath.join(testbed_path, directory))
+    base = _resolve(directory)
 
     command = (f"set -o pipefail; find {shlex.quote(base)} -path '*/.git' -prune -o "
                f"-type f -name {shlex.quote(pattern)} -print | sort")
@@ -244,7 +257,7 @@ def run_command(command: str, workdir: str | None = None) -> str:
 
     Returns the command's stdout, stderr and exit code.
     """
-    r = executor.run(command, workdir or testbed_path, COMMAND_TIMEOUT)
+    r = executor.run(command, _resolve(workdir) if workdir else testbed_path, COMMAND_TIMEOUT)
     return f"exit_code: {r.exit_code}\n--- stdout ---\n{r.stdout}\n--- stderr ---\n{r.stderr}"
 
 
