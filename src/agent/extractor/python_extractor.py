@@ -145,7 +145,7 @@ def _extract_with_kind(llm_output: str) -> tuple[str | None, str | None]:
     blocks = [
         str(block).rstrip()
         for block
-        in _PYTHON_CODE_BLOCK_PATTERN.findall(llm_output)
+        in _PYTHON_CODE_BLOCK_PATTERN.findall(text)
     ]
 
     kind: str | None = None
@@ -176,14 +176,14 @@ def _extract_with_kind(llm_output: str) -> tuple[str | None, str | None]:
 
     # 1つもブロックがない場合は閉じフェンスなし、フェンスなしの素のPythonコードをまず救済。
     else:
-        match = _UNCLOSED_CODE_BLOCK_PATTERN.search(llm_output)
+        match = _UNCLOSED_CODE_BLOCK_PATTERN.search(text)
         if match and match.group(1).strip():
             body = _TRAILING_FENCE_PATTERN.sub("", str(match.group(1)))
             code = body.rstrip()
             kind = SALVAGE_UNCLOSED_FENCE
         # フェンスなしの素のPythonコードを抽出する。
         else:
-            code = _extract_bare_code(llm_output)
+            code = _extract_bare_code(text)
             if code is not None:
                 kind = SALVAGE_UNFENCED
 
@@ -219,7 +219,7 @@ def _split_glued_fences(llm_output: str) -> str:
         str: フェンスの直後で改行した出力。くっついたフェンスがなければ元の文字列のまま。
     """
     split = _GLUED_FENCE_PATTERN.sub("```\n", llm_output)
-    return _FENCE_THEN_PROSE_PATTERN.sub("\\1\n, split")
+    return _FENCE_THEN_PROSE_PATTERN.sub("\\1\n", split)
 
 
 def _call_final_answer(code: str) -> bool:
