@@ -23,7 +23,7 @@ SALVAGE_ESCAPED_QUOTES = "escaped_quotes"
 SALVAGE_JSON_WRAPPED = "json_wrapped"
 SALVAGE_MULTIPLE_BLOCKS = "multiple_blocks"
 SALVAGE_UNMATCHED_CLOSERS = "unmatched_closers"
-SALVAGE_GLUED_FENCES= "glued_fences"
+SALVAGE_GLUED_FENCES = "glued_fences"
 
 # ```python``` Pythonコードブロック
 # [ \t]* ラベルのあとの空白、タブを許可
@@ -219,7 +219,7 @@ def _split_glued_fences(llm_output: str) -> str:
         str: フェンスの直後で改行した出力。くっついたフェンスがなければ元の文字列のまま。
     """
     split = _GLUED_FENCE_PATTERN.sub("```\n", llm_output)
-    return _FENCE_THEN_PROSE_PATTERN
+    return _FENCE_THEN_PROSE_PATTERN.sub("\\1\n, split")
 
 
 def _call_final_answer(code: str) -> bool:
