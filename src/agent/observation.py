@@ -21,7 +21,7 @@
 - repeated_code_note()
     以前と同じコードを実行し、出力も同じだったことをLLMへ明示する文を返す。
 - comparable_output()
-    同じコードの再実行化を比べるために実行ごとに変わる部分を落としたObservationを返す。
+    同じコードの再実行かを比べるために実行ごとに変わる部分を落としたObservationを返す。
 - submission_rejected_note()
     final_answer()の提出を差し戻したこととその理由をLLMへ伝える文を返す。
 """
@@ -38,6 +38,17 @@ from src.agent.extractor.python_extractor import (
     SALVAGE_UNMATCHED_CLOSERS,
     SALVAGE_GLUED_FENCES
 )
+
+
+class Status(str, Enum):
+    """Observationの先頭に付与するステータスラベル."""
+
+    OK = "OK"
+    EXCEPTION = "EXCEPTION"
+    TIMEOUT = "TIMEOUT"
+    TRUNCATED = "TRUNCATED"
+    FINAL_ANSWER_INVALID = "FINAL_ANSWER_INVALID"
+    NO_CODE = "NO_CODE"
 
 
 _SUMMARY: dict[Status, str] = {
@@ -110,17 +121,6 @@ _VOLATILE_OUTPUT_PATTERN = re.compile(
     r"|random seed: +\d+"
     r"|PYTHONHASHSEED=\d+"
 )
-
-
-class Status(str, Enum):
-    """Observationの先頭に付与するステータスラベル."""
-
-    OK = "OK"
-    EXCEPTION = "EXCEPTION"
-    TIMEOUT = "TIMEOUT"
-    TRUNCATED = "TRUNCATED"
-    FINAL_ANSWER_INVALID = "FINAL_ANSWER_INVALID"
-    NO_CODE = "NO_CODE"
 
 
 def collect_statuses(result: ExecuteResult) -> list[Status]:
@@ -294,7 +294,6 @@ def comparable_output(observation: str) -> str:
         str: 比べる用の文字列。
     """
     return _VOLATILE_OUTPUT_PATTERN.sub("", observation)
-
 
 
 def submission_rejected_note(reason: str) -> str:

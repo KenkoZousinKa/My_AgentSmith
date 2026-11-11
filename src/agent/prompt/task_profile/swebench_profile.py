@@ -57,7 +57,7 @@ print(edit_file(filepath="/testbed/calc/ops.py", old_str="    return a * b", new
 result = run_tests()
 print(result[-1500:])
 if "RESULT: PASSED" in result:
-final_answer(get_patch())
+    final_answer(get_patch())
 ```
 <end_code>'''
 
