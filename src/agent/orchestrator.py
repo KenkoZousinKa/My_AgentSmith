@@ -21,6 +21,7 @@ from src.agent.observation import (
     observation_no_code,
     budget_note,
     iteration_note,
+    comparable_output,
     malformed_code_note,
     repeated_code_note,
     submission_rejected_note
@@ -120,10 +121,10 @@ class Orchestrator:
             ResilientLLMClientがAllProvidersExhaustedを投げ、LLM_UNAVAILABLE。
         - 提出したコードがない。
             [NO_CODE]で知らせる。extractorがコードを見つけられない。
+        - 提出したコードが同じを繰り返す(コードも出力も前と同じ)。
+            [REPEATED]で知らせる。SWE-Benchは2回続いたら別のプロバイダへ。
         - 提出したコードが崩れてる。
             [MALFORMED_CODE]で知らせる。extractorがコードを直して実行。
-        - 提出したコードが同じを繰り返す。
-            [REPEATED]で知らせる。SWE-Benchは2回続いたら別のプロバイダへ。
         - 提出したコードを実行、例外、時間切れ、出力過多。
             ラベルと助言付きのObservationで知らせる。
         - 提出が空、形式違い、検査に落ちる。
@@ -161,8 +162,8 @@ class Orchestrator:
         # 打ち切り時に提出するコードの候補を保持する変数。Observationが生成されるたびに更新される。
         # TaskProfileがそのまま提出できると判断したものを入れる。
         best_solution: str = ""
-        # {実行したコードの文字列: 実行したstepの番号}。同じコードの再実行指摘用。
-        executed_codes: dict[str, int] = {}
+        # {実行したコードの文字列: (実行したstepの番号, その時の出力)}。同じコードの再実行指摘用。
+        executed_codes: dict[str, tuple[int, str]] = {}
         # 提出できなかった反復の連続回数。続いたら別プロバイダに切り替える用。
         misses_in_a_row = 0
         # 以前と同じコードを実行した反復の連続数。指摘し繰り返すなら別のプロバイダに切り替える用。
@@ -278,14 +279,17 @@ class Orchestrator:
             result: ExecuteResult = self.sandbox.run(code)
             observation = build_observation(result)
 
-            # 以前と同じコードなら、Observationの先頭に[REPEATED]を付ける。
-            # fingerprintで改行、空白の違いだけのコードは同じとみなす
+            # 以前と同じコードを実行して出力も同じなら、Observationの先頭に[REPEATED]を付ける。
+            # fingerprintで改行、空白の違いだけのコードは同じとみなす。
+            # コードが同じでも、編集後のrun_tests()の再実行など、その間の編集で出力が変わった時は付けない。
             fingerprint = " ".join(code.split())
-            if fingerprint in executed_codes:
-                observation = f"{repeated_code_note(executed_codes[fingerprint])}\n{observation}"
+            output = comparable_output(observation)
+            previous_run = executed_codes.get(fingerprint)
+            executed_codes[fingerprint] = (len(steps) + 1, output)
+            if previous_run is not None and previous_run[1] == output:
+                observation = f"{repeated_code_note(previous_run[0])}\n{observation}"
                 repeats_in_a_row = self._count_repeat(repeats_in_a_row)
             else:
-                executed_codes[fingerprint] = len(steps) + 1
                 repeats_in_a_row = 0
 
             # 崩れたコードを救済実行した場合は[MALFORMED_CODE]の種類をLLMに伝えるためにobservationの前に追加

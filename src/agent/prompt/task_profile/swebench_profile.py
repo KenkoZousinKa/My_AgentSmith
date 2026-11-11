@@ -51,24 +51,13 @@ Observation:
 --- stdout ---
 10: def divide(a, b):
 11:     return a * b
-Thought: It multiplies instead of dividing. Fix it, run the evaluation tests, and look at the patch.
+Thought: It multiplies instead of dividing. Fix it and run the evaluation tests. Submit in this same step if they pass.
 ```python
 print(edit_file(filepath="/testbed/calc/ops.py", old_str="    return a * b", new_str="    return a / b"))
-print(run_tests()[-1500:])
-patch = get_patch()
-print(patch)
-```
-<end_code>
-Observation:
-[OK] Executed successfully.
---- stdout ---
-Edited /testbed/calc/ops.py (replaced 1 occurrence starting at line 11).
-calc/tests/test_ops.py::test_divide PASSED
-diff --git a/calc/ops.py b/calc/ops.py
-...
-Thought: The tests pass and the patch is correct. Submit it.
-```python
-final_answer(patch)
+result = run_tests()
+print(result[-1500:])
+if "RESULT: PASSED" in result:
+final_answer(get_patch())
 ```
 <end_code>'''
 
@@ -109,8 +98,9 @@ class SWEBenchProfile(TaskProfile):
             str: 提出を促す文。
         """
         return (
-            "Stop exploring: if your fix is in place, run run_tests() once and submit with "
-            "final_answer(get_patch()). If no fix is in place yet, make the most likely minimal edit now."
+            "Stop exploring: if your fix is in place, run run_tests() and submit with "
+            "final_answer(get_patch()) in the same code block. If no fix is in place yet, make the most "
+            "likely minimal edit now."
         )
 
     def sanitize_submission(self, raw: str) -> str:
@@ -223,12 +213,15 @@ class SWEBenchProfile(TaskProfile):
             "library source. old_str must match the file exactly (copy indentation from read_file "
             "output, without the 'N: ' prefixes). A reply starting with 'Error:' means nothing was changed.\n"
             "4. Verify: run_tests() runs the official evaluation script (it adds the hidden tests). "
-            "Read the failing test names and fix until they pass.\n"
-            "5. Submit: patch = get_patch(); if patch: final_answer(patch).\n"
+            "Its last line is the verdict: RESULT: PASSED, RESULT: FAILED or RESULT: UNKNOWN. "
+            "Read the failing test names and fix until it says PASSED.\n"
+            "5. Submit in the same step as the passing run: result = run_tests(); "
+            "if \"RESULT: PASSED\" in result: final_answer(get_patch()). "
+            "Do not spend a step only to re-read a passing result.\n"
             "Rules: never edit or add test files; do not try to fetch fixes from the internet, pull "
             "requests or issues; base every change on the code you read in this repository."
         )
-        # 181行目、`cd /testbed && python - <<'EOF'` はbash -c ではなくbash -lcで実行する前提。
+        # `cd /testbed && python - <<'EOF'` はbash -c ではなくbash -lcで実行する前提。
 
     def final_answer_specification(self) -> str:
         """final_answer()に何を渡すべきか、最終的な回答の仕方を返す.
