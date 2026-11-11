@@ -1,4 +1,4 @@
-u""mcp_tools_swebench.py."""
+"""mcp_tools_swebench.py."""
 
 import re
 import os
@@ -251,7 +251,7 @@ def run_tests() -> str:
             if line.startswith("git checkout "):
                 executor.run(line, testbed_path, COMMAND_TIMEOUT)  # テストファイルを元に戻す
                 break
-        return f"Timeout after {EVAL_TIMEOUT}s\n{output}\n{VERDICT_FAILED} (timeout))"
+        return f"Timeout after {EVAL_TIMEOUT}s\n{output}\n{VERDICT_FAILED} (timeout)"
     return f"--- result run_tests ---\n{output}\n{_test_verdict(output)}"
     # exit_code は使わない：テストが失敗しても最後の git checkout が成功すると 0 になる
 
