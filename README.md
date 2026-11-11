@@ -539,5 +539,5 @@ The official `mcp` SDK is used only as the other end in tests that check the two
   - **Design**: a sounding board for the agent loop, provider switching and how to handle the limits. Which option to take was decided by myself (the team).
   - **Implementation**: received code proposals with a line-by-line explanation, read and understood them, then typed them in myself and tested them.
   - **Testing and measurement**: used for designing unit tests and for the measurement scripts. Also used to read the `solution.json` of failed runs and find the cause.
-  - **Documentation**: used for drafting the Agent section of this README and the benchmark report. All the numbers come from actual measurements. The English `README.md` and `BENCHMARK_REPORT.md` were translated from the Japanese versions with AI.
+  - **Documentation**: used for drafting the Agent section of this README and the benchmark report. All the numbers come from actual measurements.
 - **joseo (Sandbox)**: Used AI for learning the way to implement a sandbox that is isolated. Used for debugging.
