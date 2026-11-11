@@ -1,5 +1,6 @@
 """mcp_tools_swebench.py."""
 
+import re
 import os
 import sys
 import posixpath
@@ -206,6 +207,23 @@ EVAL_TIMEOUT = 300  # run_tests のタイムアウト時間（秒）
 EVAL_PATH = "/tmp/agentsmith_eval.sh"  # 評価スクリプトを一時的に保存するパス
 TEST_START, TEST_END = ">>>>> Start Test Output", ">>>>> End Test Output"  # テスト出力の開始・終了マーカー
 
+# === add iroha ===
+# run_tests の最後の行(判定)の書き出し。エージェントは "RESULT: PASSED" in run_tests() で通ったかをコードで確かめる
+VERDICT_PASSED, VERDICT_FAILED, VERDICT_UNKNOWN = "RESULT: PASSED", "RESULT: FAILED", "RESULT: UNKNOWN"
+# pytest の要約行。例: "==== 1 failed, 3 passed, 2 warnings in 0.12s ====" （古い版は "in 0.12 seconds"）
+PYTEST_SUMMARY = re.compile(
+    r"^=+ (?P<counts>.*\d+ (?:passed|failed|errors?|skipped|xfailed|xpassed|deselected|warnings?).*)"
+    r" in [\d.]+ ?s(?:econds)?\b.*=+$"
+)
+# sympy の bin/test の要約行。例: "==== tests finished: 3 passed, 1 failed, 1 exceptions, in 0.52 seconds ===="
+# 長いと "in 40.47 seconds" が次の行へ折り返されるので、"in ... seconds" は無くてもよい
+SYMPY_SUMMARY = re.compile(r"tests finished: (?P<counts>.*?),?(?: in [\d.]+ seconds)?\s*=*$")
+# django の runtests.py の要約。"Ran 5 tests in 0.010s" の次の "OK" / "OK (skipped=1)" / "FAILED (failures=1, errors=2)"
+DJANGO_RAN = re.compile(r"^Ran (?P<total>\d+) tests? in [\d.]+s$")
+DJANGO_RESULT = re.compile(r"^(?P<status>OK|FAILED)(?: \((?P<details>[^)]*)\))?$")
+SUMMARY_COUNT = re.compile(r"(\d+) ([a-z][a-z ]*?)(?=,|$)")  # 要約の中の「数 種類」。"1 failed" "2 expected to fail" など
+FAILURE_WORDS = ("failed", "error", "errors", "exceptions")  # 1つでもあれば「落ちた」とする種類
+# === add iroha ===
 
 @server.tool()
 def run_tests() -> str:
@@ -232,9 +250,84 @@ def run_tests() -> str:
             if line.startswith("git checkout "):
                 executor.run(line, testbed_path, COMMAND_TIMEOUT)  # テストファイルを元に戻す
                 break
-        return f"Timeout after {EVAL_TIMEOUT}s\n{output}"
-    return "--- result run_tests ---\n" + output
+        return f"Timeout after {EVAL_TIMEOUT}s\n{output}\n{VERDICT_FAILED} (timeout after {EVAL_TIMEOUT}s)"
+    return f"--- result run_tests ---\n{output}\n{_test_verdict(output)}"
     # exit_code は使わない：テストが失敗しても最後の git checkout が成功すると 0 になる
+
+
+def _test_verdict(output: str) -> str:
+    """テストの出力の要約行から、全部通ったかを1行で返す.
+
+    LLM は出力の一部（末尾の1500字など）だけを見ることが多く、通ったかを読むのに1反復使ってから提出していた。
+    判定を決まった1行にしておけば、エージェントは通った同じ反復のコードの中で提出できる。
+
+    Args:
+        output (str): テスト出力の開始・終了マーカーの間の出力。
+
+    Returns:
+        str: "RESULT: PASSED (4 passed)" / "RESULT: FAILED (1 failed, 3 passed)" / "RESULT: UNKNOWN (...)" の1行。
+    """
+    counts = _summary_counts(output.splitlines())
+    if counts is None:
+        return f"{VERDICT_UNKNOWN} (no test summary line found; read the output above)"
+    shown = ", ".join(f"{number} {word}" for word, number in counts.items())
+    if sum(counts.get(word, 0) for word in FAILURE_WORDS) > 0:
+        return f"{VERDICT_FAILED} ({shown})"
+    if counts.get("passed", 0) == 0:
+        return f"{VERDICT_UNKNOWN} (no test passed: {shown})"
+    return f"{VERDICT_PASSED} ({shown})"
+
+
+def _summary_counts(lines: list[str]) -> dict[str, int] | None:
+    """テストの出力を下から見て、最後の要約行の {種類: 数} を返す.
+
+    pytest（xarray・scikit-learn など）・sympy の bin/test・django の runtests.py の3つの形を読む。
+
+    Args:
+        lines (list[str]): テストの出力の行。
+
+    Returns:
+        dict[str, int] | None: {"passed": 3, "failed": 1} のような数。要約行がなければ None。
+    """
+    for index in range(len(lines) - 1, -1, -1):
+        line = lines[index].strip()
+        summary = PYTEST_SUMMARY.match(line) or SYMPY_SUMMARY.search(line)
+        if summary:
+            counts: dict[str, int] = {}
+            for number, word in SUMMARY_COUNT.findall(summary.group("counts")):
+                counts[word.strip()] = counts.get(word.strip(), 0) + int(number)
+            return counts
+        ran = DJANGO_RAN.match(line)
+        if ran:
+            return _django_counts(int(ran.group("total")), lines[index + 1:])
+    return None
+
+
+def _django_counts(total: int, rest: list[str]) -> dict[str, int] | None:
+    """Django の "Ran N tests" の後の "OK" / "FAILED (...)" の行から {種類: 数} を返す.
+
+    Args:
+        total (int): "Ran N tests" の N。
+        rest (list[str]): "Ran N tests" の行より後ろの行。
+
+    Returns:
+        dict[str, int] | None: {"passed": 4} / {"passed": 3, "failed": 1} のような数。OK / FAILED の行がなければ None。
+    """
+    result = next((DJANGO_RESULT.match(line.strip()) for line in rest if line.strip()), None)
+    if result is None:
+        return None
+    details: dict[str, int] = {}
+    for item in (result.group("details") or "").split(","):
+        if "=" in item:
+            key, value = item.split("=", 1)
+            details[key.strip()] = int(value)
+    failed = details.get("failures", 0) + details.get("errors", 0)
+    if result.group("status") == "FAILED" and failed == 0:
+        failed = 1  # 内訳のない FAILED も落ちたとみなす
+    counts = {"passed": total - failed - details.get("skipped", 0)}
+    if failed:
+        counts["failed"] = failed
+    return counts
 
 
 @server.tool()
