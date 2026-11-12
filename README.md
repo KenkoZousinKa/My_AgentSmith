@@ -39,8 +39,8 @@ The system is made of three components.
 
 | Component | Role | Owner |
 |---|---|---|
-| Agent | Calls the LLM, runs the think-and-act loop, extracts the answer | nsato (to be confirmed) |
-| Sandbox | Runs the code written by the LLM in an isolated environment | joseo (to be confirmed) |
+| Agent | Calls the LLM, runs the think-and-act loop, extracts the answer | nsato |
+| Sandbox | Runs the code written by the LLM in an isolated environment | joseo |
 | MCP | A server that provides tools, and a client that calls them | ayhirose |
 
 ### 1-1. System architecture
