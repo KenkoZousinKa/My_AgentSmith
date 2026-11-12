@@ -1,0 +1,10 @@
+warning: `VIRTUAL_ENV=/tmp/claude-1000/-home-iroha-42Tokyo-cursus-Rank05-Agent-Smith-Project/63ce4256-2275-4884-be7b-aefdf6903945/scratchpad/run/moulinette/.venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instead
+   Building agentsmith @ file:///tmp/claude-1000/-home-iroha-42Tokyo-cursus-Rank05-Agent-Smith-Project/63ce4256-2275-4884-be7b-aefdf6903945/scratchpad/run/measure_A
+      Built agentsmith @ file:///tmp/claude-1000/-home-iroha-42Tokyo-cursus-Rank05-Agent-Smith-Project/63ce4256-2275-4884-be7b-aefdf6903945/scratchpad/run/measure_A
+Uninstalled 1 package in 0.63ms
+Installed 1 package in 0.76ms
+[Server] MCP_TOOLS_SWEBENCHを起動します。
+🐳Dockerコンテナを起動しています。
+✅Dockerコンテナが正常に起動しました。
+[Client] MCPクライアントが正常に起動しました。 (StdioClientTransport)
+[Server] MCP_TOOLS_SWEBENCHを終了しました。

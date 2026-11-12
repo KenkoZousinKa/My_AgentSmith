@@ -1,0 +1,18 @@
+{
+    "providers": [
+        {
+            "name": "cloudflare",
+            "provider_url": "https://api.cloudflare.com/client/v4/accounts/045ea01f49c9d249f477e852c7f42a01/ai/v1",
+            "models": [
+                "@cf/openai/gpt-oss-120b"
+            ],
+            "keys_env": "CLOUDFLARE_API_KEY",
+            "priority": 1,
+            "model_params": {
+                "@cf/openai/gpt-oss-120b": {
+                    "reasoning_effort": "low"
+                }
+            }
+        }
+    ]
+}
