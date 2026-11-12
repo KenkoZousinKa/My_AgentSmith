@@ -79,6 +79,7 @@ def apply_limits(config: SandboxConfig) -> None:
 _DENIED_EVENTS = frozenset({
     "os.system", "os.exec", "os.spawn", "os.fork", "os.forkpty",
     "os.posix_spawn", "os.putenv", "os.unsetenv", "os.startfile",
+    "os.kill", "os.killpg", "signal.pthread_kill",
     "subprocess.Popen",
     "socket.socket", "socket.connect", "socket.bind", "socket.getaddrinfo",
     "ctypes.dlopen", "ctypes.dlsym", "ctypes.call_function", "ctypes.cdata",
@@ -146,7 +147,6 @@ def install_audit_hook(config: SandboxConfig) -> None:
     write_roots = norm_roots(config.allowed_directories)
     read_roots = write_roots + norm_roots({
         sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
-        *sys.path
     })
 
     def hook(event: str, args: tuple[Any, ...]) -> None:

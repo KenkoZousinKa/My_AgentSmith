@@ -16,6 +16,10 @@ _BLOCKED = frozenset({
 
 _IMPLICIT_IMPORTS = frozenset({"_strptime"})
 
+_BLOCKED_ATTRS = frozenset({
+    "format", "format_map", "vformat", "get_field", "get_value", "Formatter"
+})
+
 
 def _allowed(name: str, authorized: frozenset[str]) -> bool:
     """Match a module name against the allowlist."""
@@ -105,6 +109,8 @@ class _Checker(ast.NodeVisitor):
         elif node.module:
             self._check_module(node.module)
         for alias in node.names:
+            if alias.name in _BLOCKED_ATTRS:
+                self.errors.append(f"import of {alias.name!r} is not allowed")
             if alias.name.startswith("_") and not (
                 alias.name.startswith("__") and alias.name.endswith("__")
             ):
@@ -117,16 +123,13 @@ class _Checker(ast.NodeVisitor):
         """Blocks dunder access, which reaches globals and subclasses."""
         if node.attr.startswith("__") and node.attr.endswith("__"):
             self.errors.append(f"access to dunder attribute {node.attr!r}")
-        elif (
-            node.attr.startswith("_")
-            and isinstance(node.value, ast.Name)
-            and node.value.id in self.module_names
-        ):
+        elif node.attr.startswith("_"):
             self.errors.append(
-                f"access to private module attribute {node.attr!r}"
+                f"access to private attribute {node.attr!r} is not allowed; "
+                "use a name without a leading underscore"
             )
-        elif node.attr == "format":
-            self.errors.append("use of '.format' is not allowed")
+        elif node.attr in _BLOCKED_ATTRS:
+            self.errors.append(f"use of '.{node.attr}' is not allowed")
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name) -> None:  # noqa: N802
