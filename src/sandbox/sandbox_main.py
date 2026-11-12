@@ -44,7 +44,6 @@ class Sandbox:
         self._pid: int | None = None
         self._cmd_w = -1
         self._res_r = -1
-        self._tool_truncated = False
         self.resources: list[Any] = []
         self.prompts: list[Any] = []
         self._tool_params: dict[str, list[str]] = {}
@@ -204,14 +203,13 @@ class Sandbox:
         if rejection:
             return ExecuteResult(error=rejection)
 
-        self._tool_truncated = False
         try:
             send(self._cmd_w, {"kind": "run", "code": code})
         except OSError:
             self.reset()
             return ExecuteResult(error="worker was dead; restarted")
 
-        grace = self.config.max_execution_time_seconds + 5
+        grace = self.config.max_execution_time_seconds + 1
         while True:
             ready, _, _ = select.select([self._res_r], [], [], grace)
             if not ready:
@@ -366,6 +364,8 @@ class Sandbox:
                 reply["error"] = f"{type(exc).__name__}: {exc}"
         try:
             send(self._cmd_w, reply)
+        except TypeError:
+            send(self._cmd_w, {"result": str(reply["result"]), "error": reply["error"]})
         except OSError:
             pass
 
@@ -375,7 +375,7 @@ class Sandbox:
             "stdout": message.get("stdout", ""),
             "stderr": message.get("stderr", ""),
             "timeout": bool(message.get("timeout", False)),
-            "truncated": bool(message.get("truncated", False) or self._tool_truncated),
+            "truncated": bool(message.get("truncated", False))
         }
         kind = message.get("kind")
         if kind == "final_answer":
