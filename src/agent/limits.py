@@ -75,7 +75,7 @@ class LimitTracker:
             出力(total_output_tokens) -> 時間(elapsed_seconds)
         の順で最初に超過したものを返す。
         反復数や累積トークンは既に上限以上かどうか
-        時間は経過時間 + time_margin_secがtotal_time_secを以上かどうかで判定する。
+        時間は経過時間 + time_margin_secがtotal_time_sec以上かどうかで判定する。
         (1反復のmarginを考慮して、超過しそうなら止める)
         続行時は反復カウンタを1進める。
 
