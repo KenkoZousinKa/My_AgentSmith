@@ -1,0 +1,90 @@
+--- result run_tests ---
++ PYTHONWARNINGS=ignore::UserWarning,ignore::SyntaxWarning
++ bin/test -C --verbose sympy/physics/tests/test_secondquant.py
+============================= test process starts ==============================
+executable:         /opt/miniconda3/envs/testbed/bin/python  (3.9.20-final-0) [CPython]
+architecture:       64-bit
+cache:              no
+ground types:       python 
+numpy:              None
+random seed:        23440443
+hash randomization: on (PYTHONHASHSEED=4291676261)
+
+sympy/physics/tests/test_secondquant.py[53] 
+test_PermutationOperator ok
+test_index_permutations_with_dummies ok
+test_dagger ok
+test_operator ok
+test_create ok
+test_annihilate ok
+test_basic_state ok
+test_basic_apply ok
+test_complex_apply ok
+test_number_operator ok
+test_inner_product ok
+test_symbolic_matrix_elements ok
+test_matrix_elements ok
+test_fixed_bosonic_basis ok
+test_sho Slow w
+test_commutation F
+test_create_f F
+test_annihilate_f ok
+test_create_b ok
+test_annihilate_b ok
+test_wicks ok
+test_NO F
+test_sorting ok
+test_contraction ok
+test_evaluate_deltas ok
+test_Tensors ok
+test_fully_contracted ok
+test_substitute_dummies_without_dummies ok
+test_substitute_dummies_NO_operator ok
+test_substitute_dummies_SQ_operator ok
+test_substitute_dummies_new_indices ok
+test_substitute_dummies_substitution_order ok
+test_dummy_order_inner_outer_lines_VT1T1T1 ok
+test_dummy_order_inner_outer_lines_VT1T1T1T1 ok
+test_get_subNO ok
+test_equivalent_internal_lines_VT1T1 ok
+test_equivalent_internal_lines_VT2conjT2 ok
+test_equivalent_internal_lines_VT2conjT2_ambiguous_order ok
+test_equivalent_internal_lines_VT2 ok
+test_internal_external_VT2T2 ok
+test_internal_external_pqrs ok
+test_dummy_order_well_defined ok
+test_dummy_order_ambiguous ok
+test_dummy_order_inner_outer_lines_VT1T1T1_AT ok
+test_dummy_order_inner_outer_lines_VT1T1T1T1_AT ok
+test_equivalent_internal_lines_VT1T1_AT ok
+test_equivalent_internal_lines_VT2conjT2_AT ok
+test_equivalent_internal_lines_VT2conjT2_ambiguous_order_AT ok
+test_equivalent_internal_lines_VT2_AT ok
+test_internal_external_VT2T2_AT ok
+test_internal_external_pqrs_AT ok
+test_issue_19661 ok
+test_canonical_ordering_AntiSymmetricTensor ok                            [FAIL]
+
+
+________________________________________________________________________________
+___________ sympy/physics/tests/test_secondquant.py:test_commutation ___________
+Traceback (most recent call last):
+  File "/testbed/sympy/physics/tests/test_secondquant.py", line 261, in test_commutation
+    assert latex(c) == r'\left[{a^\dagger_{a}} a_{i},{a^\dagger_{b}} a_{j}\right]'
+AssertionError
+________________________________________________________________________________
+____________ sympy/physics/tests/test_secondquant.py:test_create_f _____________
+Traceback (most recent call last):
+  File "/testbed/sympy/physics/tests/test_secondquant.py", line 291, in test_create_f
+    assert latex(Fd(p)) == r'{a^\dagger_{p}}'
+AssertionError
+________________________________________________________________________________
+_______________ sympy/physics/tests/test_secondquant.py:test_NO ________________
+Traceback (most recent call last):
+  File "/testbed/sympy/physics/tests/test_secondquant.py", line 429, in test_NO
+    assert latex(no) == r'\left\{{a^\dagger_{a}} {a^\dagger_{i}}\right\}'
+AssertionError
+
+======= tests finished: 49 passed, 3 failed, 1 skipped, in 21.14 seconds =======
+DO *NOT* COMMIT!
+RESULT: FAILED (49 passed, 3 failed, 1 skipped)
