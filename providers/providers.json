@@ -25,24 +25,6 @@
             }
         },
         {
-            "name": "ollama",
-            "provider_url": "https://ollama.com/v1",
-            "models": [
-                "gpt-oss:120b",
-                "nemotron-3-ultra"
-            ],
-            "keys_env": "OLLAMA_API_KEY",
-            "priority": 3,
-            "model_params": {
-                "gpt-oss:120b": {
-                    "reasoning_effort": "low"
-                },
-                "nemotron-3-ultra": {
-                    "reasoning_effort": "none"
-                }
-            }
-        },
-        {
             "name": "gemini",
             "provider_url": "https://generativelanguage.googleapis.com/v1beta/openai",
             "models": [
@@ -50,7 +32,7 @@
                 "gemini-3.5-flash-lite"
             ],
             "keys_env": "GEMINI_API_KEY",
-            "priority": 4,
+            "priority": 3,
             "model_params": {
                 "gemini-3.1-flash-lite": {
                     "reasoning_effort": "minimal"
@@ -67,7 +49,7 @@
                 "nvidia/nemotron-3-ultra-550b-a55b:free"
             ],
             "keys_env": "KILO_API_KEY",
-            "priority": 5,
+            "priority": 4,
             "model_params": {
                 "nvidia/nemotron-3-ultra-550b-a55b:free": {
                     "reasoning": {
@@ -83,7 +65,7 @@
                 "nvidia/nemotron-3-ultra-550b-a55b"
             ],
             "keys_env": "NVIDIA_API_KEY",
-            "priority": 6,
+            "priority": 5,
             "model_params": {
                 "nvidia/nemotron-3-ultra-550b-a55b": {
                     "chat_template_kwargs": {
@@ -99,7 +81,7 @@
                 "@cf/openai/gpt-oss-120b"
             ],
             "keys_env": "CLOUDFLARE_API_KEY",
-            "priority": 7,
+            "priority": 6,
             "model_params": {
                 "@cf/openai/gpt-oss-120b": {
                     "reasoning_effort": "low"
