@@ -309,8 +309,8 @@ Even when the agent stops without submitting, it submits the best result it has.
 
 #### Provider order in production (chosen by measurement; see [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) for details)
 - MBPP: we ran all 257 tasks in the exam's range and got 237/257 (92.2%).
-  - First is codestral, which has a large quota and is fast.
-  - Second is qwen3.8, which had the highest pass rate on the hard tasks.
+  - First is codestral (fast). Its free key now allows only 2 requests per minute, so in the exam it answers the first requests and the rest go on to the next models.
+  - Second is qwen3.8 (Groq), which had the highest pass rate on the hard tasks, and third is gpt-oss-120b (Cloudflare), which passed most of the tasks codestral could not pass in the full runs.
 - SWE-bench: first is NVIDIA glm-5.3-flash (17/18 on the 6 candidate exam tasks × 3 rounds with a single model, 24/24 on 11-11, and 6/6 with this order on 11-12), and second is gpt-oss-120b (low) on Cloudflare (13/13).
   - Until 11-09, gpt-oss:120b (low) on Ollama was first (18/18, 9/9 even on the hardest one, sympy-14711). Ollama Cloud's free plan became pay-as-you-go on 11-09, so we removed Ollama from both orders.
 - Stronger reasoning settings are not used: they tended to hit SWE's output limit (10,000) and did not raise the pass rate.
