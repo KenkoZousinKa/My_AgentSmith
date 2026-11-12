@@ -147,6 +147,7 @@ def check_code(
     """Return a rejection reason, or None if the code is okay."""
     try:
         tree = ast.parse(code)
+        compile(tree, "<sandbox>", "exec")
     except SyntaxError as exc:
         return f"SyntaxError: {exc.msg} (line {exc.lineno})"
     checker = _Checker(frozenset(config.authorized_imports), tool_names)
