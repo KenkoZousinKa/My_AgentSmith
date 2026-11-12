@@ -37,6 +37,7 @@
   - Reading "glued" code fences correctly (#5.2, tool) cut syntax errors from 26 to 1 on the 6 tasks.
   - Submitting in the same step as the passing test (#5.3, prompt + tool) cut the gap between "tests first pass" and `final_answer` from 1.18 to 0.08 (10 of 10 pairs, p=0.002), and the iterations of glm-5.3-flash from 6.50 to 4.58, without losing any PASS (24/24).
 
+- **A 7th task outside the exam pool** (#1.3, #4): `sympy__sympy-21930` has 6 failing tests, so partial progress can be seen. The current order passed it 3/3. Every run fixed 5 of the 6 at its first test run, then needed 1–6 more iterations to find the last fix, which the issue does not mention.
 - **Production order (changed on 11-12)**
     **NVIDIA glm-5.3-flash goes first, and the same gpt-oss-120b as before, on Cloudflare, goes second.**
   - Until 11-09, Ollama gpt-oss:120b (reasoning low) was first: 18/18 on 6 tasks × 3 rounds as the only model, 9/9 on 14711.
@@ -118,7 +119,7 @@ For each setting and task, we ran these 3 steps.
 - This was because groq's qwen3.8-27b, which scored 7.2 on the hard 10 above, ran out of quota halfway through, and kilo's nemotron-ultra, placed second, solved the other half.
 - In the trial run we had used mistral codestral, which scored only 4.0 in the measurement above. So we concluded that the difference on 10 hand-picked tasks cannot measure the difference between models.
 - Most of the tasks lost during the measurements failed on the input token limit. We trimmed the system prompt and the history sent each time to leave room for one more turn. That reduced how often the input limit was hit, but the runs then hit the output limit instead, and the score did not improve. We did not see a meaningful difference, so we did not adopt the change this time.
-- With 10 random tasks it is hard to measure differences. A full run measures the score best, but even that varies from round to round. We use free quotas, so we cannot measure many times, and one run takes time (about 40 minutes and about 1,000 requests for all tasks), so changing one thing at a time and measuring again after each change is not realistic. On top of that, some of the lost tasks are hard to infer the answer to from the tests and the problem statement given to the LLM, so we judged that an implementation that always passes is impossible. For the MBPP order, we chose mistral codestral, which has plenty of token headroom and ranked high in earlier measurements, and put groq's qwen second, so that if codestral cannot answer, the agent falls back to a model with a (probably) higher pass rate.
+- With 10 random tasks it is hard to measure differences. A full run measures the score best, but even that varies from round to round. We use free quotas, so we cannot measure many times, and one run takes time (about 40 minutes and about 1,000 requests for all tasks), so changing one thing at a time and measuring again after each change is not realistic. On top of that, some of the lost tasks are hard to infer the answer to from the tests and the problem statement given to the LLM, so we judged that an implementation that always passes is impossible. For the MBPP order, we chose mistral codestral, which has plenty of token headroom and ranked high in earlier measurements, and put groq's qwen second, so that if codestral cannot answer, the agent falls back to a model with a (probably) higher pass rate. (This was the order as of 11-02. The free Mistral key later dropped to 2 requests per minute, so we changed the MBPP order on 11-13; see #10.)
 
 - For SWE, we expected that with the larger input/output limits, models that reason more would hit the limits less often and be more accurate, so we put reasoning ON and OFF of the same model side by side.
 - Each reasoning-ON setting was first checked once with a request of the same shape as the agent's (`stop=["<end_code>"]`, `max_tokens=1200`), and only settings that returned code in the body in both cases were adopted.
@@ -159,7 +160,7 @@ For each setting and task, we ran these 3 steps.
 
 ### 1.3 Tasks
 
-We used two sets of tasks.
+We used two sets of tasks, and added a 7th task on 11-13.
 
 **3 tasks for all 16 settings** (#2–#5.1): `sympy__sympy-14711`, `sympy__sympy-13480` and `pydata__xarray-4629`, for these reasons:
 
@@ -181,6 +182,17 @@ We used two sets of tasks.
 - We measured the baseline without the LLM: the task's grading script (`eval_script`) run on the original code in the task's Docker image (`benchmark/swebench/baseline_original_code/<task>.log`).
 - In every task, the failing test is the one listed in the dataset's `FAIL_TO_PASS`.
 - All 6 tasks have exactly one failing test. This matters for one of the metrics in #4.
+
+**A 7th task outside the exam pool (added on 11-13)**: `sympy__sympy-21930` (SWE-bench Verified, "15 min – 1 hour", a one-file patch, 2021).
+
+- We chose it from the candidates with 2 or more failing tests (`django__django-16667`, `pydata__xarray-7393`, `sympy__sympy-21930`, `scikit-learn__scikit-learn-26194`) because it has the most: 6 (`test_create`, `test_commutation`, `test_create_f`, `test_NO`, `test_Tensors`, `test_issue_19661`, the same as `FAIL_TO_PASS`). With 6, the partial-progress metric of #4 can move.
+- It is in the same repository as three exam tasks, so `run_tests()` reads its summary line the same way.
+
+| Task | Test runner | Tests failing on the original code (baseline) | Used in |
+|---|---|---|---|
+| sympy__sympy-21930 | `bin/test` | **6** (`RESULT: FAILED (46 passed, 6 failed, 1 skipped)`) | 7th task (#4, #7) |
+
+- Applying the 3 hunks of the gold patch one by one gives 6 → 5 → 3 → 0 failures, and the full patch gives `RESULT: PASSED (52 passed, 1 skipped)` (`benchmark/swebench/task7_sympy21930/baseline/`). The verdict line of `run_tests()` (#5.3) also works on a task outside the 6 it was written for.
 
 ## 2. **Results table**
 - For each model × task combination:
@@ -377,7 +389,21 @@ Automation is not required. What matters is the analysis, not the tooling.
 - Baseline: the number of tests failing on the original code (#1.3). It is 1 for all 6 tasks.
 - We read the counts from the output of each `run_tests()` step: the summary line of pytest, sympy `bin/test` or Django `runtests.py`, and, from 11-11, the verdict line `RESULT: …` (#5.3).
 - With a baseline of 1, "fewer failures than the baseline" means 0 failures, that is, "all tests pass". So on these tasks this metric always equals the step at which all tests first pass. We checked this on the 213 runs we had on 11-10: in every run, the two steps were the same.
-- **Insight**: this metric shows partial progress only on tasks with 2 or more failing tests. On the exam's 6 tasks it cannot separate models. A 7th task with several failing tests would be needed to use it (not done).
+- **Insight**: this metric shows partial progress only on tasks with 2 or more failing tests. On the exam's 6 tasks it cannot separate models, so we added a 7th task with 6 failing tests (#1.3).
+
+**The 7th task** (`sympy__sympy-21930`, current order, 3 runs, 11-13):
+
+| Run | Result | First step that reads / edits the file of the final patch | First step with fewer failures than the baseline (6) | Step at which all tests first pass | Gap | Iterations |
+|---|---|---|---|---|---|---|
+| r1 | [PASS](benchmark/swebench/task7_sympy21930/r1/sympy__sympy-21930/solution.json) | 2 / 5 | 6 (6 → 1) | 7 | 0 | 7 |
+| r2 | [PASS](benchmark/swebench/task7_sympy21930/r2/sympy__sympy-21930/solution.json) | 2 / 4 | 6 (6 → 1) | 10 | 0 | 10 |
+| r3 | [PASS](benchmark/swebench/task7_sympy21930/r3/sympy__sympy-21930/solution.json) | 2 / 6 | 7 (6 → 1) | 13 | 0 | 13 |
+
+- In all 3 runs, the first edit fixed `b^\dagger` (named in the issue) and the same pattern `a^\dagger`, and the first test run already went from 6 failures to 1.
+- The last failing test, `test_Tensors`, needs the same fix in `AntiSymmetricTensor._latex`, which the issue does not mention. Finding it took 1, 4 and 6 more iterations.
+- **Insight**: on this task, "first decrease" and "all pass" are different steps. The difference measures how long the agent searches for the part of the fix that the issue does not name. On the exam's 6 tasks this phase does not exist, so iterations there mostly measure how fast the agent finds the named function.
+- The gap was 0 in all 3 runs (#5.3).
+- In r3, glm-5.3-flash returned an empty response at step 10. The agent moved to the second provider (Cloudflare gpt-oss-120b), which found the last fix and passed at step 13.
 
 **Exploration efficiency**:
 
@@ -398,6 +424,10 @@ Automation is not required. What matters is the analysis, not the tooling.
 | Gap (iterations from all tests passing to `final_answer`) | 0 | 1 | 2 | 3 | 4–6 | 14, 16 |
 |---|---|---|---|---|---|---|
 | Runs | 14 | **98** | 18 | 9 | 6 | 3 |
+
+![Gap distribution](.images/fig_gap_distribution.png)
+
+*Figure 1. Left: the gap over the 148 measurable runs until 11-10. Right: the gap of glm-5.3-flash before (A) and after (B) the change of #5.3.*
 
 - **Insight**: 66% of the runs had a gap of exactly 1. The cause was not the models but our few-shot example, which showed "run the tests, read the result in the next step, then submit". The models copied it. codestral, which often wrote `final_answer(get_patch())` in the same step as the tests, had 8 of the 14 runs with gap 0.
 - This led to the change measured in #5.3: the tool prints a verdict line, and the example submits in the same step when it says PASSED. With it, the gap became 0 in 11 of 12 runs of glm-5.3-flash.
@@ -519,6 +549,10 @@ Only the reasoning setting of the request (`model_params`) was changed.
 | 5.2 | Tool (code extraction) | Read glued code fences | Syntax errors 26 → 1 (6/6, p≈0.03) | Iterations 10.5 → 7.2 (p≈0.69), PASS 6/6 → 6/6 | Kept |
 | 5.3 | Prompt + tool | Verdict line + submit in the same step | Gap 1.18 → 0.08 (10/10, p=0.002) | Iterations 6.50 → 4.58 (p=0.050), input −30%, PASS 12/12 → 12/12 | Kept |
 
+![Ablations: iterations before and after](.images/fig_ablation_iterations.png)
+
+*Figure 2. Iterations per run before and after each change. Gray lines are single tasks (and rounds); the orange line joins the averages.*
+
 - In all three, the mechanism moved clearly, and the outcome moved less or within chance. On the 6 exam tasks, good models pass almost every run, so PASS cannot show an improvement. Iterations, tokens and the gap can.
 
 ### 5.5 Comparisons we did not count as ablations
@@ -556,7 +590,7 @@ Only the reasoning setting of the request (`model_params`) was changed.
 3. **NVIDIA `nemotron-3-ultra` (reasoning ON)**
    - 3/3 on the 3 tasks (14711 with a recovered patch at the iteration limit). It is on the same provider as the first, so it comes after Cloudflare.
 4. **Mistral `codestral-latest`**
-   - Fast with a large quota, but 3/9 on 14711 and 1/4 on scikit-learn. It sometimes submits a wrong patch with confidence, so it is after the models above.
+   - Fast, but on 11-12 its free key allowed only 2 requests per minute (#10). 3/9 on 14711 and 1/4 on scikit-learn. It sometimes submits a wrong patch with confidence, so it is after the models above.
 5. Google `gemini-3.1-flash-lite` (reasoning medium): 2/3 on the 3 tasks, 6/9 on 14711.
 6. Kilo `nemotron-3-ultra:free` (reasoning OFF): `:free` models can disappear, so it is near the end.
 7. Cohere `command-a-03-2025`
@@ -612,6 +646,8 @@ Only the reasoning setting of the request (`model_params`) was changed.
 | cohere first (the previous `providers_swebench.json`; cohere ran out of quota partway through round 1, so nemotron-3-ultra was first in practice) | 3 rounds (r1–r3) | 5, 5, 5 → **15/18 (83%)** |
 | The top 3 models (9/9 on 14711), each as the only model × 6 tasks × 3 rounds | table below | gpt-oss low **18/18**, glm 17/18, gpt-oss medium 16/18 |
 | **Current order (glm first, Cloudflare second; #6)** | 1 round (11-12) | **6/6** (avg. 4.8 iterations, about 13,203 input, about 703 output, 208 s). Only glm-5.3-flash answered; no fallback was needed |
+| Official [`exam_swebench.sh`](benchmark/swebench/official_exam_7bfd3dc/exam_swebench.log) with the current order (`7bfd3dc`, 11-12) | The 3 tasks picked by the script | **3/3** ([18189](benchmark/swebench/official_exam_7bfd3dc/sympy__sympy-18189/solution.json), [14711](benchmark/swebench/official_exam_7bfd3dc/sympy__sympy-14711/solution.json), [django](benchmark/swebench/official_exam_7bfd3dc/django__django-11066/solution.json); avg. 3.3 iterations, about 9,984 input, about 704 output, 176 s). The gap was 0 in all 3 runs; only glm-5.3-flash answered |
+| Current order on the 7th task `sympy__sympy-21930` (`3c98b62`, 11-13; #1.3, #4) | 3 rounds | **3/3** ([r1](benchmark/swebench/task7_sympy21930/r1/sympy__sympy-21930/solution.json), [r2](benchmark/swebench/task7_sympy21930/r2/sympy__sympy-21930/solution.json), [r3](benchmark/swebench/task7_sympy21930/r3/sympy__sympy-21930/solution.json); avg. 10.0 iterations, about 36,486 input, about 3,386 output, 262 s). glm-5.3-flash answered, except steps 10–13 of r3 (Cloudflare gpt-oss-120b after an empty response from glm) |
 | Previous final order (gpt-oss first on Ollama, until 11-09) | 2 rounds (11-02 07:12–07:26) | **12/12** (avg. 9.5 iterations, about 30,500 input, about 1,260 output, 35 s). Only gpt-oss:120b answered, except one xarray run that switched to glm-5.3-flash partway and passed |
 
 **Current order (glm first, Cloudflare second; `ba5baed`, 11-12)**:
@@ -696,17 +732,26 @@ PASS rates with 95% Wilson intervals (the interval stays within 0–1 even for s
 | gpt-oss-120b Cloudflare, A (6 × 1 + 1, 11-11) | 7 | 7 | 0.65–1.00 | 29,843 | 89.8 | 7.3 |
 | gpt-oss-120b Cloudflare, B (6 × 1, 11-11) | 6 | 6 | 0.61–1.00 | 21,573 | 58.1 | 6.5 |
 | **glm first order, current (6 × 1, 11-12)** | 6 | 6 | 0.61–1.00 | 13,906 | 208.1 | 5.5 |
+| current order, 7th task sympy-21930 (1 task × 3, 11-13) | 3 | 3 | 0.44–1.00 | 39,872 | 262.0 | 10.3 |
 | gpt-oss first order, until 11-09 (6 × 2) | 12 | 12 | 0.76–1.00 | 31,762 | 34.3 | 9.5 |
 | codestral first order (6 × 4) | 24 | 19 | 0.60–0.91 | 30,929 | 49.5 | 7.6 |
 | cohere first order (6 × 3) | 18 | 15 | 0.61–0.94 | 78,751 | 227.7 | 52.5 |
 | codestral alone, 14711 × 8 | 8 | 2 | 0.07–0.59 | 46,682 | 95.5 | 19.0 |
 | Any setting, 3 tasks × 1 (#2) | 3 | 3 | 0.44–1.00 | - | - | - |
 
+![PASS rate and 95% interval per data set](.images/fig_pass_rate_ci.png)
+
+*Figure 3. PASS rate (dot) and 95% Wilson interval (line) per data set. With 3–8 runs, the interval is wide even at 100%.*
+
 - 3/3 on 3 tasks has an interval of 0.44–1.00. The 16-setting comparison (#2) can only narrow the candidates; the decision needs repeated runs (#7).
 - Even 18/18 only says that the pass rate is likely above 0.82. The differences between the top models (18/18, 17/18, 16/18) are within chance. What separates them is cost and speed.
 - The paired tests of the ablations are in #5 (sign test, exact Wilcoxon signed-rank test).
 
 ### 8.2 Cost
+
+![Cost per PASS](.images/fig_cost_per_pass.png)
+
+*Figure 4. Tokens (input + output) used per PASS. With the same model, the change of #5.3 lowered it by 29% (glm A → B). The 7th task costs more because the last fix is not named in the issue (#4).*
 
 - Every provider is used on a free tier, so the money cost is 0. Instead, we compare how much of the free quota one PASS uses (the table above).
 - With the current agent, glm-5.3-flash used 15,875 tokens and 4.8 requests per PASS, and Cloudflare's gpt-oss-120b 21,573 tokens and 6.5 requests.
@@ -721,7 +766,7 @@ PASS rates with 95% Wilson intervals (the interval stays within 0–1 even for s
 | Item | Value |
 |---|---|
 | Dataset | SWE-bench Verified, as loaded by the moulinette (revision `78f471b…`) |
-| Tasks | The 6 tasks of `EXAM_POOL` (#1.3), each run in its Docker image from the moulinette |
+| Tasks | The 6 tasks of `EXAM_POOL` and the 7th task `sympy__sympy-21930` (#1.3), each run in its Docker image from the moulinette |
 | Limits | 30 iterations, 300,000 input tokens, 10,000 output tokens, 900 seconds |
 | Machine | Ubuntu 24.04, Python 3.10.22 |
 
@@ -732,6 +777,8 @@ PASS rates with 95% Wilson intervals (the interval stays within 0–1 even for s
 | `ablation_glued_fences/after_glued_fix` | `08c8c6c` + `after_glued_fix.diff` |
 | `ablation_same_step_submit/*/A` | `055a539` |
 | `ablation_same_step_submit/*/B`, `production_glm_first` | `ba5baed` (`production_glm_first` with the current `providers_swebench.json`) |
+| `official_exam_7bfd3dc` | `7bfd3dc` (the official `exam_swebench.sh`) |
+| `task7_sympy21930` | `3c98b62` (the same agent behavior as `ba5baed`; the current providers files) |
 
 **What cannot be reproduced exactly**:
 
@@ -740,7 +787,7 @@ PASS rates with 95% Wilson intervals (the interval stays within 0–1 even for s
 
 **Limitations**:
 
-- The 6 exam tasks are easy ("15 min – 1 hour") and each has exactly one failing test. Good models pass almost every run, so PASS hardly separates them; iterations, tokens and the gap do. The "partial progress" metric cannot work on them (#4).
+- The 6 exam tasks are easy ("15 min – 1 hour") and each has exactly one failing test. Good models pass almost every run, so PASS hardly separates them; iterations, tokens and the gap do. The "partial progress" metric cannot work on them, so we added a 7th task with 6 failing tests (#4).
 - The tasks are several years old, so the models may have seen the fixes during training.
 - `run_tests()` runs the task's grading script, so "tests pass" inside the agent almost means a graded PASS. On a real issue without such tests, the agent would have to write its own.
 - n is small: 6–24 runs per comparison (#8.1).
@@ -752,11 +799,14 @@ PASS rates with 95% Wilson intervals (the interval stays within 0–1 even for s
   - 11-01 (order B): 224/257 (87.2%)
   - 11-02 (A and C alternating task by task): A 234 (91.1%), C **237** (92.2%) → **production uses C**
 - The exam requires 4 of 5 tasks, so with a per-task success rate of 0.92, the chance of passing is about 95%.
-- On 11-12 we removed Ollama (third in the MBPP order) because it is no longer free. The order is now Mistral (codestral → ministral-14b) → Groq qwen3.8-27b → Gemini → Kilo → NVIDIA → Cloudflare. The full runs above were made with Ollama third, which answered only when both Mistral and Groq failed.
+- On 11-12 we removed Ollama (third in the MBPP order) because it is no longer free. The full runs above were made with Ollama third, which answered only when both Mistral and Groq failed.
+- **Mistral's free key now allows only 2 requests per minute** for each model (codestral and ministral-14b; header `x-ratelimit-limit-req-minute: 2`, checked on 11-12). On 11-01–11-02 codestral could still answer all 257 tasks, so the limit was lowered after that. The exam's 5 tasks take about 30 seconds, so codestral answers only the first 2 requests and the rest go to the next models.
+- So on 11-13 we reordered MBPP with the full-run data: codestral → Groq qwen3.8-27b (90.1% on the 121 tasks it answered first on 11-01) → Cloudflare gpt-oss-120b (in runs A and C, gpt-oss-120b, as the model that answered after codestral, passed 30 tasks per run that codestral had failed on the visible tests) → Kilo nemotron-3-ultra → ministral-14b → Gemini → NVIDIA nemotron-3-ultra.
+- The official `exam_mbpp.sh` gave **5/5** with the previous order (11-12) and **5/5** with the new order (11-13). In the new-order run, codestral answered 2 tasks and qwen 3; in one of them, qwen failed the visible tests twice and gpt-oss-120b then passed it.
 
 ## 11. Where the data is
 
-We put 258 runs in `benchmark/swebench/` (about 54MB).
+We put 264 runs in `benchmark/swebench/` (about 55MB).
 
 - Each run has these 6 files:
   - `solution.json`
@@ -780,6 +830,8 @@ We put 258 runs in `benchmark/swebench/` (about 54MB).
 | `ablation_same_step_submit/gptoss120b_groq_smoke/<task>/` | Groq gpt-oss-120b, 2 tries (empty body) | #1.2, #3 |
 | `baseline_original_code/<task>.log` | The grading script on the original code (no LLM) | #1.3, #4 |
 | `production_glm_first/r1/<task>/` | Current order (glm first) × 6 tasks × 1 round | #7 |
+| `official_exam_7bfd3dc/<task>/` | The official `exam_swebench.sh` with the current order (3 tasks; the full output is `exam_swebench.log`) | #7 |
+| `task7_sympy21930/r<n>/sympy__sympy-21930/` | The 7th task × 3 rounds with the current order. `baseline/` has the `run_tests()` output on the original code and with the gold patch applied hunk by hunk | #1.3, #4, #7 |
 
 **How to check one row** (every result in #2, #5 and #7 links to its `solution.json`):
 
