@@ -59,7 +59,7 @@ flowchart LR
         ORCH -- コード --> SBP
         SBP --> MCPC
     end
-    LLMC -- "HTTPS（Chat Completions）" --> API["LLM の API<br>Ollama・NVIDIA・Mistral など"]
+    LLMC -- "HTTPS（Chat Completions）" --> API["LLM の API<br>NVIDIA・Cloudflare・Mistral など"]
     SBP <-- "パイプ" --> CHILD["サンドボックスの子プロセス（fork）<br>制限した名前空間・監査フック・rlimit"]
     MCPC <-- "JSON-RPC（stdio / HTTP）" --> SRV["MCP サーバー（別プロセス）<br>mcp_tools_mbpp.py / mcp_tools_swebench.py"]
     SRV -- "docker exec" --> DOCKER["Docker コンテナ（SWE-bench）<br>/testbed のリポジトリ"]
@@ -311,9 +311,10 @@ flowchart TD
 - MBPP: 試験の範囲の257問を全部回して、237/257（92.2%）でした。
   - 1番手は、枠が大きく速い codestral です。
   - 2番手は、難しい問題で正答率が一番高かった qwen3.8 です。
-- SWE-bench: 試験の候補の6問 × 3周を1モデルだけで回して、gpt-oss:120b（low）が 18/18 でした（いちばん難しい sympy-14711 も 9/9）。
-- 推論を強くする設定は、SWE の出力の上限（10,000）に当たりやすく、正答率も上がらなかったので、使っていません。
-- `.env` には、ここに出てくる社のキー（`MISTRAL_API_KEY`・`GROQ_API_KEY`・`OLLAMA_API_KEY`・`GEMINI_API_KEY`・`KILO_API_KEY`・`NVIDIA_API_KEY`・`CLOUDFLARE_API_KEY`・`COHERE_API_KEY`）を入れます。キーの無い社は飛ばされます。
+- SWE-bench: 1番手は NVIDIA の glm-5.3-flash（試験の候補の6問 × 3周を1モデルだけで回して 17/18、11-11 に 24/24、この並びで 11-12 に 6/6）、2番手は Cloudflare の gpt-oss-120b（low。13/13）です。
+  - 11-09 までは Ollama の gpt-oss:120b（low）が1番手でした（18/18、いちばん難しい sympy-14711 も 9/9）。Ollama Cloud の無料プランが 11-09 に従量課金に変わったので、両方の並びから Ollama を外しました。
+- 推論を強くする設定はSWE の出力の上限（10,000）に当たりやすく、正答率も上がらなかったので使っていません。
+- `.env` には、ここに出てくる社のキー（`MISTRAL_API_KEY`・`GROQ_API_KEY`・`GEMINI_API_KEY`・`KILO_API_KEY`・`NVIDIA_API_KEY`・`CLOUDFLARE_API_KEY`・`COHERE_API_KEY`）を入れます。キーの無い社は飛ばされます。
 
 #### 制限とトークンの数え方
 | 上限（`config.json`） | MBPP | SWE-bench |
@@ -527,7 +528,6 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
   - API
   [mistral.ai](https://mistral.ai/products/studio/)
   [groq](https://console.groq.com/home)
-  [ollama](https://signin.ollama.com/)
   [gemini](https://aistudio.google.com/prompts/)
   [kilo](https://app.kilo.ai/)
   [nvidia](https://build.nvidia.com/settings/api-keys)
