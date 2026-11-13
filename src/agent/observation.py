@@ -19,10 +19,13 @@
 - malformed_code_note()
     崩れたコードを救済実行したことをLLMへ明示する文を返す。
 - repeated_code_note()
-    以前と同じコードを実行したことをLLMへ明示する文を返す。
+    以前と同じコードを実行し、出力も同じだったことをLLMへ明示する文を返す。
+- comparable_output()
+    同じコードの再実行かを比べるために実行ごとに変わる部分を落としたObservationを返す。
 - submission_rejected_note()
     final_answer()の提出を差し戻したこととその理由をLLMへ伝える文を返す。
 """
+import re
 from enum import Enum
 
 from src.models.output import ExecuteResult
@@ -32,7 +35,8 @@ from src.agent.extractor.python_extractor import (
     SALVAGE_ESCAPED_QUOTES,
     SALVAGE_JSON_WRAPPED,
     SALVAGE_MULTIPLE_BLOCKS,
-    SALVAGE_UNMATCHED_CLOSERS
+    SALVAGE_UNMATCHED_CLOSERS,
+    SALVAGE_GLUED_FENCES
 )
 
 
@@ -63,6 +67,60 @@ _NOTE: dict[Status, str] = {
     Status.FINAL_ANSWER_INVALID: "Call final_answer() with the actual solution as its argument.",
     Status.NO_CODE: "Write exactly one ```python ... ``` code block."
 }
+
+_CUT_OFF_NOTE = (
+    "Your reply spent its whole {spent}-token allowance on prose and was cut off before any "
+    "```python fence, so nothing ran. Do NOT derive formulas or trace arithmetic in words: "
+    "write a candidate implementation in code and let run_tests tell you if it is right."
+)
+
+# [MALFORMED_CODE]の種類ごとのLLMへの説明文
+_MALFORMED_NOTES: dict[str, str] = {
+    SALVAGE_UNCLOSED_FENCE: (
+        "[MALFORMED_CODE] Your ```python block was never closed, so your response was cut off "
+        "by the per-turn output limit. I executed everything after the opening fence anyway. "
+        "Write shorter turns so the block closes."
+    ),
+    SALVAGE_UNFENCED: (
+        "[MALFORMED_CODE] You wrote bare Python with no ```python fence. I detected it and "
+        "executed it anyway, but wrap your code in ```python ... ``` so it is read reliably."
+    ),
+    SALVAGE_ESCAPED_QUOTES: (
+        "[MALFORMED_CODE] You backslash-escaped quotes outside a string literal (for example "
+        'if report[\\"success\\"]: instead of if report["success"]:). That is a SyntaxError. '
+        "I unescaped the broken lines and ran your code. Write plain Python quotes: this is a "
+        "code block, not a JSON string."
+    ),
+    SALVAGE_JSON_WRAPPED: (
+        "[MALFORMED_CODE] Your ```python block contained a JSON object like {\"code\": \"...\"} "
+        "instead of Python. I took the string under \"code\" and executed it as Python. Write the "
+        "Python statements directly inside the block."
+    ),
+    SALVAGE_UNMATCHED_CLOSERS: (
+        "[MALFORMED_CODE] Your code had more closing brackets than opening ones (a SyntaxError: "
+        "unmatched ')'), usually from counting the brackets inside a string literal. I removed only "
+        "the extra closing brackets the Python parser reported and ran the code. Brackets inside "
+        "quotes do not need closing outside them."
+    ),
+    SALVAGE_GLUED_FENCES: (
+        "[MALFORMED_CODE] Your fences were glued together (``` directly followed by ```python or by "
+        "text on the same line), and you wrote several steps ahead without seeing any result. "
+        "I executed only the FIRST block; the later blocks were NOT run. Read the output below, "
+        "then write exactly ONE ```python block per turn, with the closing ``` on its own line, "
+        "and end with <end_code>."
+    ),
+    SALVAGE_MULTIPLE_BLOCKS: (
+        "[NOTE] Your message had several ```python blocks. I joined them in order and executed "
+        "them as one program. Prefer exactly one block per turn."
+    ),
+}
+# 同じコードの出力を比べる時に落とす実行ごとに変わる部分。
+# テストの所要時間とsympyのbin/testが毎回変える乱数のseed(random seed / PYTHONHASHSEED)
+_VOLATILE_OUTPUT_PATTERN = re.compile(
+    r"\b(?:in|Took) \d+(?:\.\d+)? ?s(?:econds)?\b"
+    r"|random seed: +\d+"
+    r"|PYTHONHASHSEED=\d+"
+)
 
 
 def collect_statuses(result: ExecuteResult) -> list[Status]:
@@ -145,13 +203,6 @@ def build_observation(result: ExecuteResult) -> str:
     )
 
 
-_CUT_OFF_NOTE = (
-    "Your reply spent its whole {spent}-token allowance on prose and was cut off before any "
-    "```python fence, so nothing ran. Do NOT derive formulas or trace arithmetic in words: "
-    "write a candidate implementation in code and let run_tests tell you if it is right."
-)
-
-
 def observation_no_code(cut_off_at: int | None = None) -> str:
     """LLMに返すObservation文字列を構築する(コードがない場合).
 
@@ -200,41 +251,6 @@ def iteration_note(iterations_left: int, submit_hint: str) -> str:
     return f"[BUDGET] Only {iterations_left} {plural} for this task. {submit_hint}"
 
 
-# [MALFORMED_CODE]の種類ごとのLLMへの説明文
-_MALFORMED_NOTES: dict[str, str] = {
-    SALVAGE_UNCLOSED_FENCE: (
-        "[MALFORMED_CODE] Your ```python block was never closed, so your response was cut off "
-        "by the per-turn output limit. I executed everything after the opening fence anyway. "
-        "Write shorter turns so the block closes."
-    ),
-    SALVAGE_UNFENCED: (
-        "[MALFORMED_CODE] You wrote bare Python with no ```python fence. I detected it and "
-        "executed it anyway, but wrap your code in ```python ... ``` so it is read reliably."
-    ),
-    SALVAGE_ESCAPED_QUOTES: (
-        "[MALFORMED_CODE] You backslash-escaped quotes outside a string literal (for example "
-        'if report[\\"success\\"]: instead of if report["success"]:). That is a SyntaxError. '
-        "I unescaped the broken lines and ran your code. Write plain Python quotes: this is a "
-        "code block, not a JSON string."
-    ),
-    SALVAGE_JSON_WRAPPED: (
-        "[MALFORMED_CODE] Your ```python block contained a JSON object like {\"code\": \"...\"} "
-        "instead of Python. I took the string under \"code\" and executed it as Python. Write the "
-        "Python statements directly inside the block."
-    ),
-    SALVAGE_UNMATCHED_CLOSERS: (
-        "[MALFORMED_CODE] Your code had more closing brackets than opening ones (a SyntaxError: "
-        "unmatched ')'), usually from counting the brackets inside a string literal. I removed only "
-        "the extra closing brackets the Python parser reported and ran the code. Brackets inside "
-        "quotes do not need closing outside them."
-    ),
-    SALVAGE_MULTIPLE_BLOCKS: (
-        "[NOTE] Your message had several ```python blocks. I joined them in order and executed "
-        "them as one program. Prefer exactly one block per turn."
-    ),
-}
-
-
 def malformed_code_note(kind: str) -> str:
     """崩れたコードを救済実行したことをLLMへ明示する文を返す.
 
@@ -250,19 +266,34 @@ def malformed_code_note(kind: str) -> str:
     return _MALFORMED_NOTES.get(kind, "")
 
 
-def repeated_code_note(first_step: int) -> str:
-    """以前と同じコードを実行したことをLLMへ明示する文を返す.
+def repeated_code_note(previous_step: int) -> str:
+    """以前と同じコードを実行し、出力も同じだったことをLLMへ明示する文を返す.
 
     Args:
-        first_step (int): 以前の同じコードを最初に実行したstepの番号。
+        previous_step (int): 以前の同じコードを最初に実行したstepの番号。
 
     Returns:
         str: Observationの先頭に付ける説明文。
     """
     return (
-        f"[REPEATED] This code is identical to what you ran in step {first_step}, so it fails the "
-        "same way. Do not resubmit it: re-read the failing values and change the logic."
+        f"[REPEATED] This code and its output are identical to step {previous_step}: running it again "
+        "changes nothing. Do not resubmit it: re-read the failing values and change the logic."
     )
+
+
+def comparable_output(observation: str) -> str:
+    """同じコードの再実行かを比べるために実行ごとに変わる部分を落としたObservationを返す.
+
+    テストの所要時間や乱数のシードは同じ状態で同じコードを実行しても毎回変わる。
+    ここを落とさないと本当に同じことを繰り返しているのに[REPEATED]を付けられない。
+
+    Args:
+        observation (str): build_observation()で組み立てたObservation(注記をつける前)。
+
+    Returns:
+        str: 比べる用の文字列。
+    """
+    return _VOLATILE_OUTPUT_PATTERN.sub("", observation)
 
 
 def submission_rejected_note(reason: str) -> str:

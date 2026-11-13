@@ -39,11 +39,11 @@ AgentSmith は、プログラミングの課題を自分で考え、コードを
 
 | 部品 | 役割 | 担当 |
 |---|---|---|
-| Agent | LLM の呼び出し、思考と行動のループ、答えの取り出し | nsato（要確認） |
-| Sandbox | LLM が書いたコードを、隔離した環境で実行する | joseo（要確認） |
+| Agent | LLM の呼び出し、思考と行動のループ、答えの取り出し | nsato |
+| Sandbox | LLM が書いたコードを、隔離した環境で実行する | joseo |
 | MCP | ツールを提供するサーバーと、それを呼ぶクライアント | ayhirose |
 
-### システムアーキテクチャ
+### 1-1. システムアーキテクチャ
 
 ```mermaid
 flowchart LR
@@ -59,7 +59,7 @@ flowchart LR
         ORCH -- コード --> SBP
         SBP --> MCPC
     end
-    LLMC -- "HTTPS（Chat Completions）" --> API["LLM の API<br>Ollama・NVIDIA・Mistral など"]
+    LLMC -- "HTTPS（Chat Completions）" --> API["LLM の API<br>NVIDIA・Cloudflare・Mistral など"]
     SBP <-- "パイプ" --> CHILD["サンドボックスの子プロセス（fork）<br>制限した名前空間・監査フック・rlimit"]
     MCPC <-- "JSON-RPC（stdio / HTTP）" --> SRV["MCP サーバー（別プロセス）<br>mcp_tools_mbpp.py / mcp_tools_swebench.py"]
     SRV -- "docker exec" --> DOCKER["Docker コンテナ（SWE-bench）<br>/testbed のリポジトリ"]
@@ -309,11 +309,12 @@ flowchart TD
 
 #### 本番のプロバイダの並び（計測で決めたもの。詳しくは [`BENCHMARK_REPORT_ja.md`](BENCHMARK_REPORT_ja.md)）
 - MBPP: 試験の範囲の257問を全部回して、237/257（92.2%）でした。
-  - 1番手は、枠が大きく速い codestral です。
-  - 2番手は、難しい問題で正答率が一番高かった qwen3.8 です。
-- SWE-bench: 試験の候補の6問 × 3周を1モデルだけで回して、gpt-oss:120b（low）が 18/18 でした（いちばん難しい sympy-14711 も 9/9）。
-- 推論を強くする設定は、SWE の出力の上限（10,000）に当たりやすく、正答率も上がらなかったので、使っていません。
-- `.env` には、ここに出てくる社のキー（`MISTRAL_API_KEY`・`GROQ_API_KEY`・`OLLAMA_API_KEY`・`GEMINI_API_KEY`・`KILO_API_KEY`・`NVIDIA_API_KEY`・`CLOUDFLARE_API_KEY`・`COHERE_API_KEY`）を入れます。キーの無い社は飛ばされます。
+  - 1番手は速い codestral です。無料のキーが1分に2リクエストまでになったので、試験では最初の分だけを答え、残りは次のモデルへ回ります。
+  - 2番手は難しい問題で正答率が一番高かった qwen3.8（Groq）、3番手は全問の計測で codestral が通せなかった問題の多くを通した gpt-oss-120b（Cloudflare）です。
+- SWE-bench: 1番手は NVIDIA の glm-5.3-flash（試験の候補の6問 × 3周を1モデルだけで回して 17/18、11-11 に 24/24、この並びで 11-12 に 6/6）、2番手は Cloudflare の gpt-oss-120b（low。13/13）です。
+  - 11-09 までは Ollama の gpt-oss:120b（low）が1番手でした（18/18、いちばん難しい sympy-14711 も 9/9）。Ollama Cloud の無料プランが 11-09 に従量課金に変わったので、両方の並びから Ollama を外しました。
+- 推論を強くする設定はSWE の出力の上限（10,000）に当たりやすく、正答率も上がらなかったので使っていません。
+- `.env` には、ここに出てくる社のキー（`MISTRAL_API_KEY`・`GROQ_API_KEY`・`GEMINI_API_KEY`・`KILO_API_KEY`・`NVIDIA_API_KEY`・`CLOUDFLARE_API_KEY`・`COHERE_API_KEY`）を入れます。キーの無い社は飛ばされます。
 
 #### 制限とトークンの数え方
 | 上限（`config.json`） | MBPP | SWE-bench |
@@ -527,7 +528,6 @@ MCP の仕様（JSON-RPC 2.0）に沿って、サーバーとクライアント�
   - API
   [mistral.ai](https://mistral.ai/products/studio/)
   [groq](https://console.groq.com/home)
-  [ollama](https://signin.ollama.com/)
   [gemini](https://aistudio.google.com/prompts/)
   [kilo](https://app.kilo.ai/)
   [nvidia](https://build.nvidia.com/settings/api-keys)

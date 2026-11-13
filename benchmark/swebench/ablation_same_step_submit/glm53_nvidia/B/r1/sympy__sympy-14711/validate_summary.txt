@@ -1,0 +1,9 @@
+Correctness: PASSED
+Iterations: 7 / 30 OK
+Input tokens: 25270 / 300000 OK
+Output tokens: 2372 / 10000 OK
+Time: 124.1s / 900.0s OK
+Metrics: VALID
+Correctness: PASSED
+Metrics: VALID
+Overall: PASSED

@@ -510,7 +510,7 @@ class ResilientLLMClient:
                     break
 
                 # 7. その他のLLMError(レスポンスの解釈失敗など)はバックオフせずに次のモデルへ。
-                # privider._parse_response()でLLMからのレスポンスが取得できない時、LLMErrorが発生する
+                # provider._parse_response()でLLMからのレスポンスが取得できない時、LLMErrorが発生する
                 # OpenAI互換のレスポンスがJSONでない、choices[0]が存在しない、contentが空など。
                 # 今後の拡張でLLMErrorの子孫クラスを追加する場合もここで捕らえる。
                 except LLMError as error:

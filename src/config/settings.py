@@ -6,7 +6,6 @@ APIキーは.envからのみ。
 providers.jsonにはキーの値ではなく、keys_env(env変数名)だけ書く。
 providers.jsonは構造化データなので、pydanticでProviderConfigモデルに変換して扱う。
 pydantic-settingsを使うと、環境変数やJSON/YAMLファイルから設定を読み込むことができる。
-- [ ] Limits.time_margin_secのデフォルト値は実際の計測時間に合わせて調整。
 
 下記を提供
 - Limits
@@ -28,7 +27,7 @@ pydantic-settingsを使うと、環境変数やJSON/YAMLファイルから設定
 - order_providers()
     CLI引数(--model_name / --provider-url)を反映した、試す順番のプロバイダ設定リストを返す。
 - load_settings()
-    Settingsを構築して返す。config.json + env + CLI overridesを階�層的に読み込む。
+    Settingsを構築して返す。config.json + env + CLI overridesを階層的に読み込む。
 """
 import json
 from urllib.parse import urlsplit

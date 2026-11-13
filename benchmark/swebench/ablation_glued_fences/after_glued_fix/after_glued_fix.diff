@@ -1,0 +1,149 @@
+diff --git a/mcp_tools_swebench.py b/mcp_tools_swebench.py
+index ee5078a..2c8bd4a 100644
+--- a/mcp_tools_swebench.py
++++ b/mcp_tools_swebench.py
+@@ -240,7 +240,7 @@ def run_tests() -> str:
+ @server.tool()
+ def get_patch() -> str:
+     """Return the unified git diff of all changes in the repository."""
+-    command = "git add -N . && git -c core.fileMode=false diff HEAD"
++    command = "git reset -q && git add -N . && git -c core.fileMode=false diff HEAD"
+     # add -N：新規ファイルを「追加予定」として登録し diff に出す（.gitignore 対象は自動で除外）
+     # core.fileMode=false：パーミッションだけの変更を無視する
+     # diff HEAD：最後のコミットとの差分を取る（git add 済みの変更も漏らさない）
+diff --git a/src/agent/extractor/python_extractor.py b/src/agent/extractor/python_extractor.py
+index bd8b0bf..c21192c 100644
+--- a/src/agent/extractor/python_extractor.py
++++ b/src/agent/extractor/python_extractor.py
+@@ -57,6 +57,30 @@ SALVAGE_ESCAPED_QUOTES = "escaped_quotes"
+ SALVAGE_JSON_WRAPPED = "json_wrapped"
+ SALVAGE_MULTIPLE_BLOCKS = "multiple_blocks"
+ SALVAGE_UNMATCHED_CLOSERS = "unmatched_closers"
++SALVAGE_GLUED_FENCES = "glued_fences"
++
++# 閉じフェンスと次のフェンスが同じ行にくっついた出力(```の直後に```python)を見つける。
++# gpt-ossが同じ呼び出しを何度も書くときに出る(SWE django-11066 の step 2・6 で実測)。
++_GLUED_FENCE_PATTERN = re.compile(r"```[ \t]*(?=```)")
++# 行頭の閉じフェンスの直後に地の文が続く出力(```We need ...)を見つける。開きフェンス(```python)は除く。
++_FENCE_THEN_PROSE_PATTERN = re.compile(
++    r"^([ \t]*```)(?=[^`\s])(?!(?:python|py)[ \t]*\r?$)",
++    re.MULTILINE | re.IGNORECASE
++)
++
++
++def _split_glued_fences(llm_output: str) -> str:
++    """くっついたフェンスを行で分け、正規のブロックとして読める形にする.
++
++    Args:
++        llm_output (str): LLMが生成した出力テキスト全体。
++
++    Returns:
++        str: フェンスの直後で改行した出力。くっついたフェンスがなければ元の文字列のまま。
++    """
++    split = _GLUED_FENCE_PATTERN.sub("```\n", llm_output)
++    return _FENCE_THEN_PROSE_PATTERN.sub("\\1\n", split)
++
+ 
+ # 停止シーケンスの前半だけが本文末尾に漏れたものを取り除くときの最短文字数。
+ # 例えば停止シーケンスが"<end_code>"の場合、本文末尾に"<end"だけが漏れた場合に取り除く。
+@@ -307,13 +331,23 @@ def _extract_with_kind(llm_output: str) -> tuple[str | None, str | None]:
+         tuple[str | None, str | None]: (抽出されたコード, 崩れ(救済)の種類)
+         コードが抽出できなかった場合は(None, None)を返す。正規のブロックをそのまま抽出した場合は(コード, None)を返す。
+     """
++    # くっついたフェンスを先に行で分ける。分けた場合は最初のブロックだけを使う。
++    text = _split_glued_fences(llm_output)
++    glued = text != llm_output
+     # まず正規の```python```ブロックを抽出する。
+-    blocks = [str(block).rstrip() for block in _PYTHON_CODE_BLOCK_PATTERN.findall(llm_output)]
++    blocks = [str(block).rstrip() for block in _PYTHON_CODE_BLOCK_PATTERN.findall(text)]
+ 
+     kind: str | None = None
+     code: str | None = None
++    # くっついたフェンスがあった場合
++    if glued and blocks:
++        # くっついた出力は、結果を見ないまま先の手まで書いたもの(読む→直す→テスト→提出)が多い。
++        # 全部を実行すると、テストの結果を見ないまま提出しかねない。
++        # 最初のブロックだけを実行し、その結果を見てから次を書かせる。
++        code, kind = blocks[0], SALVAGE_GLUED_FENCES
++
+     # 複数のブロックがある場合
+-    if len(blocks) > 1:
++    elif len(blocks) > 1:
+         # 関数定義のブロックとそれを検証するブロックに分けて書くモデルがある(nemtron)
+         # 最後のブロックだけを実行すると定義がなくてエラーになる。
+         # 連結して構文が通れば全部を順番に実行、通らなければ最後のブロックだけを返す。
+@@ -330,14 +364,14 @@ def _extract_with_kind(llm_output: str) -> tuple[str | None, str | None]:
+ 
+     # 1つもブロックがない場合は閉じフェンスなし、フェンスなしの素のPythonコードをまず救済。
+     else:
+-        match = _UNCLOSED_CODE_BLOCK_PATTERN.search(llm_output)
++        match = _UNCLOSED_CODE_BLOCK_PATTERN.search(text)
+         if match and match.group(1).strip():
+             body = _TRAILING_FENCE_PATTERN.sub("", str(match.group(1)))
+             code = body.rstrip()
+             kind = SALVAGE_UNCLOSED_FENCE
+         # フェンスなしの素のPythonコードを抽出する。
+         else:
+-            code = _extract_bare_code(llm_output)
++            code = _extract_bare_code(text)
+             if code is not None:
+                 kind = SALVAGE_UNFENCED
+ 
+diff --git a/src/agent/observation.py b/src/agent/observation.py
+index d8a8628..65d8748 100644
+--- a/src/agent/observation.py
++++ b/src/agent/observation.py
+@@ -32,7 +32,8 @@ from src.agent.extractor.python_extractor import (
+     SALVAGE_ESCAPED_QUOTES,
+     SALVAGE_JSON_WRAPPED,
+     SALVAGE_MULTIPLE_BLOCKS,
+-    SALVAGE_UNMATCHED_CLOSERS
++    SALVAGE_UNMATCHED_CLOSERS,
++    SALVAGE_GLUED_FENCES
+ )
+ 
+ 
+@@ -228,6 +229,13 @@ _MALFORMED_NOTES: dict[str, str] = {
+         "the extra closing brackets the Python parser reported and ran the code. Brackets inside "
+         "quotes do not need closing outside them."
+     ),
++    SALVAGE_GLUED_FENCES: (
++        "[MALFORMED_CODE] Your fences were glued together (``` directly followed by ```python or by "
++        "text on the same line), and you wrote several steps ahead without seeing any result. "
++        "I executed only the FIRST block; the later blocks were NOT run. Read the output below, "
++        "then write exactly ONE ```python block per turn, with the closing ``` on its own line, "
++        "and end with <end_code>."
++    ),
+     SALVAGE_MULTIPLE_BLOCKS: (
+         "[NOTE] Your message had several ```python blocks. I joined them in order and executed "
+         "them as one program. Prefer exactly one block per turn."
+diff --git a/src/sandbox/sandbox_main.py b/src/sandbox/sandbox_main.py
+index f0bed3f..b2a3e33 100644
+--- a/src/sandbox/sandbox_main.py
++++ b/src/sandbox/sandbox_main.py
+@@ -451,12 +451,21 @@ def _run_script(sandbox: Sandbox, source: str) -> int:
+         print(f"SyntaxError: {exc}")
+         return 1
+     lines = source.splitlines()
++    # (first line, last line) of each chunk to run. 1-based, last line inclusive
++    chunks: list[tuple[int, int]] = []
+     for node in tree.body:
+-        # For a decorated def or class, start at the decorator (node.lineno points at the def line)
++        # For a decorated def or class, start at the first decorator (node.lineno points at the def line)
+         decorators = getattr(node, "decorator_list", None)
+-        start = decorators[0].lineno if decorators else node.lineno
+-        # lineno and end_lineno are 1-based and end_lineno is inclusive, so slice [start - 1:end]
+-        _show(sandbox.run("\n".join(lines[start - 1:node.end_lineno])))
++        start = min(decorator.lineno for decorator in decorators) if decorators else node.lineno
++        end = node.end_lineno or node.lineno
++        # "a = 1; b = 2" puts several statements on one line: join them into one chunk
++        # so the shared line is not run once per statement
++        if chunks and start <= chunks[-1][1]:
++            chunks[-1] = (chunks[-1][0], max(chunks[-1][1], end))
++        else:
++            chunks.append((start, end))
++    for start, end in chunks:
++        _show(sandbox.run("\n".join(lines[start - 1:end])))
+     return 0
+ 
+ 

@@ -218,7 +218,7 @@ def _run_safely(
             solution_output = solve(task_input)
 
         # stderr + SolutionOutputにAGENT_CRASHを書き込む。
-        except Exception as error:
+        except (Exception, SystemExit) as error:
             if os.environ.get(_DEBUG_ENV_NAME) == "1":
                 traceback.print_exc(file=sys.stderr)
             error_summary = f"{type(error).__name__}: {error}"

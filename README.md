@@ -39,8 +39,8 @@ The system is made of three components.
 
 | Component | Role | Owner |
 |---|---|---|
-| Agent | Calls the LLM, runs the think-and-act loop, extracts the answer | nsato (to be confirmed) |
-| Sandbox | Runs the code written by the LLM in an isolated environment | joseo (to be confirmed) |
+| Agent | Calls the LLM, runs the think-and-act loop, extracts the answer | nsato |
+| Sandbox | Runs the code written by the LLM in an isolated environment | joseo |
 | MCP | A server that provides tools, and a client that calls them | ayhirose |
 
 ### 1-1. System architecture
@@ -59,7 +59,7 @@ flowchart LR
         ORCH -- code --> SBP
         SBP --> MCPC
     end
-    LLMC -- "HTTPS (Chat Completions)" --> API["LLM APIs<br>Ollama, NVIDIA, Mistral, ..."]
+    LLMC -- "HTTPS (Chat Completions)" --> API["LLM APIs<br>NVIDIA, Cloudflare, Mistral, ..."]
     SBP <-- "pipe" --> CHILD["Sandbox child process (fork)<br>restricted namespace, audit hook, rlimits"]
     MCPC <-- "JSON-RPC (stdio / HTTP)" --> SRV["MCP server (separate process)<br>mcp_tools_mbpp.py / mcp_tools_swebench.py"]
     SRV -- "docker exec" --> DOCKER["Docker container (SWE-bench)<br>repository in /testbed"]
@@ -309,11 +309,12 @@ Even when the agent stops without submitting, it submits the best result it has.
 
 #### Provider order in production (chosen by measurement; see [`BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) for details)
 - MBPP: we ran all 257 tasks in the exam's range and got 237/257 (92.2%).
-  - First is codestral, which has a large quota and is fast.
-  - Second is qwen3.8, which had the highest pass rate on the hard tasks.
-- SWE-bench: we ran the 6 candidate exam tasks × 3 rounds with a single model, and gpt-oss:120b (low) got 18/18 (9/9 even on the hardest one, sympy-14711).
+  - First is codestral (fast). Its free key now allows only 2 requests per minute, so in the exam it answers the first requests and the rest go on to the next models.
+  - Second is qwen3.8 (Groq), which had the highest pass rate on the hard tasks, and third is gpt-oss-120b (Cloudflare), which passed most of the tasks codestral could not pass in the full runs.
+- SWE-bench: first is NVIDIA glm-5.3-flash (17/18 on the 6 candidate exam tasks × 3 rounds with a single model, 24/24 on 11-11, and 6/6 with this order on 11-12), and second is gpt-oss-120b (low) on Cloudflare (13/13).
+  - Until 11-09, gpt-oss:120b (low) on Ollama was first (18/18, 9/9 even on the hardest one, sympy-14711). Ollama Cloud's free plan became pay-as-you-go on 11-09, so we removed Ollama from both orders.
 - Stronger reasoning settings are not used: they tended to hit SWE's output limit (10,000) and did not raise the pass rate.
-- Put the keys of the providers listed here in `.env` (`MISTRAL_API_KEY`, `GROQ_API_KEY`, `OLLAMA_API_KEY`, `GEMINI_API_KEY`, `KILO_API_KEY`, `NVIDIA_API_KEY`, `CLOUDFLARE_API_KEY`, `COHERE_API_KEY`). Providers without a key are skipped.
+- Put the keys of the providers listed here in `.env` (`MISTRAL_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `KILO_API_KEY`, `NVIDIA_API_KEY`, `CLOUDFLARE_API_KEY`, `COHERE_API_KEY`). Providers without a key are skipped.
 
 #### Limits and token counting
 | Limit (`config.json`) | MBPP | SWE-bench |
@@ -523,7 +524,6 @@ The official `mcp` SDK is used only as the other end in tests that check the two
   - APIs:
   [mistral.ai](https://mistral.ai/products/studio/)
   [groq](https://console.groq.com/home)
-  [ollama](https://signin.ollama.com/)
   [gemini](https://aistudio.google.com/prompts/)
   [kilo](https://app.kilo.ai/)
   [nvidia](https://build.nvidia.com/settings/api-keys)
@@ -539,5 +539,5 @@ The official `mcp` SDK is used only as the other end in tests that check the two
   - **Design**: a sounding board for the agent loop, provider switching and how to handle the limits. Which option to take was decided by myself (the team).
   - **Implementation**: received code proposals with a line-by-line explanation, read and understood them, then typed them in myself and tested them.
   - **Testing and measurement**: used for designing unit tests and for the measurement scripts. Also used to read the `solution.json` of failed runs and find the cause.
-  - **Documentation**: used for drafting the Agent section of this README and the benchmark report. All the numbers come from actual measurements. The English `README.md` and `BENCHMARK_REPORT.md` were translated from the Japanese versions with AI.
+  - **Documentation**: used for drafting the Agent section of this README and the benchmark report. All the numbers come from actual measurements.
 - **joseo (Sandbox)**: Used AI for learning the way to implement a sandbox that is isolated. Used for debugging.

@@ -4,8 +4,7 @@
             "name": "mistral",
             "provider_url": "https://api.mistral.ai/v1",
             "models": [
-                "codestral-latest",
-                "ministral-14b-latest"
+                "codestral-latest"
             ],
             "keys_env": "MISTRAL_API_KEY",
             "priority": 1
@@ -25,38 +24,16 @@
             }
         },
         {
-            "name": "ollama",
-            "provider_url": "https://ollama.com/v1",
+            "name": "cloudflare",
+            "provider_url": "https://api.cloudflare.com/client/v4/accounts/045ea01f49c9d249f477e852c7f42a01/ai/v1",
             "models": [
-                "gpt-oss:120b",
-                "nemotron-3-ultra"
+                "@cf/openai/gpt-oss-120b"
             ],
-            "keys_env": "OLLAMA_API_KEY",
+            "keys_env": "CLOUDFLARE_API_KEY",
             "priority": 3,
             "model_params": {
-                "gpt-oss:120b": {
+                "@cf/openai/gpt-oss-120b": {
                     "reasoning_effort": "low"
-                },
-                "nemotron-3-ultra": {
-                    "reasoning_effort": "none"
-                }
-            }
-        },
-        {
-            "name": "gemini",
-            "provider_url": "https://generativelanguage.googleapis.com/v1beta/openai",
-            "models": [
-                "gemini-3.1-flash-lite",
-                "gemini-3.5-flash-lite"
-            ],
-            "keys_env": "GEMINI_API_KEY",
-            "priority": 4,
-            "model_params": {
-                "gemini-3.1-flash-lite": {
-                    "reasoning_effort": "minimal"
-                },
-                "gemini-3.5-flash-lite": {
-                    "reasoning_effort": "minimal"
                 }
             }
         },
@@ -67,12 +44,39 @@
                 "nvidia/nemotron-3-ultra-550b-a55b:free"
             ],
             "keys_env": "KILO_API_KEY",
-            "priority": 5,
+            "priority": 4,
             "model_params": {
                 "nvidia/nemotron-3-ultra-550b-a55b:free": {
                     "reasoning": {
                         "enabled": false
                     }
+                }
+            }
+        },
+        {
+            "name": "mistral",
+            "provider_url": "https://api.mistral.ai/v1",
+            "models": [
+                "ministral-14b-latest"
+            ],
+            "keys_env": "MISTRAL_API_KEY",
+            "priority": 5
+        },
+        {
+            "name": "gemini",
+            "provider_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+            "models": [
+                "gemini-3.1-flash-lite",
+                "gemini-3.5-flash-lite"
+            ],
+            "keys_env": "GEMINI_API_KEY",
+            "priority": 6,
+            "model_params": {
+                "gemini-3.1-flash-lite": {
+                    "reasoning_effort": "minimal"
+                },
+                "gemini-3.5-flash-lite": {
+                    "reasoning_effort": "minimal"
                 }
             }
         },
@@ -83,26 +87,12 @@
                 "nvidia/nemotron-3-ultra-550b-a55b"
             ],
             "keys_env": "NVIDIA_API_KEY",
-            "priority": 6,
+            "priority": 7,
             "model_params": {
                 "nvidia/nemotron-3-ultra-550b-a55b": {
                     "chat_template_kwargs": {
                         "enable_thinking": false
                     }
-                }
-            }
-        },
-        {
-            "name": "cloudflare",
-            "provider_url": "https://api.cloudflare.com/client/v4/accounts/045ea01f49c9d249f477e852c7f42a01/ai/v1",
-            "models": [
-                "@cf/openai/gpt-oss-120b"
-            ],
-            "keys_env": "CLOUDFLARE_API_KEY",
-            "priority": 7,
-            "model_params": {
-                "@cf/openai/gpt-oss-120b": {
-                    "reasoning_effort": "low"
                 }
             }
         }
